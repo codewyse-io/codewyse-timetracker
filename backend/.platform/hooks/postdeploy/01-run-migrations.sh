@@ -24,13 +24,6 @@ if [ "$IS_LEADER" = true ]; then
   else
     echo 'Warning: Migration command failed or no migrations to run'
   fi
-
-  echo 'Running seeders...'
-  if npm run seed:prod; then
-    echo 'Seeders completed successfully'
-  else
-    echo 'Warning: Seeder command failed'
-  fi
 else
   echo 'Skipping migrations and seeds on non-leader instance'
 fi
