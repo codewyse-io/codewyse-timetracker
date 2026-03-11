@@ -8,6 +8,8 @@ export interface User {
   designation: string | null;
   hourlyRate: number;
   shiftId: string | null;
+  allowedLeavesPerYear: number;
+  consumedLeaves: number;
   status: 'invited' | 'active' | 'deactivated';
   createdAt: string;
   updatedAt: string;

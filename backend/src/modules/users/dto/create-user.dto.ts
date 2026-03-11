@@ -1,11 +1,13 @@
 import {
   IsEmail,
   IsEnum,
+  IsInt,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   Min,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -46,4 +48,11 @@ export class CreateUserDto {
   @IsOptional()
   @IsUUID()
   shiftId?: string;
+
+  @ApiPropertyOptional({ example: 20, description: 'Allowed leaves per year' })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(365)
+  allowedLeavesPerYear?: number;
 }

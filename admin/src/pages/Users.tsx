@@ -299,6 +299,7 @@ export default function UsersPage() {
       designation: user.designation,
       hourlyRate: Number(user.hourlyRate),
       shiftId: user.shiftId,
+      allowedLeavesPerYear: user.allowedLeavesPerYear,
     });
     setEditModalOpen(true);
   };
@@ -357,6 +358,21 @@ export default function UsersPage() {
       render: (shiftId: string | null) => (
         <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{getShiftName(shiftId)}</span>
       ),
+    },
+    {
+      title: 'Leaves',
+      key: 'leaves',
+      render: (_: unknown, record: User) => {
+        const consumed = record.consumedLeaves ?? 0;
+        const total = record.allowedLeavesPerYear ?? 20;
+        const isOver = consumed > total;
+        return (
+          <span style={{ fontSize: 13 }}>
+            <span style={{ fontWeight: 600, color: isOver ? '#ef4444' : 'var(--text-primary)' }}>{consumed}</span>
+            <span style={{ color: 'var(--text-muted)' }}> / {total}</span>
+          </span>
+        );
+      },
     },
     {
       title: 'Status',
@@ -536,6 +552,13 @@ export default function UsersPage() {
       </Form.Item>
       <Form.Item name="shiftId" label={<span style={labelStyle}>Shift</span>}>
         <Select placeholder="Select shift (optional)" allowClear options={shiftOptions} />
+      </Form.Item>
+      <Form.Item
+        name="allowedLeavesPerYear"
+        label={<span style={labelStyle}>Allowed Leaves / Year</span>}
+        initialValue={20}
+      >
+        <InputNumber min={0} max={365} step={1} style={{ width: '100%', borderRadius: 8 }} placeholder="20" />
       </Form.Item>
       <div style={{
         marginTop: 24,

@@ -46,6 +46,12 @@ export class User {
   @JoinColumn({ name: 'shiftId' })
   shift: Shift;
 
+  @Column({ type: 'int', default: 20 })
+  allowedLeavesPerYear: number;
+
+  @Column({ type: 'int', default: 0 })
+  consumedLeaves: number;
+
   @Column({ type: 'enum', enum: UserStatus, default: UserStatus.INVITED })
   status: UserStatus;
 

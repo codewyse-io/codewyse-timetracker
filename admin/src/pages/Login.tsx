@@ -263,7 +263,7 @@ export default function LoginPage() {
               letterSpacing: '0.3px',
             }}
           >
-            Powered by Pulse AI
+            Powered By CodeWyse
           </Text>
         </div>
       </div>
