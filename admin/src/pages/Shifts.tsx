@@ -10,7 +10,6 @@ import {
   Checkbox,
   Popconfirm,
   message,
-  Typography,
   Spin,
   Tooltip,
   Row,
@@ -22,7 +21,6 @@ import { shiftsApi } from '../api/shifts.api';
 import type { CreateShiftData, UpdateShiftData } from '../api/shifts.api';
 import type { Shift } from '../types';
 
-const { Title } = Typography;
 
 const DAYS_OF_WEEK = [
   { label: 'Monday', value: 'monday' },

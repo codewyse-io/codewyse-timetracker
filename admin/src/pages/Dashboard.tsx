@@ -34,7 +34,7 @@ import type { WorkSession } from '../types';
 import { timeTrackingApi } from '../api/time-tracking.api';
 import { focusScoreApi } from '../api/focus-score.api';
 import { payrollApi } from '../api/payroll.api';
-import { formatTime, getFocusScoreColor, getFocusScoreCategory } from '../utils/format';
+import { formatTime, getFocusScoreCategory } from '../utils/format';
 
 interface DashboardStats {
   totalEmployees: number;
@@ -477,7 +477,7 @@ export default function DashboardPage() {
                     innerRadius={65}
                     outerRadius={100}
                     paddingAngle={3}
-                    label={(entry: FocusDistribution) =>
+                    label={(entry: any) =>
                       `${entry.category}: ${entry.count}`
                     }
                     labelLine={{ stroke: '#cbd5e1' }}

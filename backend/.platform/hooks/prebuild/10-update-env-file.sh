@@ -31,10 +31,10 @@ echo 'EB_ENV_REGION="'${ENVIRONMENT_REGION}'"' >> .env
 
 echo ''
 echo 'Step 4: Get environment variables from AWS Parameter Store'
-echo 'Loading from path: /Csperks-env/csperks/'
+echo 'Loading from path: /pulsetrack/'
 
 aws ssm get-parameters-by-path \
-  --path "/Csperks-env/csperks/" \
+  --path "/pulsetrack/" \
   --region ${ENVIRONMENT_REGION} \
   --with-decryption \
   --query 'Parameters[].[Name,Value]' \

@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback } from 'react';
 import {
   Card,
   Table,
-  Tabs,
   DatePicker,
   Select,
   Row,

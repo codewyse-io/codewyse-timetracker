@@ -13,7 +13,6 @@ import {
   Spin,
   Empty,
   message,
-  Tag,
 } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import {
@@ -22,7 +21,7 @@ import {
   ResponsiveContainer,
   Tooltip as RechartsTooltip,
 } from 'recharts';
-import dayjs, { type Dayjs } from 'dayjs';
+import { type Dayjs } from 'dayjs';
 
 import type { KpiDefinition, User } from '../types';
 import { kpisApi, type TeamKpiRow, type CreateKpiEntryData } from '../api/kpis.api';
@@ -91,9 +90,9 @@ export default function KpisPage() {
         kpisApi.getDefinitions(designation),
         kpisApi.getTeamKpis({ period: 'weekly' }),
       ]);
-      const rawDefs = defsRes.data;
+      const rawDefs = defsRes.data as any;
       setDefinitions(Array.isArray(rawDefs) ? rawDefs : (Array.isArray(rawDefs?.data) ? rawDefs.data : []));
-      const rawTeam = teamRes.data;
+      const rawTeam = teamRes.data as any;
       setTeamData(Array.isArray(rawTeam) ? rawTeam : (Array.isArray(rawTeam?.data) ? rawTeam.data : []));
     } catch {
       message.error('Failed to load KPI data');
@@ -126,7 +125,7 @@ export default function KpisPage() {
       setSelectedUserDesignation(user.designation ?? undefined);
       try {
         const res = await kpisApi.getDefinitions(user.designation ?? undefined);
-        const raw = res.data;
+        const raw = res.data as any;
         setUserKpiDefs(Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []));
       } catch {
         setUserKpiDefs([]);

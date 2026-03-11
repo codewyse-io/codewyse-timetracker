@@ -6,7 +6,6 @@ import {
   Col,
   Select,
   Button,
-  Tag,
   Space,
   Timeline,
   Spin,
@@ -18,8 +17,6 @@ import {
   ThunderboltOutlined,
   SyncOutlined,
 } from '@ant-design/icons';
-import dayjs from 'dayjs';
-
 import type { AiInsight, CoachingTip, User } from '../types';
 import {
   insightsApi,

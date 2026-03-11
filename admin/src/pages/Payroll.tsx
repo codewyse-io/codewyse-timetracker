@@ -4,7 +4,6 @@ import {
   Table,
   Row,
   Col,
-  Statistic,
   DatePicker,
   Segmented,
   Button,

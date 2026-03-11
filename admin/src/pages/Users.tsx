@@ -10,7 +10,6 @@ import {
   InputNumber,
   Popconfirm,
   message,
-  Typography,
   Tooltip,
   Divider,
 } from 'antd';
@@ -27,7 +26,6 @@ import type { CreateUserData, UpdateUserData } from '../api/users.api';
 import { shiftsApi } from '../api/shifts.api';
 import type { User, Shift } from '../types';
 
-const { Title } = Typography;
 
 function getAvatarColor(name: string): string {
   const pastels = [
