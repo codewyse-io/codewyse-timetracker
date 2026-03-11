@@ -1,0 +1,46 @@
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Unique,
+} from 'typeorm';
+import { User } from '../../users/entities/user.entity';
+import { FocusCategory } from '../enums/focus-category.enum';
+
+@Entity('daily_focus_scores')
+@Unique(['userId', 'date'])
+export class DailyFocusScore {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ name: 'user_id', type: 'varchar', length: 36 })
+  userId: string;
+
+  @Column({ type: 'date' })
+  date: string;
+
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
+  score: number;
+
+  @Column({ type: 'enum', enum: FocusCategory, default: FocusCategory.LOW_FOCUS })
+  category: FocusCategory;
+
+  @Column({ name: 'total_active_time', type: 'int', default: 0 })
+  totalActiveTime: number; // seconds
+
+  @Column({ name: 'total_logged_time', type: 'int', default: 0 })
+  totalLoggedTime: number; // seconds
+
+  @Column({ name: 'idle_interruptions', type: 'int', default: 0 })
+  idleInterruptions: number;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
+
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'user_id' })
+  user: User;
+}

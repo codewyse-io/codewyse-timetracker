@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx @nestjs/cli --version)",
+      "Bash(npm install -g @nestjs/cli)",
+      "Bash(node --version)",
+      "Bash(npm --version)",
+      "Bash(npx @nestjs/cli new backend --package-manager npm --skip-git --language ts)",
+      "Bash(npm create vite@latest admin -- --template react-ts)",
+      "Bash(npm install)",
+      "Bash(mkdir -p c:/Users/usama/Downloads/codewyse-timetracker/desktop)",
+      "Bash(npm init -y)",
+      "Bash(npm install @nestjs/typeorm typeorm mysql2 @nestjs/config @nestjs/jwt @nestjs/passport passport passport-jwt passport-local class-validator class-transformer bcrypt @nestjs/swagger swagger-ui-express @nestjs/bull bullmq ioredis nodemailer uuid)",
+      "Bash(npm install -D @types/passport-jwt @types/passport-local @types/bcrypt @types/nodemailer @types/uuid)",
+      "Bash(npm install react-router-dom axios antd @ant-design/icons dayjs recharts)",
+      "Bash(npm install electron electron-store axios)",
+      "Bash(npm install -D typescript @types/node electron-builder vite react react-dom @types/react @types/react-dom @vitejs/plugin-react antd recharts)",
+      "Bash(npm install concurrently react-router-dom)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(npx vite build)"
+    ]
+  }
+}

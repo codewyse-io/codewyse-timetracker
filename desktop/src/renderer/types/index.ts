@@ -1,0 +1,74 @@
+export interface Shift {
+  id: string;
+  name: string;
+  startTime: string; // "HH:mm"
+  endTime: string;   // "HH:mm"
+  allowedDays: string[];
+  timezone: string;  // IANA e.g. "America/New_York"
+  isActive: boolean;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  designation?: string;
+  hourlyRate: number;
+  shiftId: string | null;
+  shift?: Shift | null;
+  status: string;
+  createdAt?: string;
+}
+
+export interface WorkSession {
+  id: string;
+  userId: string;
+  startTime: string;
+  endTime: string | null;
+  totalDuration: number;
+  idleDuration: number;
+  activeDuration: number;
+  status: string;
+  mode?: string;
+}
+
+export interface FocusScore {
+  id: string;
+  date: string;
+  score: number;
+  category: string;
+  totalActiveTime: number;
+  totalLoggedTime: number;
+  idleInterruptions: number;
+}
+
+export interface CoachingTip {
+  id: string;
+  category: string;
+  observation: string;
+  recommendation: string;
+  generatedAt: string;
+}
+
+export interface IdleEvent {
+  startTime: string;
+  endTime: string;
+  duration: number;
+}
+
+declare global {
+  interface Window {
+    electronAPI: {
+      getIdleTime: () => Promise<number>;
+      getAuthToken: () => Promise<string | null>;
+      setAuthToken: (token: string) => Promise<void>;
+      clearAuthToken: () => Promise<void>;
+      minimizeToTray: () => void;
+      quitApp: () => void;
+      onIdleDetected: (callback: (data: { startTime: string }) => void) => void;
+      onIdleResumed: (callback: (data: IdleEvent) => void) => void;
+    };
+  }
+}
