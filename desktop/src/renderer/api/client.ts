@@ -50,6 +50,11 @@ export async function startSession(mode: 'regular' | 'overtime' = 'regular') {
   return response.data;
 }
 
+export async function getTrackingSettings(): Promise<{ idleThresholdSeconds: number }> {
+  const response = await apiClient.get('/time-tracking/settings');
+  return response.data;
+}
+
 export async function stopSession() {
   const response = await apiClient.post('/time-tracking/stop');
   return response.data;

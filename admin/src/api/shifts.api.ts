@@ -7,6 +7,7 @@ export interface CreateShiftData {
   endTime: string;
   allowedDays: string[];
   timezone?: string;
+  idleThresholdMinutes?: number;
 }
 
 export interface UpdateShiftData {
@@ -15,6 +16,7 @@ export interface UpdateShiftData {
   endTime?: string;
   allowedDays?: string[];
   timezone?: string;
+  idleThresholdMinutes?: number;
   isActive?: boolean;
 }
 

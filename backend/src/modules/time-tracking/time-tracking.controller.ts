@@ -54,6 +54,12 @@ export class TimeTrackingController {
     return this.timeTrackingService.getCurrentSession(req.user?.id);
   }
 
+  @Get('settings')
+  @ApiOperation({ summary: 'Get tracking settings for the current user (idle threshold from their shift)' })
+  async getTrackingSettings(@Req() req: any) {
+    return this.timeTrackingService.getTrackingSettings(req.user?.shiftId);
+  }
+
   @Post('idle')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({

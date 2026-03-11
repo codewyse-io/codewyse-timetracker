@@ -272,6 +272,23 @@ export class TimeTrackingService {
   }
 
   /**
+   * Return tracking settings for the user's assigned shift.
+   * Falls back to default values if the user has no shift.
+   */
+  async getTrackingSettings(shiftId: string | undefined): Promise<{ idleThresholdSeconds: number }> {
+    const DEFAULT_IDLE_MINUTES = 3;
+    if (shiftId) {
+      try {
+        const shift = await this.shiftsService.findById(shiftId);
+        return { idleThresholdSeconds: (shift.idleThresholdMinutes ?? DEFAULT_IDLE_MINUTES) * 60 };
+      } catch {
+        // shift not found — fall through to default
+      }
+    }
+    return { idleThresholdSeconds: DEFAULT_IDLE_MINUTES * 60 };
+  }
+
+  /**
    * Calculate total, idle, and active durations for a session.
    */
   private calculateDurations(session: WorkSession): void {

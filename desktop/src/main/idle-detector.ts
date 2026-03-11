@@ -12,6 +12,11 @@ export class IdleDetector {
     this.window = window;
   }
 
+  setThreshold(seconds: number): void {
+    this.idleThreshold = Math.max(10, seconds); // minimum 10 seconds
+    console.log(`[IdleDetector] Threshold updated to ${this.idleThreshold}s`);
+  }
+
   start(): void {
     if (this.intervalId) {
       this.stop();

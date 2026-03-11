@@ -20,6 +20,7 @@ export interface Shift {
   endTime: string;
   allowedDays: string[];
   timezone: string; // IANA timezone, e.g. "America/New_York"
+  idleThresholdMinutes: number;
   isActive: boolean;
   createdAt: string;
 }

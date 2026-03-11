@@ -6,6 +6,9 @@ import {
   Matches,
   IsIn,
   IsOptional,
+  IsInt,
+  Min,
+  Max,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -55,4 +58,14 @@ export class CreateShiftDto {
   @IsOptional()
   @IsString()
   timezone?: string;
+
+  @ApiPropertyOptional({
+    example: 3,
+    description: 'Minutes of inactivity before marking as idle (1-60, defaults to 3)',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(60)
+  idleThresholdMinutes?: number;
 }

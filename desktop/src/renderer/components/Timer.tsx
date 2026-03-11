@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from 'antd';
-import { startSession, stopSession, getCurrentSession } from '../api/client';
+import { startSession, stopSession, getCurrentSession, getTrackingSettings } from '../api/client';
 import { formatElapsedTime } from '../utils/format';
 import { WorkSession } from '../types';
 
@@ -105,6 +105,14 @@ export default function Timer() {
       setSession(newSession);
       setIsRunning(true);
       startTimer(new Date(newSession.startTime));
+
+      // Apply idle threshold from shift settings
+      try {
+        const settings = await getTrackingSettings();
+        await window.electronAPI.setIdleThreshold(settings.idleThresholdSeconds);
+      } catch {
+        // non-critical — keep existing threshold
+      }
     } catch (err: any) {
       const msg = err.response?.data?.message || 'Failed to activate Pulse';
       showError(msg);

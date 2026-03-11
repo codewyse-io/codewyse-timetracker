@@ -16,18 +16,23 @@ else
 fi
 
 if [ "$IS_LEADER" = true ]; then
-  echo 'Running migrations...'
   cd /var/app/current
 
-  # Run migrations using production command
-  if npm run migration:run:prod; then
+  echo 'Running migrations...'
+  if npm run migration:prod; then
     echo 'Migrations completed successfully'
   else
     echo 'Warning: Migration command failed or no migrations to run'
-    exit 0  # Don't fail deployment if migrations fail
+  fi
+
+  echo 'Running seeders...'
+  if npm run seed:prod; then
+    echo 'Seeders completed successfully'
+  else
+    echo 'Warning: Seeder command failed'
   fi
 else
-  echo 'Skipping migrations on non-leader instance'
+  echo 'Skipping migrations and seeds on non-leader instance'
 fi
 
 echo '========================================='

@@ -5,6 +5,7 @@ import {
   Modal,
   Form,
   Input,
+  InputNumber,
   Select,
   TimePicker,
   Checkbox,
@@ -292,6 +293,23 @@ function ShiftCard({
           )}
         </div>
       </div>
+
+      {/* Idle Threshold */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          Idle Threshold
+        </span>
+        <span style={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: 'var(--text-secondary)',
+          background: 'var(--surface-sunken)',
+          padding: '2px 10px',
+          borderRadius: 'var(--radius-sm)',
+        }}>
+          {shift.idleThresholdMinutes ?? 3} min
+        </span>
+      </div>
     </div>
   );
 }
@@ -334,6 +352,7 @@ export default function ShiftsPage() {
       endTime: dayjs(shift.endTime, 'HH:mm'),
       allowedDays: shift.allowedDays,
       timezone: shift.timezone || 'UTC',
+      idleThresholdMinutes: shift.idleThresholdMinutes ?? 3,
     });
     setModalOpen(true);
   };
@@ -347,6 +366,7 @@ export default function ShiftsPage() {
         endTime: values.endTime.format('HH:mm'),
         allowedDays: values.allowedDays.map((d: string) => d.toLowerCase()),
         timezone: values.timezone || 'UTC',
+        idleThresholdMinutes: values.idleThresholdMinutes ?? 3,
       };
       if (editingShift) {
         await shiftsApi.updateShift(editingShift.id, data);
@@ -518,6 +538,16 @@ export default function ShiftsPage() {
               style={{ borderRadius: 8 }}
               suffixIcon={<GlobalOutlined style={{ color: 'var(--text-muted)' }} />}
             />
+          </Form.Item>
+
+          <Form.Item
+            name="idleThresholdMinutes"
+            label={<span style={labelStyle}>Idle Threshold (minutes)</span>}
+            initialValue={3}
+            rules={[{ required: true, message: 'Required' }]}
+            extra={<span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Minutes of inactivity before marking the employee as idle</span>}
+          >
+            <InputNumber min={1} max={60} style={{ width: '100%', borderRadius: 'var(--radius-sm)' }} />
           </Form.Item>
 
           <Form.Item

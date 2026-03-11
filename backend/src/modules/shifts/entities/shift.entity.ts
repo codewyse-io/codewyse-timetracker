@@ -27,6 +27,9 @@ export class Shift {
   @Column({ length: 64, default: 'UTC' })
   timezone: string; // IANA timezone, e.g. "America/New_York"
 
+  @Column({ name: 'idle_threshold_minutes', type: 'int', default: 3 })
+  idleThresholdMinutes: number; // minutes of inactivity before marking as idle
+
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
 

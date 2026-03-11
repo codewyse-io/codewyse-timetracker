@@ -69,6 +69,12 @@ function setupIpcHandlers(): void {
     store.delete('authToken');
   });
 
+  ipcMain.handle('set-idle-threshold', (_event: any, seconds: number) => {
+    if (idleDetector) {
+      idleDetector.setThreshold(seconds);
+    }
+  });
+
   ipcMain.on('minimize-to-tray', () => {
     mainWindow?.hide();
   });
