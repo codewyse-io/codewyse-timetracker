@@ -15,6 +15,7 @@ import { PayrollModule } from './modules/payroll/payroll.module';
 import { KpisModule } from './modules/kpis/kpis.module';
 import { QueueModule } from './modules/queue/queue.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { AiModule } from './modules/ai/ai.module';
 
 @Module({
   controllers: [AppController],
@@ -39,6 +40,7 @@ import { ReportsModule } from './modules/reports/reports.module';
     KpisModule,
     QueueModule,
     ReportsModule,
+    AiModule,
   ],
 })
 export class AppModule {}

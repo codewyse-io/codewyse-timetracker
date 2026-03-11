@@ -13,6 +13,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UserStatus } from '../../common/enums/user-status.enum';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { PaginatedResponseDto } from '../../common/dto/paginated-response.dto';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class UsersService {
@@ -20,6 +21,7 @@ export class UsersService {
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
     private readonly configService: ConfigService,
+    private readonly emailService: EmailService,
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
@@ -43,7 +45,43 @@ export class UsersService {
       status: UserStatus.INVITED,
     });
 
-    return this.usersRepository.save(user);
+    const savedUser = await this.usersRepository.save(user);
+
+    try {
+      await this.emailService.sendInvitationEmail(
+        savedUser.email,
+        savedUser.firstName,
+        invitationToken,
+      );
+    } catch (error) {
+      // Log but don't fail user creation if email fails
+      console.error(`Failed to send invitation email to ${savedUser.email}:`, error);
+    }
+
+    return savedUser;
+  }
+
+  async resendInvite(id: string): Promise<void> {
+    const user = await this.findById(id);
+
+    if (user.status !== UserStatus.INVITED) {
+      throw new ConflictException('Can only resend invitations to users with invited status');
+    }
+
+    const invitationToken = uuidv4();
+    const expiryHours = this.configService.get<number>('app.invitationExpiryHours', 72);
+    const invitationExpiry = new Date();
+    invitationExpiry.setHours(invitationExpiry.getHours() + expiryHours);
+
+    user.invitationToken = invitationToken;
+    user.invitationExpiry = invitationExpiry;
+    await this.usersRepository.save(user);
+
+    await this.emailService.sendInvitationEmail(
+      user.email,
+      user.firstName,
+      invitationToken,
+    );
   }
 
   async findByEmail(email: string): Promise<User | null> {

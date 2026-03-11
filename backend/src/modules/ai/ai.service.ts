@@ -94,6 +94,29 @@ export class AiService {
     });
   }
 
+  async getTeamCoachingGrouped(): Promise<
+    { userId: string; user: { firstName: string; lastName: string }; tips: AiCoachingTip[] }[]
+  > {
+    const tips = await this.getTeamCoachingTips();
+    const grouped = new Map<string, { user: { firstName: string; lastName: string }; tips: AiCoachingTip[] }>();
+
+    for (const tip of tips) {
+      if (!tip.user) continue;
+      if (!grouped.has(tip.userId)) {
+        grouped.set(tip.userId, {
+          user: { firstName: tip.user.firstName, lastName: tip.user.lastName },
+          tips: [],
+        });
+      }
+      grouped.get(tip.userId)!.tips.push(tip);
+    }
+
+    return Array.from(grouped.entries()).map(([userId, data]) => ({
+      userId,
+      ...data,
+    }));
+  }
+
   /**
    * Placeholder AI API call. Replace with actual API integration
    * (OpenAI, Claude, etc.) when ready.

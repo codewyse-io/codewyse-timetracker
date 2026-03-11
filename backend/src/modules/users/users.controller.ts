@@ -72,4 +72,12 @@ export class UsersController {
   deactivate(@Param('id', ParseUUIDPipe) id: string) {
     return this.usersService.deactivate(id);
   }
+
+  @Post(':id/resend-invite')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Resend invitation email (admin only)' })
+  async resendInvite(@Param('id', ParseUUIDPipe) id: string) {
+    await this.usersService.resendInvite(id);
+    return { message: 'Invitation email resent successfully' };
+  }
 }

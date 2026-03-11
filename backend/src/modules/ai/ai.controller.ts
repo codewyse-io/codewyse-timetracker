@@ -2,54 +2,60 @@ import {
   Controller,
   Get,
   Post,
+  Param,
   Req,
   UseGuards,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AiService } from './ai.service';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Role } from '../../common/enums/role.enum';
 
 @ApiTags('AI Insights')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Controller()
+@Controller('insights')
 export class AiController {
   constructor(private readonly aiService: AiService) {}
 
-  @Get('insights/me')
+  @Get('me')
   @ApiOperation({ summary: 'Get my AI insights (employee)' })
   async getMyInsights(@Req() req: any) {
     return this.aiService.getInsightsForUser(req.user.id);
   }
 
-  @Get('insights/team')
-  @Roles('admin')
+  @Get('team')
+  @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Get team AI insights (admin)' })
   async getTeamInsights() {
     return this.aiService.getTeamInsights();
   }
 
-  @Get('coaching/me')
-  @ApiOperation({ summary: 'Get my coaching tips (employee)' })
-  async getMyCoachingTips(@Req() req: any) {
-    return this.aiService.getCoachingTipsForUser(req.user.id);
+  @Get('coaching')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Get team coaching tips grouped by employee (admin)' })
+  async getTeamCoachingGrouped() {
+    return this.aiService.getTeamCoachingGrouped();
   }
 
-  @Get('coaching/team')
-  @Roles('admin')
-  @ApiOperation({ summary: 'Get team coaching tips (admin)' })
-  async getTeamCoachingTips() {
-    return this.aiService.getTeamCoachingTips();
+  @Get('employee/:userId')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Get insights and coaching for a specific employee (admin)' })
+  async getEmployeeInsights(@Param('userId', ParseUUIDPipe) userId: string) {
+    const [insights, coaching] = await Promise.all([
+      this.aiService.getInsightsForUser(userId),
+      this.aiService.getCoachingTipsForUser(userId),
+    ]);
+    return { insights, coaching };
   }
 
-  @Post('insights/generate')
-  @Roles('admin')
+  @Post('generate')
+  @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Manually trigger insight generation (admin)' })
   async generateInsights(@Req() req: any) {
-    // Placeholder: In production, this would iterate over users
-    // and gather their data to generate insights
     const mockUserData = {
       totalHoursThisWeek: 40,
       focusScore: 78,
