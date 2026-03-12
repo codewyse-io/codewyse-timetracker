@@ -166,6 +166,7 @@ export default function LoginPage() {
               borderRadius: 12,
               background: 'rgba(244,63,94,0.08)',
               border: '1px solid rgba(244,63,94,0.15)',
+              color: '#fff',
             }}
           />
         )}
