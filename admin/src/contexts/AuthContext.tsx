@@ -31,6 +31,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     const response = await authApi.login(email, password);
     const { accessToken, refreshToken, user: userData } = response.data;
+
+    if (userData.role !== 'admin') {
+      throw new Error('Access denied. Only administrators can sign in here.');
+    }
+
     localStorage.setItem('accessToken', accessToken);
     localStorage.setItem('refreshToken', refreshToken);
     setToken(accessToken);
@@ -47,6 +52,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       try {
         const response = await authApi.getMe();
+        if (response.data.role !== 'admin') {
+          throw new Error('Not admin');
+        }
         setUser(response.data);
         setToken(storedToken);
       } catch {
