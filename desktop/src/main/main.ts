@@ -75,6 +75,18 @@ function setupIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle('start-idle-detection', () => {
+    if (idleDetector) {
+      idleDetector.start();
+    }
+  });
+
+  ipcMain.handle('stop-idle-detection', () => {
+    if (idleDetector) {
+      idleDetector.stop();
+    }
+  });
+
   ipcMain.on('minimize-to-tray', () => {
     mainWindow?.hide();
   });
@@ -92,7 +104,6 @@ app.whenReady().then(() => {
   tray = createTray(mainWindow!);
 
   idleDetector = new IdleDetector(mainWindow!);
-  idleDetector.start();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

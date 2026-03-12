@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Layout, Button } from 'antd';
-import { LogoutOutlined, MinusOutlined, CloseOutlined } from '@ant-design/icons';
+import {
+  LogoutOutlined,
+  MinusOutlined,
+  CloseOutlined,
+  DashboardOutlined,
+  FieldTimeOutlined,
+  CalendarOutlined,
+  UserOutlined,
+} from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 import { getMe } from '../api/client';
 import { User } from '../types';
@@ -11,15 +19,25 @@ import CoachingPanel from '../components/CoachingPanel';
 import IdleIndicator from '../components/IdleIndicator';
 import TimelinePanel from '../components/TimelinePanel';
 import ProfilePanel from '../components/ProfilePanel';
+import LeaveRequestPanel from '../components/LeaveRequestPanel';
+import OnboardingTutorial from '../components/OnboardingTutorial';
 
 const { Content } = Layout;
 
-type TabKey = 'dashboard' | 'timeline' | 'profile';
+type TabKey = 'dashboard' | 'timeline' | 'leaves' | 'profile';
 
-const TABS: { key: TabKey; label: string; icon: string }[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: '\u25C9' },
-  { key: 'timeline', label: 'Timeline', icon: '\u29D7' },
-  { key: 'profile', label: 'Profile', icon: '\u2B24' },
+const TAB_ICONS: Record<TabKey, React.ReactNode> = {
+  dashboard: <DashboardOutlined />,
+  timeline: <FieldTimeOutlined />,
+  leaves: <CalendarOutlined />,
+  profile: <UserOutlined />,
+};
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: 'dashboard', label: 'Dashboard' },
+  { key: 'timeline', label: 'Timeline' },
+  { key: 'leaves', label: 'Leaves' },
+  { key: 'profile', label: 'Profile' },
 ];
 
 function useLiveClock(timezone?: string) {
@@ -84,6 +102,7 @@ export default function Home() {
 
   return (
     <Layout style={{ height: '100vh', background: '#0a0a0f', overflow: 'hidden' }}>
+      <OnboardingTutorial />
       {/* Header */}
       <div
         style={{
@@ -229,7 +248,7 @@ export default function Home() {
                   boxShadow: isActive ? '0 0 12px rgba(124, 92, 252, 0.15)' : 'none',
                 }}
               >
-                <span style={{ fontSize: 9, lineHeight: 1 }}>{tab.icon}</span>
+                <span style={{ fontSize: 11, lineHeight: 1, display: 'flex' }}>{TAB_ICONS[tab.key]}</span>
                 {tab.label}
               </button>
             );
@@ -283,6 +302,7 @@ export default function Home() {
           </div>
         )}
         {activeTab === 'timeline' && <TimelinePanel />}
+        {activeTab === 'leaves' && <LeaveRequestPanel />}
         {activeTab === 'profile' && <ProfilePanel />}
       </Content>
     </Layout>

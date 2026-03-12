@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Typography, Space, Spin } from 'antd';
+import { ThunderboltOutlined } from '@ant-design/icons';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { getFocusScore } from '../api/client';
 import { FocusScore } from '../types';
@@ -55,6 +56,16 @@ export default function FocusScorePanel() {
       }
     };
     loadFocusData();
+
+    // Refresh on session changes and periodically while active
+    const handleSessionChange = () => loadFocusData();
+    window.addEventListener('session-changed', handleSessionChange);
+    const interval = setInterval(loadFocusData, 15_000);
+
+    return () => {
+      window.removeEventListener('session-changed', handleSessionChange);
+      clearInterval(interval);
+    };
   }, []);
 
   const score = Math.round(Number(focusData?.score) || 0);
@@ -90,7 +101,7 @@ export default function FocusScorePanel() {
     <div className="glass-card" style={{ padding: 12 }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <span style={{ fontSize: 14, opacity: 0.6 }}>&#10024;</span>
+        <ThunderboltOutlined style={{ fontSize: 14, opacity: 0.6 }} />
         <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.9)' }}>
           AI Analysis
         </span>

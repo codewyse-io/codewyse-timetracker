@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm ls:*)",
+      "Bash(curl -s -X GET https://backend.codewyse.site/time-tracking/settings -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyMzYwYTY4OC0wYjg3LTRlNWEtYWRhNC04MzM0YWMwNzYyODMiLCJlbWFpbCI6ImFkbWluQHB1bHNldHJhY2suY29tIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNzczMjc1MTQzLCJleHAiOjE4MDQ4MTExNDN9.cGAltQpL5L1EEu8T1XVy9gUhnT2ZrPaD5nDFo30y9YM\")"
+    ]
+  }
+}

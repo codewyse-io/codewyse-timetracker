@@ -44,7 +44,11 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+interface AttachmentUrl {
+  key: string;
+  url: string;
+  filename: string;
+}
 
 export default function LeaveRequestsPage() {
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
@@ -57,6 +61,8 @@ export default function LeaveRequestsPage() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+
+  const [attachmentUrls, setAttachmentUrls] = useState<AttachmentUrl[]>([]);
 
   // Action modal
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
@@ -83,9 +89,14 @@ export default function LeaveRequestsPage() {
   const openDetail = async (id: string) => {
     setDetailLoading(true);
     setDetailOpen(true);
+    setAttachmentUrls([]);
     try {
-      const res = await leaveRequestsApi.getById(id);
+      const [res, attachments] = await Promise.all([
+        leaveRequestsApi.getById(id),
+        leaveRequestsApi.getAttachments(id),
+      ]);
       setSelectedRequest(res.data);
+      setAttachmentUrls(Array.isArray(attachments) ? attachments : []);
     } catch {
       message.error('Failed to load request details');
       setDetailOpen(false);
@@ -97,6 +108,7 @@ export default function LeaveRequestsPage() {
   const closeDetail = () => {
     setDetailOpen(false);
     setSelectedRequest(null);
+    setAttachmentUrls([]);
   };
 
   const handleAction = async () => {
@@ -294,21 +306,20 @@ export default function LeaveRequestsPage() {
             </div>
 
             {/* Attachments */}
-            {selectedRequest.attachments && selectedRequest.attachments.length > 0 && (
+            {attachmentUrls.length > 0 && (
               <div style={{ marginTop: 16 }}>
                 <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>
-                  Attachments ({selectedRequest.attachments.length})
+                  Attachments ({attachmentUrls.length})
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <Image.PreviewGroup>
-                    {selectedRequest.attachments.map((url, i) => {
-                      const fullUrl = `${apiBaseUrl}${url}`;
-                      const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(url);
+                    {attachmentUrls.map((att, i) => {
+                      const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(att.filename || '');
                       if (isImage) {
                         return (
                           <Image
                             key={i}
-                            src={fullUrl}
+                            src={att.url}
                             width={100}
                             height={100}
                             style={{ objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border-light)' }}
@@ -318,7 +329,7 @@ export default function LeaveRequestsPage() {
                       return (
                         <a
                           key={i}
-                          href={fullUrl}
+                          href={att.url}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{
@@ -335,7 +346,7 @@ export default function LeaveRequestsPage() {
                             textDecoration: 'none',
                           }}
                         >
-                          {url.split('/').pop()}
+                          {att.filename}
                         </a>
                       );
                     })}

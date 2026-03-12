@@ -95,6 +95,18 @@ export class AuthService {
     }
   }
 
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.usersService.findById(userId);
+
+    const isValid = await this.comparePassword(currentPassword, user.password);
+    if (!isValid) {
+      throw new BadRequestException('Current password is incorrect');
+    }
+
+    user.password = await this.hashPassword(newPassword);
+    await this.usersService.save(user);
+  }
+
   async logout(userId: string) {
     const user = await this.usersService.findById(userId);
     user.refreshToken = null as any;

@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
-import { invitationTemplate } from './templates/invitation.template';
+import { credentialsTemplate } from './templates/credentials.template';
 
 @Injectable()
 export class EmailService {
@@ -19,18 +19,16 @@ export class EmailService {
     this.from = this.configService.get<string>('EMAIL_FROM', 'PulseTrack <onboarding@resend.dev>');
   }
 
-  async sendInvitationEmail(
+  async sendCredentialsEmail(
     email: string,
     firstName: string,
-    inviteToken: string,
+    password: string,
   ): Promise<void> {
-    const adminUrl = this.configService.get<string>('app.adminUrl');
-    const inviteUrl = `${adminUrl}/accept-invite?token=${inviteToken}`;
-    const html = invitationTemplate(firstName, inviteUrl);
+    const html = credentialsTemplate(firstName, email, password);
 
     await this.sendEmail(
       email,
-      'You have been invited to PulseTrack',
+      'Your PulseTrack Account Credentials',
       html,
     );
   }

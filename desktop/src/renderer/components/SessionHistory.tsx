@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Spin, Collapse } from 'antd';
+import { PlayCircleOutlined, HistoryOutlined } from '@ant-design/icons';
 import { getSessions } from '../api/client';
 import { WorkSession } from '../types';
 import { formatTime, formatDuration } from '../utils/format';
@@ -76,7 +77,15 @@ export default function SessionHistory() {
     loadSessions();
 
     const interval = setInterval(loadSessions, 60_000);
-    return () => clearInterval(interval);
+
+    // Refresh immediately when a session starts or stops
+    const handleSessionChange = () => loadSessions();
+    window.addEventListener('session-changed', handleSessionChange);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('session-changed', handleSessionChange);
+    };
   }, []);
 
   const totalAll = groups.reduce((a, g) => a + g.totalDuration, 0);
@@ -196,7 +205,7 @@ export default function SessionHistory() {
         marginBottom: 10,
         flexWrap: 'wrap',
       }}>
-        <span style={{ fontSize: 13, opacity: 0.5 }}>&#9656;</span>
+        <HistoryOutlined style={{ fontSize: 13, opacity: 0.5 }} />
         <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.9)' }}>
           Activity Log
         </span>
@@ -219,7 +228,7 @@ export default function SessionHistory() {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             margin: '0 auto 12px',
           }}>
-            <span style={{ fontSize: 16, opacity: 0.3 }}>&#9656;</span>
+            <PlayCircleOutlined style={{ fontSize: 16, opacity: 0.3 }} />
           </div>
           <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', lineHeight: 1.6 }}>
             No activity recorded yet

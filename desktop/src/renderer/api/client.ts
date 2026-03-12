@@ -85,4 +85,22 @@ export async function getCoachingTips() {
   return response.data;
 }
 
+// Leave Requests
+export async function getMyLeaveRequests() {
+  const response = await apiClient.get('/leave-requests/my');
+  return response.data;
+}
+
+export async function createLeaveRequest(data: FormData) {
+  const response = await apiClient.post('/leave-requests', data, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+}
+
+export async function changePassword(currentPassword: string, newPassword: string) {
+  const response = await apiClient.post('/auth/change-password', { currentPassword, newPassword });
+  return response.data;
+}
+
 export default apiClient;

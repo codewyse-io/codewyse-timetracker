@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Spin } from 'antd';
+import { ClockCircleOutlined, ArrowRightOutlined, CalendarOutlined } from '@ant-design/icons';
 import { getSessions } from '../api/client';
 import { WorkSession } from '../types';
 import { formatTime, formatDuration } from '../utils/format';
@@ -102,7 +103,7 @@ export default function TimelinePanel() {
             marginBottom: 10,
           }}
         >
-          <span style={{ fontSize: 13, opacity: 0.5 }}>&#128337;</span>
+          <ClockCircleOutlined style={{ fontSize: 13, opacity: 0.5 }} />
           <span
             style={{
               fontSize: 13,
@@ -121,7 +122,7 @@ export default function TimelinePanel() {
         {/* Date filters */}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <DateInput label="From" value={fromDate} onChange={setFromDate} />
-          <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 11 }}>&#8594;</span>
+          <ArrowRightOutlined style={{ color: 'rgba(255,255,255,0.2)', fontSize: 9 }} />
           <DateInput label="To" value={toDate} onChange={setToDate} />
           {/* Quick filters */}
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
@@ -176,7 +177,7 @@ export default function TimelinePanel() {
               margin: '0 auto 12px',
             }}
           >
-            <span style={{ fontSize: 16, opacity: 0.3 }}>&#128197;</span>
+            <CalendarOutlined style={{ fontSize: 16, opacity: 0.3 }} />
           </div>
           <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', lineHeight: 1.6 }}>
             No sessions found

@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setAuthToken: (token: string): Promise<void> => ipcRenderer.invoke('set-auth-token', token),
   clearAuthToken: (): Promise<void> => ipcRenderer.invoke('clear-auth-token'),
   setIdleThreshold: (seconds: number): Promise<void> => ipcRenderer.invoke('set-idle-threshold', seconds),
+  startIdleDetection: (): Promise<void> => ipcRenderer.invoke('start-idle-detection'),
+  stopIdleDetection: (): Promise<void> => ipcRenderer.invoke('stop-idle-detection'),
   minimizeToTray: (): void => ipcRenderer.send('minimize-to-tray'),
   quitApp: (): void => ipcRenderer.send('quit-app'),
   onIdleDetected: (callback: (data: { startTime: string }) => void): void => {

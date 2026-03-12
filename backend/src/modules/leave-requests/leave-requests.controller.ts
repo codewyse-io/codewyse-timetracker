@@ -14,9 +14,7 @@ import {
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiConsumes } from '@nestjs/swagger';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import { memoryStorage } from 'multer';
 import { LeaveRequestsService } from './leave-requests.service';
 import { CreateLeaveRequestDto } from './dto/create-leave-request.dto';
 import { UpdateLeaveStatusDto } from './dto/update-leave-status.dto';
@@ -25,35 +23,39 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../../common/enums/role.enum';
+import { S3Service } from '../s3/s3.service';
 
 @ApiTags('Leave Requests')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('leave-requests')
 export class LeaveRequestsController {
-  constructor(private readonly leaveRequestsService: LeaveRequestsService) {}
+  constructor(
+    private readonly leaveRequestsService: LeaveRequestsService,
+    private readonly s3Service: S3Service,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Submit a leave request' })
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(
     FilesInterceptor('attachments', 5, {
-      storage: diskStorage({
-        destination: './uploads/leave-attachments',
-        filename: (_req, file, cb) => {
-          const uniqueName = `${uuidv4()}${extname(file.originalname)}`;
-          cb(null, uniqueName);
-        },
-      }),
+      storage: memoryStorage(),
       limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
     }),
   )
   async create(
     @Req() req: any,
     @Body() dto: CreateLeaveRequestDto,
-    @UploadedFiles() files: Array<{ filename: string }>,
+    @UploadedFiles() files: Express.Multer.File[],
   ) {
-    const attachments = files?.map((f) => `/uploads/leave-attachments/${f.filename}`) || [];
+    const attachments: string[] = [];
+    if (files?.length) {
+      for (const file of files) {
+        const key = await this.s3Service.uploadFile(file, 'leave-attachments');
+        attachments.push(key);
+      }
+    }
     return this.leaveRequestsService.create(req.user.id, dto, attachments);
   }
 
@@ -74,6 +76,22 @@ export class LeaveRequestsController {
   @ApiOperation({ summary: 'Get leave request details' })
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.leaveRequestsService.findById(id);
+  }
+
+  @Get(':id/attachments')
+  @ApiOperation({ summary: 'Get presigned URLs for leave request attachments' })
+  async getAttachmentUrls(@Param('id', ParseUUIDPipe) id: string) {
+    const request = await this.leaveRequestsService.findById(id);
+    if (!request.attachments?.length) {
+      return [];
+    }
+    return Promise.all(
+      request.attachments.map(async (key) => ({
+        key,
+        url: await this.s3Service.getPresignedUrl(key),
+        filename: key.split('/').pop(),
+      })),
+    );
   }
 
   @Patch(':id/status')

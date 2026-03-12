@@ -52,6 +52,21 @@ export interface CoachingTip {
   generatedAt: string;
 }
 
+export interface LeaveRequest {
+  id: string;
+  userId: string;
+  subject: string;
+  message: string;
+  startDate: string;
+  endDate: string;
+  totalDays: number;
+  attachments: string[] | null;
+  status: 'pending' | 'approved' | 'rejected';
+  adminNotes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface IdleEvent {
   startTime: string;
   endTime: string;
@@ -65,6 +80,9 @@ declare global {
       getAuthToken: () => Promise<string | null>;
       setAuthToken: (token: string) => Promise<void>;
       clearAuthToken: () => Promise<void>;
+      setIdleThreshold: (seconds: number) => Promise<void>;
+      startIdleDetection: () => Promise<void>;
+      stopIdleDetection: () => Promise<void>;
       minimizeToTray: () => void;
       quitApp: () => void;
       onIdleDetected: (callback: (data: { startTime: string }) => void) => void;

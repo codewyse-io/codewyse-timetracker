@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Spin } from 'antd';
+import { StarOutlined, BulbOutlined } from '@ant-design/icons';
 import { getCoachingTips } from '../api/client';
 import { CoachingTip } from '../types';
 
@@ -44,13 +45,23 @@ export default function CoachingPanel() {
       }
     };
     loadTips();
+
+    // Refresh on session changes and periodically
+    const handleSessionChange = () => loadTips();
+    window.addEventListener('session-changed', handleSessionChange);
+    const interval = setInterval(loadTips, 15_000);
+
+    return () => {
+      window.removeEventListener('session-changed', handleSessionChange);
+      clearInterval(interval);
+    };
   }, []);
 
   return (
     <div className="glass-card" style={{ padding: 12 }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <span style={{ fontSize: 14, opacity: 0.6 }}>&#9733;</span>
+        <StarOutlined style={{ fontSize: 14, opacity: 0.6 }} />
         <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.9)' }}>
           Pulse Insights
         </span>
@@ -79,7 +90,7 @@ export default function CoachingPanel() {
             margin: '0 auto 12px',
             animation: 'breathe 3s ease-in-out infinite',
           }}>
-            <span style={{ fontSize: 18, opacity: 0.6 }}>&#10024;</span>
+            <BulbOutlined style={{ fontSize: 18, opacity: 0.6 }} />
           </div>
           <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6 }}>
             Pulse is learning your patterns...

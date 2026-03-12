@@ -1,13 +1,22 @@
 import React, { useEffect, useState } from 'react';
-import { Spin } from 'antd';
+import { Spin, message } from 'antd';
+import { SettingOutlined, LockOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
-import { getMe } from '../api/client';
+import { getMe, changePassword } from '../api/client';
 import { User } from '../types';
 
 export default function ProfilePanel() {
   const { user: authUser } = useAuth();
   const [user, setUser] = useState<User | null>(authUser);
   const [loading, setLoading] = useState(true);
+
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -35,7 +44,6 @@ export default function ProfilePanel() {
 
   const initials = `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}`.toUpperCase();
 
-  // Format shift time in the shift's own timezone
   const formatShiftValue = (): string => {
     const shift = user.shift;
     if (!shift) return 'No shift assigned';
@@ -88,141 +96,119 @@ export default function ProfilePanel() {
       : []),
   ];
 
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      message.error('Please fill in all fields');
+      return;
+    }
+    if (newPassword.length < 8) {
+      message.error('New password must be at least 8 characters');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      message.error('Passwords do not match');
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      await changePassword(currentPassword, newPassword);
+      message.success('Password changed successfully');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err: any) {
+      message.error(err.response?.data?.message || 'Failed to change password');
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '9px 36px 9px 12px',
+    borderRadius: 8,
+    border: '1px solid rgba(255,255,255,0.08)',
+    background: 'rgba(255,255,255,0.03)',
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 12,
+    outline: 'none',
+    transition: 'border-color 0.2s',
+  };
+
+  const eyeStyle: React.CSSProperties = {
+    position: 'absolute',
+    right: 10,
+    top: '50%',
+    transform: 'translateY(-50%)',
+    cursor: 'pointer',
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: 13,
+  };
+
   return (
-    <div style={{ display: 'grid', gap: 10, padding: 10 }}>
-      {/* Profile Card */}
-      <div
-        className="glass-card"
-        style={{
-          padding: '24px 16px',
-          textAlign: 'center',
-        }}
-      >
-        {/* Avatar */}
-        <div
-          style={{
-            width: 64,
-            height: 64,
-            borderRadius: '50%',
-            background: 'linear-gradient(135deg, #7c5cfc 0%, #00d4ff 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 14px',
-            boxShadow: '0 8px 32px rgba(124, 92, 252, 0.3)',
-            position: 'relative',
-          }}
-        >
-          <span
-            style={{
-              fontSize: 22,
-              fontWeight: 700,
-              color: '#fff',
-              letterSpacing: 1,
-            }}
-          >
-            {initials}
-          </span>
-          {/* Online dot */}
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, padding: 10 }}>
+      {/* Left Column: Profile + Details */}
+      <div className="glass-card" style={{ padding: 16, display: 'flex', flexDirection: 'column' }}>
+        {/* Avatar + Name */}
+        <div style={{ textAlign: 'center', marginBottom: 16 }}>
           <div
             style={{
-              position: 'absolute',
-              bottom: 2,
-              right: 2,
-              width: 14,
-              height: 14,
+              width: 56,
+              height: 56,
               borderRadius: '50%',
-              background: '#00e676',
-              border: '2.5px solid #0a0a0f',
-              boxShadow: '0 0 8px rgba(0, 230, 118, 0.5)',
-            }}
-          />
-        </div>
-
-        {/* Name */}
-        <div
-          style={{
-            fontSize: 18,
-            fontWeight: 700,
-            color: 'rgba(255, 255, 255, 0.9)',
-            marginBottom: 4,
-            letterSpacing: -0.3,
-          }}
-        >
-          {user.firstName} {user.lastName}
-        </div>
-
-        {/* Role badge */}
-        <div
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '4px 12px',
-            borderRadius: 20,
-            background: 'rgba(124, 92, 252, 0.1)',
-            border: '1px solid rgba(124, 92, 252, 0.2)',
-            marginBottom: 4,
-          }}
-        >
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: '#7c5cfc',
-              boxShadow: '0 0 6px rgba(124, 92, 252, 0.5)',
-            }}
-          />
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              color: '#7c5cfc',
-              letterSpacing: 0.5,
-              textTransform: 'uppercase',
+              background: 'linear-gradient(135deg, #7c5cfc 0%, #00d4ff 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 10px',
+              boxShadow: '0 8px 32px rgba(124, 92, 252, 0.3)',
+              position: 'relative',
             }}
           >
-            {user.role === 'admin' ? 'Admin' : 'Employee'}
-          </span>
-        </div>
-
-        {user.designation && (
-          <div
-            style={{
-              fontSize: 12,
-              color: 'rgba(255, 255, 255, 0.4)',
-              marginTop: 4,
-            }}
-          >
-            {user.designation}
+            <span style={{ fontSize: 20, fontWeight: 700, color: '#fff', letterSpacing: 1 }}>
+              {initials}
+            </span>
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 1,
+                right: 1,
+                width: 12,
+                height: 12,
+                borderRadius: '50%',
+                background: '#00e676',
+                border: '2px solid #0a0a0f',
+                boxShadow: '0 0 8px rgba(0, 230, 118, 0.5)',
+              }}
+            />
           </div>
-        )}
-      </div>
-
-      {/* Details Card */}
-      <div className="glass-card" style={{ padding: 12 }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            marginBottom: 12,
-          }}
-        >
-          <span style={{ fontSize: 13, opacity: 0.5 }}>&#9881;</span>
-          <span
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'rgba(255,255,255,0.9)', marginBottom: 4, letterSpacing: -0.3 }}>
+            {user.firstName} {user.lastName}
+          </div>
+          <div
             style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: 'rgba(255,255,255,0.9)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '3px 10px',
+              borderRadius: 20,
+              background: 'rgba(124, 92, 252, 0.1)',
+              border: '1px solid rgba(124, 92, 252, 0.2)',
             }}
           >
-            Profile Details
-          </span>
+            <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#7c5cfc', boxShadow: '0 0 6px rgba(124, 92, 252, 0.5)' }} />
+            <span style={{ fontSize: 10, fontWeight: 600, color: '#7c5cfc', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+              {user.role === 'admin' ? 'Admin' : 'Employee'}
+            </span>
+          </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        {/* Details */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+          <SettingOutlined style={{ fontSize: 12, opacity: 0.5 }} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.9)' }}>Profile Details</span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1 }}>
           {infoRows.map((row) => (
             <div
               key={row.label}
@@ -230,25 +216,19 @@ export default function ProfilePanel() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: '9px 10px',
-                borderRadius: 8,
+                padding: '7px 8px',
+                borderRadius: 6,
                 background: 'rgba(255, 255, 255, 0.015)',
                 borderBottom: '1px solid rgba(255, 255, 255, 0.03)',
               }}
             >
-              <span
-                style={{
-                  fontSize: 12,
-                  color: 'rgba(255, 255, 255, 0.4)',
-                  fontWeight: 500,
-                }}
-              >
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>
                 {row.label}
               </span>
               <span
                 style={{
-                  fontSize: 12,
-                  color: row.color || 'rgba(255, 255, 255, 0.75)',
+                  fontSize: 11,
+                  color: row.color || 'rgba(255,255,255,0.75)',
                   fontWeight: 600,
                   textAlign: 'right',
                   maxWidth: '60%',
@@ -262,6 +242,93 @@ export default function ProfilePanel() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Right Column: Change Password */}
+      <div className="glass-card" style={{ padding: 16, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16 }}>
+          <LockOutlined style={{ fontSize: 12, opacity: 0.5 }} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.9)' }}>Change Password</span>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
+          <div>
+            <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 500, marginBottom: 4, display: 'block' }}>
+              Current Password
+            </label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showCurrent ? 'text' : 'password'}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                style={inputStyle}
+                placeholder="Enter current password"
+              />
+              <span style={eyeStyle} onClick={() => setShowCurrent(!showCurrent)}>
+                {showCurrent ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 500, marginBottom: 4, display: 'block' }}>
+              New Password
+            </label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showNew ? 'text' : 'password'}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                style={inputStyle}
+                placeholder="Min 8 characters"
+              />
+              <span style={eyeStyle} onClick={() => setShowNew(!showNew)}>
+                {showNew ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 500, marginBottom: 4, display: 'block' }}>
+              Confirm Password
+            </label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showConfirm ? 'text' : 'password'}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                style={inputStyle}
+                placeholder="Re-enter new password"
+              />
+              <span style={eyeStyle} onClick={() => setShowConfirm(!showConfirm)}>
+                {showConfirm ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={handleChangePassword}
+          disabled={changingPassword}
+          style={{
+            marginTop: 16,
+            width: '100%',
+            padding: '10px 0',
+            borderRadius: 10,
+            border: 'none',
+            background: 'linear-gradient(135deg, #7c5cfc 0%, #00d4ff 100%)',
+            color: '#fff',
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: changingPassword ? 'not-allowed' : 'pointer',
+            opacity: changingPassword ? 0.6 : 1,
+            letterSpacing: 0.3,
+            boxShadow: '0 4px 16px rgba(124, 92, 252, 0.3)',
+            transition: 'opacity 0.2s, transform 0.15s',
+          }}
+        >
+          {changingPassword ? 'Updating...' : 'Update Password'}
+        </button>
       </div>
     </div>
   );

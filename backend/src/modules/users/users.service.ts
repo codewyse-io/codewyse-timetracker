@@ -5,8 +5,9 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { v4 as uuidv4 } from 'uuid';
 import { ConfigService } from '@nestjs/config';
+import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { User } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -24,6 +25,10 @@ export class UsersService {
     private readonly emailService: EmailService,
   ) {}
 
+  private generateTempPassword(): string {
+    return crypto.randomBytes(6).toString('base64url'); // ~8 char readable password
+  }
+
   async create(createUserDto: CreateUserDto): Promise<User> {
     const existing = await this.usersRepository.findOne({
       where: { email: createUserDto.email },
@@ -33,29 +38,25 @@ export class UsersService {
       throw new ConflictException('A user with this email already exists');
     }
 
-    const invitationToken = uuidv4();
-    const expiryHours = this.configService.get<number>('app.invitationExpiryHours', 72);
-    const invitationExpiry = new Date();
-    invitationExpiry.setHours(invitationExpiry.getHours() + expiryHours);
+    const tempPassword = this.generateTempPassword();
+    const hashedPassword = await bcrypt.hash(tempPassword, 12);
 
     const user = this.usersRepository.create({
       ...createUserDto,
-      invitationToken,
-      invitationExpiry,
-      status: UserStatus.INVITED,
+      password: hashedPassword,
+      status: UserStatus.ACTIVE,
     });
 
     const savedUser = await this.usersRepository.save(user);
 
     try {
-      await this.emailService.sendInvitationEmail(
+      await this.emailService.sendCredentialsEmail(
         savedUser.email,
         savedUser.firstName,
-        invitationToken,
+        tempPassword,
       );
     } catch (error) {
-      // Log but don't fail user creation if email fails
-      console.error(`Failed to send invitation email to ${savedUser.email}:`, error);
+      console.error(`Failed to send credentials email to ${savedUser.email}:`, error);
     }
 
     return savedUser;
@@ -64,23 +65,19 @@ export class UsersService {
   async resendInvite(id: string): Promise<void> {
     const user = await this.findById(id);
 
-    if (user.status !== UserStatus.INVITED) {
-      throw new ConflictException('Can only resend invitations to users with invited status');
+    const tempPassword = this.generateTempPassword();
+    const hashedPassword = await bcrypt.hash(tempPassword, 12);
+
+    user.password = hashedPassword;
+    if (user.status === UserStatus.INVITED) {
+      user.status = UserStatus.ACTIVE;
     }
-
-    const invitationToken = uuidv4();
-    const expiryHours = this.configService.get<number>('app.invitationExpiryHours', 72);
-    const invitationExpiry = new Date();
-    invitationExpiry.setHours(invitationExpiry.getHours() + expiryHours);
-
-    user.invitationToken = invitationToken;
-    user.invitationExpiry = invitationExpiry;
     await this.usersRepository.save(user);
 
-    await this.emailService.sendInvitationEmail(
+    await this.emailService.sendCredentialsEmail(
       user.email,
       user.firstName,
-      invitationToken,
+      tempPassword,
     );
   }
 

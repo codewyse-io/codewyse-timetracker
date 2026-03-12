@@ -17,6 +17,7 @@ import { QueueModule } from './modules/queue/queue.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { AiModule } from './modules/ai/ai.module';
 import { LeaveRequestsModule } from './modules/leave-requests/leave-requests.module';
+import { S3Module } from './modules/s3/s3.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 
@@ -44,6 +45,7 @@ import { join } from 'path';
     QueueModule,
     ReportsModule,
     AiModule,
+    S3Module,
     LeaveRequestsModule,
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads'),

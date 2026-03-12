@@ -29,4 +29,8 @@ export const leaveRequestsApi = {
       adminNotes,
     });
   },
+
+  getAttachments(id: string): Promise<{ key: string; url: string; filename: string }[]> {
+    return apiClient.get(`/leave-requests/${id}/attachments`);
+  },
 };

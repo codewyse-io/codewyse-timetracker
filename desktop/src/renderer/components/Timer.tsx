@@ -84,6 +84,7 @@ export default function Timer() {
           setIsRunning(true);
           if (current.mode) setMode(current.mode);
           startTimer(new Date(current.startTime));
+          try { await window.electronAPI.startIdleDetection(); } catch { /* */ }
         }
       } catch {
         // No active session
@@ -106,13 +107,23 @@ export default function Timer() {
       setIsRunning(true);
       startTimer(new Date(newSession.startTime));
 
-      // Apply idle threshold from shift settings
+      // Apply idle threshold from shift settings and start idle detection
       try {
-        const settings = await getTrackingSettings();
-        await window.electronAPI.setIdleThreshold(settings.idleThresholdSeconds);
+        const response = await getTrackingSettings();
+        const settings = response.data || response;
+        const threshold = settings.idleThresholdSeconds;
+        if (threshold && !isNaN(threshold)) {
+          await window.electronAPI.setIdleThreshold(threshold);
+        }
       } catch {
         // non-critical — keep existing threshold
       }
+      try {
+        await window.electronAPI.startIdleDetection();
+      } catch {
+        // non-critical
+      }
+      window.dispatchEvent(new Event('session-changed'));
     } catch (err: any) {
       const msg = err.response?.data?.message || 'Failed to activate Pulse';
       showError(msg);
@@ -130,6 +141,12 @@ export default function Timer() {
       clearTimer();
       setElapsed(0);
       setSession(null);
+      try {
+        await window.electronAPI.stopIdleDetection();
+      } catch {
+        // non-critical
+      }
+      window.dispatchEvent(new Event('session-changed'));
     } catch (err: any) {
       const msg = err.response?.data?.message || 'Failed to end session';
       showError(msg);

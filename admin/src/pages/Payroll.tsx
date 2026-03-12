@@ -8,14 +8,16 @@ import {
   Segmented,
   Button,
   Spin,
+  Select,
   message,
 } from 'antd';
-import { DollarOutlined, ClockCircleOutlined, TeamOutlined, DownloadOutlined, RiseOutlined } from '@ant-design/icons';
+import { DollarOutlined, ClockCircleOutlined, TeamOutlined, DownloadOutlined, RiseOutlined, UserOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 
-import type { PayrollEntry } from '../types';
+import type { PayrollEntry, User } from '../types';
 import { payrollApi, type PayrollSummary } from '../api/payroll.api';
+import { usersApi } from '../api/users.api';
 import { formatCurrency, formatDuration } from '../utils/format';
 import { downloadCsv } from '../utils/export';
 
@@ -61,6 +63,8 @@ export default function PayrollPage() {
   const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs());
   const [summary, setSummary] = useState<PayrollSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [employees, setEmployees] = useState<User[]>([]);
+  const [selectedEmployee, setSelectedEmployee] = useState<string | undefined>(undefined);
 
   const fetchPayroll = useCallback(async () => {
     setLoading(true);
@@ -87,13 +91,23 @@ export default function PayrollPage() {
     fetchPayroll();
   }, [fetchPayroll]);
 
+  useEffect(() => {
+    usersApi.getUsers({ limit: 500, role: 'employee' }).then((res) => {
+      setEmployees(res.data.data);
+    }).catch(() => {});
+  }, []);
+
+  const filteredEntries = summary?.entries.filter(
+    (e) => !selectedEmployee || e.userId === selectedEmployee,
+  ) ?? [];
+
   const handleExportCsv = () => {
-    if (!summary || summary.entries.length === 0) {
+    if (filteredEntries.length === 0) {
       message.warning('No data to export');
       return;
     }
     const headers = ['Employee', 'Role', 'Active Hours', 'Hourly Rate ($)', 'Payable Amount ($)'];
-    const rows = summary.entries.map((e) => [
+    const rows = filteredEntries.map((e) => [
       `${e.user.firstName} ${e.user.lastName}`,
       e.user.role,
       (e.activeHours || 0).toFixed(1),
@@ -171,11 +185,17 @@ export default function PayrollPage() {
     },
   ];
 
+  const filteredTotalHours = filteredEntries.reduce((s, e) => s + e.activeHours, 0);
+  const filteredTotalPayable = filteredEntries.reduce((s, e) => s + e.payableAmount, 0);
+  const filteredAvgRate = filteredEntries.length > 0
+    ? filteredEntries.reduce((s, e) => s + e.hourlyRate, 0) / filteredEntries.length
+    : 0;
+
   const statValues: Record<string, number | string> = {
-    totalPayable: summary?.totalPayable ?? 0,
-    totalActiveHours: summary?.totalActiveHours ?? 0,
-    averageHourlyRate: summary?.averageHourlyRate ?? 0,
-    employeeCount: summary?.employeeCount ?? 0,
+    totalPayable: Math.round(filteredTotalPayable * 100) / 100,
+    totalActiveHours: Math.round(filteredTotalHours * 100) / 100,
+    averageHourlyRate: Math.round(filteredAvgRate * 100) / 100,
+    employeeCount: filteredEntries.length,
   };
 
   return (
@@ -197,6 +217,24 @@ export default function PayrollPage() {
               if (date) setSelectedDate(date);
             }}
             style={{ borderRadius: 'var(--radius-sm)' }}
+          />
+        </Col>
+        <Col>
+          <Select
+            allowClear
+            showSearch
+            placeholder="All Employees"
+            value={selectedEmployee}
+            onChange={(val) => setSelectedEmployee(val)}
+            style={{ width: 220, borderRadius: 'var(--radius-sm)' }}
+            suffixIcon={<UserOutlined />}
+            filterOption={(input, option) =>
+              (option?.label as string ?? '').toLowerCase().includes(input.toLowerCase())
+            }
+            options={employees.map((emp) => ({
+              value: emp.id,
+              label: `${emp.firstName} ${emp.lastName}`,
+            }))}
           />
         </Col>
         <Col flex="auto" style={{ textAlign: 'right' }}>
@@ -278,13 +316,16 @@ export default function PayrollPage() {
             bodyStyle={{ padding: 0, overflow: 'hidden', borderRadius: 'var(--radius-lg)' }}
           >
             <Table
-              dataSource={summary?.entries ?? []}
+              dataSource={filteredEntries}
               columns={columns}
               rowKey="userId"
               pagination={false}
               rowClassName={() => 'payroll-row'}
               summary={() => {
-                if (!summary || summary.entries.length === 0) return null;
+                if (filteredEntries.length === 0) return null;
+                const totalHrs = filteredEntries.reduce((s, e) => s + e.activeHours, 0);
+                const totalPay = filteredEntries.reduce((s, e) => s + e.payableAmount, 0);
+                const avgRate = filteredEntries.reduce((s, e) => s + e.hourlyRate, 0) / filteredEntries.length;
                 return (
                   <Table.Summary.Row className="payroll-summary-row">
                     <Table.Summary.Cell index={0}>
@@ -293,17 +334,17 @@ export default function PayrollPage() {
                     <Table.Summary.Cell index={1} />
                     <Table.Summary.Cell index={2}>
                       <span style={{ fontWeight: 700, color: '#166534' }}>
-                        {formatDuration((summary.totalActiveHours ?? 0) * 3600)}
+                        {formatDuration(totalHrs * 3600)}
                       </span>
                     </Table.Summary.Cell>
                     <Table.Summary.Cell index={3}>
                       <span style={{ fontWeight: 700, color: '#166534' }}>
-                        {formatCurrency(summary.averageHourlyRate ?? 0)} avg
+                        {formatCurrency(Math.round(avgRate * 100) / 100)} avg
                       </span>
                     </Table.Summary.Cell>
                     <Table.Summary.Cell index={4}>
                       <span style={{ fontWeight: 700, color: '#10b981', fontSize: 16 }}>
-                        {formatCurrency(summary.totalPayable ?? 0)}
+                        {formatCurrency(Math.round(totalPay * 100) / 100)}
                       </span>
                     </Table.Summary.Cell>
                   </Table.Summary.Row>
