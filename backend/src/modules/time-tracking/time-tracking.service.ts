@@ -131,11 +131,12 @@ export class TimeTrackingService {
    * Get all currently active sessions (admin view).
    */
   async getActiveSessions(): Promise<WorkSession[]> {
-    return this.sessionRepository.find({
+    const sessions = await this.sessionRepository.find({
       where: { status: SessionStatus.ACTIVE },
       relations: ['user'],
       order: { startTime: 'DESC' },
     });
+    return this.computeLiveDurations(sessions);
   }
 
   /**
@@ -268,6 +269,7 @@ export class TimeTrackingService {
     qb.skip(skip).take(limit);
 
     const [data, total] = await qb.getManyAndCount();
+    this.computeLiveDurations(data);
 
     return new PaginatedResponseDto(data, total, page, limit);
   }
@@ -325,5 +327,24 @@ export class TimeTrackingService {
     session.totalDuration = totalSeconds;
     session.idleDuration = idleSeconds;
     session.activeDuration = Math.max(0, totalSeconds - idleSeconds);
+  }
+
+  /**
+   * For active (in-progress) sessions, compute live durations on the fly
+   * since they are only persisted when the session is stopped.
+   */
+  private computeLiveDurations(sessions: WorkSession[]): WorkSession[] {
+    const now = Date.now();
+    for (const session of sessions) {
+      if (session.status === SessionStatus.ACTIVE) {
+        const totalSeconds = Math.floor(
+          (now - new Date(session.startTime).getTime()) / 1000,
+        );
+        const idleSeconds = session.idleDuration || 0;
+        session.totalDuration = totalSeconds;
+        session.activeDuration = Math.max(0, totalSeconds - idleSeconds);
+      }
+    }
+    return sessions;
   }
 }
