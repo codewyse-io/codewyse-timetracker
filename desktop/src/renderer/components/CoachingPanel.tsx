@@ -58,14 +58,14 @@ export default function CoachingPanel() {
   }, []);
 
   return (
-    <div className="glass-card" style={{ padding: 12 }}>
+    <div className="glass-card" style={{ padding: 12, overflow: 'hidden' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <StarOutlined style={{ fontSize: 14, opacity: 0.6 }} />
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.9)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+        <StarOutlined style={{ fontSize: 14, opacity: 0.6, flexShrink: 0 }} />
+        <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255,255,255,0.95)', fontFamily: "'Space Grotesk', 'Inter', sans-serif", minWidth: 0 }}>
           Pulse Insights
         </span>
-        <span className="ai-dot" style={{ width: 6, height: 6, marginLeft: 'auto' }} />
+        <span className="ai-dot" style={{ width: 6, height: 6, marginLeft: 'auto', flexShrink: 0 }} />
       </div>
 
       {loading ? (
@@ -92,7 +92,7 @@ export default function CoachingPanel() {
           }}>
             <BulbOutlined style={{ fontSize: 18, opacity: 0.6 }} />
           </div>
-          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6 }}>
+          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6 }}>
             Pulse is learning your patterns...
             <br />
             insights coming soon
@@ -100,7 +100,7 @@ export default function CoachingPanel() {
         </div>
       ) : (
         /* Tips as AI message bubbles */
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden' }}>
           {tips.map((tip) => {
             const catColor = categoryColors[tip.category] || '#7c5cfc';
             const catGlow = categoryGlows[tip.category] || 'rgba(124, 92, 252, 0.12)';
@@ -113,6 +113,8 @@ export default function CoachingPanel() {
                   borderRadius: 12,
                   padding: '10px 12px',
                   transition: 'border-color 0.3s ease',
+                  overflow: 'hidden',
+                  minWidth: 0,
                 }}
                 onMouseEnter={(e) => {
                   (e.currentTarget as HTMLElement).style.borderColor = `${catColor}30`;
@@ -142,9 +144,11 @@ export default function CoachingPanel() {
                 {/* Observation — AI speaking */}
                 <div style={{
                   fontSize: 12,
-                  color: 'rgba(255,255,255,0.8)',
+                  color: 'rgba(255,255,255,0.88)',
                   lineHeight: 1.55,
                   marginBottom: 8,
+                  wordBreak: 'break-word' as const,
+                  overflowWrap: 'break-word' as const,
                 }}>
                   {tip.observation}
                 </div>
@@ -155,10 +159,11 @@ export default function CoachingPanel() {
                   border: '1px solid rgba(124, 92, 252, 0.1)',
                   borderRadius: 8,
                   padding: '6px 10px',
+                  overflow: 'hidden',
                 }}>
                   <div style={{
                     fontSize: 9,
-                    color: '#7c5cfc',
+                    color: '#a78bfa',
                     fontWeight: 600,
                     letterSpacing: 0.8,
                     marginBottom: 4,
@@ -168,8 +173,10 @@ export default function CoachingPanel() {
                   </div>
                   <div style={{
                     fontSize: 11,
-                    color: 'rgba(255,255,255,0.7)',
+                    color: 'rgba(255,255,255,0.8)',
                     lineHeight: 1.5,
+                    wordBreak: 'break-word' as const,
+                    overflowWrap: 'break-word' as const,
                   }}>
                     {tip.recommendation}
                   </div>

@@ -98,11 +98,11 @@ export default function FocusScorePanel() {
   }
 
   return (
-    <div className="glass-card" style={{ padding: 12 }}>
+    <div className="glass-card" style={{ padding: 12, overflow: 'hidden' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         <ThunderboltOutlined style={{ fontSize: 14, opacity: 0.6 }} />
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.9)' }}>
+        <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255,255,255,0.95)', fontFamily: "'Space Grotesk', 'Inter', sans-serif", minWidth: 0 }}>
           AI Analysis
         </span>
       </div>
@@ -169,7 +169,7 @@ export default function FocusScorePanel() {
 
           {/* Active vs Idle bar */}
           <div style={{ marginBottom: 4 }}>
-            <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', letterSpacing: 0.5 }}>
+            <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', letterSpacing: 0.5 }}>
               ACTIVE VS IDLE
             </Text>
           </div>
@@ -191,10 +191,10 @@ export default function FocusScorePanel() {
             }} />
           </div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>
+            <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.65)' }}>
               Active: {formatDuration(activeTime)}
             </Text>
-            <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>
+            <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)' }}>
               Total: {formatDuration(loggedTime)}
             </Text>
           </div>
@@ -203,7 +203,7 @@ export default function FocusScorePanel() {
 
       {/* Weekly Chart */}
       {chartData.length > 1 && (
-        <div style={{ marginTop: 12, height: 70 }}>
+        <div style={{ marginTop: 12, height: 70, width: '100%', overflow: 'hidden' }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData}>
               <XAxis

@@ -41,8 +41,19 @@ export class FocusScoreService {
     let idleInterruptions = 0;
 
     for (const session of sessions) {
-      totalLoggedTime += session.totalDuration;
-      totalActiveTime += session.activeDuration;
+      // For active sessions, compute durations live from startTime to now
+      if (session.status === 'active') {
+        const now = new Date();
+        const liveTotal = Math.floor(
+          (now.getTime() - session.startTime.getTime()) / 1000,
+        );
+        const liveIdle = session.idleDuration || 0;
+        totalLoggedTime += liveTotal;
+        totalActiveTime += Math.max(0, liveTotal - liveIdle);
+      } else {
+        totalLoggedTime += session.totalDuration;
+        totalActiveTime += session.activeDuration;
+      }
       idleInterruptions += session.idleIntervals?.length ?? 0;
     }
 
@@ -92,10 +103,11 @@ export class FocusScoreService {
     period: 'daily' | 'weekly',
   ): Promise<DailyFocusScore[]> {
     const now = new Date();
+    const today = now.toISOString().split('T')[0];
     let startDate: string;
 
     if (period === 'daily') {
-      startDate = now.toISOString().split('T')[0];
+      startDate = today;
     } else {
       // Last 7 days
       const weekAgo = new Date(now);
@@ -103,13 +115,18 @@ export class FocusScoreService {
       startDate = weekAgo.toISOString().split('T')[0];
     }
 
-    const endDate = now.toISOString().split('T')[0];
+    // Always recalculate today's score live (handles active sessions)
+    try {
+      await this.calculateDailyScore(userId, today);
+    } catch (err) {
+      this.logger.warn(`Live focus score recalculation failed: ${err.message}`);
+    }
 
     return this.focusScoreRepo
       .createQueryBuilder('fs')
       .where('fs.userId = :userId', { userId })
       .andWhere('fs.date >= :startDate', { startDate })
-      .andWhere('fs.date <= :endDate', { endDate })
+      .andWhere('fs.date <= :endDate', { endDate: today })
       .orderBy('fs.date', 'DESC')
       .getMany();
   }

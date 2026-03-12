@@ -123,11 +123,11 @@ export default function Login() {
           <Title
             level={2}
             className="ai-gradient-text"
-            style={{ margin: 0, fontWeight: 700, letterSpacing: '-0.02em', fontSize: 'clamp(22px, 4vw, 30px)' }}
+            style={{ margin: 0, fontWeight: 700, letterSpacing: '-0.02em', fontSize: 'clamp(22px, 4vw, 30px)', fontFamily: "'Space Grotesk', 'Inter', sans-serif" }}
           >
             PulseTrack
           </Title>
-          <Text style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: 'clamp(11px, 1.8vw, 13px)', letterSpacing: '0.04em' }}>
+          <Text style={{ color: 'rgba(255, 255, 255, 0.55)', fontSize: 'clamp(11px, 1.8vw, 13px)', letterSpacing: '0.04em' }}>
             Your AI Work Companion
           </Text>
         </Space>

@@ -17,6 +17,7 @@ import {
   PlusOutlined,
   EditOutlined,
   StopOutlined,
+  DeleteOutlined,
   SendOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
@@ -281,6 +282,16 @@ export default function UsersPage() {
     }
   };
 
+  const handleDelete = async (id: string) => {
+    try {
+      await usersApi.deleteUser(id);
+      message.success('User deleted');
+      fetchUsers();
+    } catch {
+      message.error('Failed to delete user');
+    }
+  };
+
   const handleResendInvite = async (id: string) => {
     try {
       await usersApi.resendInvite(id);
@@ -447,6 +458,30 @@ export default function UsersPage() {
               />
             </Tooltip>
           )}
+          <Popconfirm
+            title="Delete this user?"
+            description="This action is permanent and cannot be undone."
+            onConfirm={() => handleDelete(record.id)}
+            okText="Delete"
+            okType="danger"
+          >
+            <Tooltip title="Delete user">
+              <Button
+                type="text"
+                danger
+                icon={<DeleteOutlined />}
+                size="small"
+                style={{
+                  borderRadius: 6,
+                  width: 32,
+                  height: 32,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              />
+            </Tooltip>
+          </Popconfirm>
         </Space>
       ),
     },

@@ -66,11 +66,19 @@ export class UsersController {
     return this.usersService.update(id, updateUserDto);
   }
 
-  @Delete(':id')
+  @Patch(':id/deactivate')
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Deactivate user (admin only)' })
   deactivate(@Param('id', ParseUUIDPipe) id: string) {
     return this.usersService.deactivate(id);
+  }
+
+  @Delete(':id')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Delete user permanently (admin only)' })
+  async remove(@Param('id', ParseUUIDPipe) id: string) {
+    await this.usersService.remove(id);
+    return { message: 'User deleted successfully' };
   }
 
   @Post(':id/resend-invite')

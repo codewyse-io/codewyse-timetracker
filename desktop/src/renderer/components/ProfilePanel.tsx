@@ -133,6 +133,7 @@ export default function ProfilePanel() {
     fontSize: 12,
     outline: 'none',
     transition: 'border-color 0.2s',
+    boxSizing: 'border-box' as const,
   };
 
   const eyeStyle: React.CSSProperties = {
@@ -146,9 +147,9 @@ export default function ProfilePanel() {
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, padding: 10 }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, padding: 10 }}>
       {/* Left Column: Profile + Details */}
-      <div className="glass-card" style={{ padding: 16, display: 'flex', flexDirection: 'column' }}>
+      <div className="glass-card" style={{ padding: 16, display: 'flex', flexDirection: 'column', flex: '1 1 250px', minWidth: 250, maxWidth: '100%' }}>
         {/* Avatar + Name */}
         <div style={{ textAlign: 'center', marginBottom: 16 }}>
           <div
@@ -182,7 +183,7 @@ export default function ProfilePanel() {
               }}
             />
           </div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: 'rgba(255,255,255,0.9)', marginBottom: 4, letterSpacing: -0.3 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'rgba(255,255,255,0.9)', marginBottom: 4, letterSpacing: -0.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {user.firstName} {user.lastName}
           </div>
           <div
@@ -245,7 +246,7 @@ export default function ProfilePanel() {
       </div>
 
       {/* Right Column: Change Password */}
-      <div className="glass-card" style={{ padding: 16, display: 'flex', flexDirection: 'column' }}>
+      <div className="glass-card" style={{ padding: 16, display: 'flex', flexDirection: 'column', flex: '1 1 250px', minWidth: 250, maxWidth: '100%' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16 }}>
           <LockOutlined style={{ fontSize: 12, opacity: 0.5 }} />
           <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.9)' }}>Change Password</span>

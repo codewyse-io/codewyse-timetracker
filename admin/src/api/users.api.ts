@@ -43,6 +43,9 @@ export const usersApi = {
   deactivateUser: (id: string) =>
     apiClient.patch<unknown, ApiResponse<User>>(`/users/${id}/deactivate`),
 
+  deleteUser: (id: string) =>
+    apiClient.delete<unknown, ApiResponse<null>>(`/users/${id}`),
+
   resendInvite: (id: string) =>
     apiClient.post<unknown, ApiResponse<null>>(`/users/${id}/resend-invite`),
 };

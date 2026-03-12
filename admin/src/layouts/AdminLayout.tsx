@@ -239,61 +239,6 @@ export default function AdminLayout() {
             />
           </div>
 
-          {/* Sidebar footer */}
-          {!collapsed && (
-            <div style={{ padding: '12px 16px 16px' }}>
-              <div
-                style={{
-                  background: 'rgba(255,255,255,0.04)',
-                  borderRadius: 12,
-                  padding: '10px 12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  border: '1px solid rgba(255,255,255,0.06)',
-                }}
-              >
-                <div style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 8,
-                  background: 'linear-gradient(135deg, #6366f1, #818cf8)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}>
-                  <UserOutlined style={{ color: '#fff', fontSize: 13 }} />
-                </div>
-                <div style={{ overflow: 'hidden', flex: 1 }}>
-                  <Text
-                    style={{
-                      color: 'rgba(255,255,255,0.8)',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      display: 'block',
-                      lineHeight: 1.3,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}
-                  >
-                    {user?.firstName} {user?.lastName}
-                  </Text>
-                  <Text
-                    style={{
-                      color: 'rgba(255,255,255,0.25)',
-                      fontSize: 10,
-                      display: 'block',
-                      lineHeight: 1.3,
-                    }}
-                  >
-                    Administrator
-                  </Text>
-                </div>
-              </div>
-            </div>
-          )}
         </Sider>
 
         {/* Main content area */}

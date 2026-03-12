@@ -117,6 +117,11 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
 
+  async remove(id: string): Promise<void> {
+    const user = await this.findById(id);
+    await this.usersRepository.remove(user);
+  }
+
   async list(paginationDto: PaginationDto): Promise<PaginatedResponseDto<User>> {
     const { page, limit } = paginationDto;
     const skip = (page - 1) * limit;

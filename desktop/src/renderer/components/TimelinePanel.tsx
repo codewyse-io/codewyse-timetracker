@@ -92,15 +92,16 @@ export default function TimelinePanel() {
   const activeAll = groups.reduce((a, g) => a + g.activeDuration, 0);
 
   return (
-    <div style={{ display: 'grid', gap: 10, padding: 10 }}>
+    <div style={{ display: 'grid', gap: 10, padding: 10, overflow: 'hidden', width: '100%', boxSizing: 'border-box' }}>
       {/* Filter Card */}
-      <div className="glass-card" style={{ padding: 12 }}>
+      <div className="glass-card" style={{ padding: 12, overflow: 'hidden' }}>
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: 8,
             marginBottom: 10,
+            flexWrap: 'wrap',
           }}
         >
           <ClockCircleOutlined style={{ fontSize: 13, opacity: 0.5 }} />
@@ -109,11 +110,12 @@ export default function TimelinePanel() {
               fontSize: 13,
               fontWeight: 600,
               color: 'rgba(255,255,255,0.9)',
+              minWidth: 0,
             }}
           >
             Timeline
           </span>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <SummaryPill label="Total" value={formatDuration(totalAll)} />
             <SummaryPill label="Active" value={formatDuration(activeAll)} color="#00e676" />
           </div>
@@ -125,7 +127,7 @@ export default function TimelinePanel() {
           <ArrowRightOutlined style={{ color: 'rgba(255,255,255,0.2)', fontSize: 9 }} />
           <DateInput label="To" value={toDate} onChange={setToDate} />
           {/* Quick filters */}
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, flexWrap: 'wrap' }}>
             <QuickFilter
               label="7d"
               onClick={() => {
@@ -187,7 +189,7 @@ export default function TimelinePanel() {
         </div>
       ) : (
         groups.map((group) => (
-          <div key={group.date} className="glass-card" style={{ padding: 12 }}>
+          <div key={group.date} className="glass-card" style={{ padding: 12, overflow: 'hidden' }}>
             {/* Day Header */}
             <div
               style={{
@@ -199,7 +201,7 @@ export default function TimelinePanel() {
                 gap: 6,
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                 <div
                   style={{
                     width: 8,
@@ -236,7 +238,7 @@ export default function TimelinePanel() {
                   {group.date}
                 </span>
               </div>
-              <div style={{ display: 'flex', gap: 6 }}>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 <SummaryPill
                   label="Total"
                   value={formatDuration(group.totalDuration)}
@@ -286,6 +288,7 @@ export default function TimelinePanel() {
                         justifyContent: 'space-between',
                         marginBottom: 4,
                         gap: 8,
+                        flexWrap: 'wrap',
                       }}
                     >
                       <div
@@ -422,6 +425,9 @@ function DateInput({
           outline: 'none',
           cursor: 'pointer',
           colorScheme: 'dark',
+          maxWidth: '100%',
+          minWidth: 0,
+          boxSizing: 'border-box',
         }}
       />
     </div>

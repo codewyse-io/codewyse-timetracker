@@ -101,8 +101,10 @@ export default function SessionHistory() {
         justifyContent: 'space-between',
         width: '100%',
         gap: 8,
+        flexWrap: 'wrap',
+        minWidth: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flexShrink: 1 }}>
           <div style={{
             width: 7,
             height: 7,
@@ -115,18 +117,22 @@ export default function SessionHistory() {
             fontSize: 12,
             fontWeight: 600,
             color: idx === 0 ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.55)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            minWidth: 0,
           }}>
             {group.label}
           </span>
         </div>
-        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <MetricPill label="Total" value={formatDuration(group.totalDuration)} small />
           <MetricPill label="Active" value={formatDuration(group.activeDuration)} color="#00e676" small />
         </div>
       </div>
     ),
     children: (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, overflow: 'hidden' }}>
         {group.sessions.map((session) => {
           const isActive = session.status === 'active';
           const isOT = session.mode === 'overtime';
@@ -150,6 +156,7 @@ export default function SessionHistory() {
                 justifyContent: 'space-between',
                 marginBottom: 4,
                 gap: 8,
+                flexWrap: 'wrap',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flexWrap: 'wrap' }}>
                   {isActive && <span className="ai-dot" />}
@@ -196,7 +203,7 @@ export default function SessionHistory() {
   }));
 
   return (
-    <div className="glass-card" style={{ padding: 12 }}>
+    <div className="glass-card" style={{ padding: 12, overflow: 'hidden' }}>
       {/* Header */}
       <div style={{
         display: 'flex',
@@ -206,10 +213,10 @@ export default function SessionHistory() {
         flexWrap: 'wrap',
       }}>
         <HistoryOutlined style={{ fontSize: 13, opacity: 0.5 }} />
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.9)' }}>
+        <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255,255,255,0.95)', fontFamily: "'Space Grotesk', 'Inter', sans-serif", minWidth: 0 }}>
           Activity Log
         </span>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexShrink: 0 }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <MetricPill label="Sessions" value={String(sessionCount)} small />
           <MetricPill label="Total" value={formatDuration(totalAll)} small />
           <MetricPill label="Active" value={formatDuration(activeAll)} color="#00e676" small />
@@ -230,7 +237,7 @@ export default function SessionHistory() {
           }}>
             <PlayCircleOutlined style={{ fontSize: 16, opacity: 0.3 }} />
           </div>
-          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', lineHeight: 1.6 }}>
+          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', lineHeight: 1.6 }}>
             No activity recorded yet
             <br />
             activate Pulse to begin

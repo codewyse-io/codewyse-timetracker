@@ -96,7 +96,7 @@ export default function LeaveRequestPanel() {
   if (selectedRequest) {
     const r = selectedRequest;
     return (
-      <div style={{ padding: 10, display: 'grid', gap: 10 }}>
+      <div style={{ padding: 10, display: 'grid', gap: 10, overflow: 'auto' }}>
         {/* Back button */}
         <button
           onClick={() => setSelectedRequest(null)}
@@ -109,9 +109,9 @@ export default function LeaveRequestPanel() {
           <ArrowLeftOutlined style={{ fontSize: 11 }} /> Back to requests
         </button>
 
-        <div className="glass-card" style={{ padding: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: 'rgba(255,255,255,0.9)' }}>
+        <div className="glass-card" style={{ padding: 16, overflow: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: 'rgba(255,255,255,0.9)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: '1 1 0', minWidth: 0 }}>
               {r.subject}
             </span>
             <StatusBadge status={r.status} />
@@ -119,7 +119,7 @@ export default function LeaveRequestPanel() {
 
           {/* Dates */}
           <div style={{
-            display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16,
+            display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16,
           }}>
             {[
               { label: 'Start Date', value: r.startDate },
@@ -128,7 +128,7 @@ export default function LeaveRequestPanel() {
             ].map((item) => (
               <div key={item.label} style={{
                 background: 'rgba(255,255,255,0.02)', borderRadius: 8, padding: '10px 12px',
-                border: '1px solid rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.04)', flex: '1 1 100px', minWidth: 100,
               }}>
                 <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
                   {item.label}
@@ -185,7 +185,7 @@ export default function LeaveRequestPanel() {
       width: '100%', padding: '10px 12px', borderRadius: 8,
       border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)',
       color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 500,
-      outline: 'none', fontFamily: 'inherit',
+      outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' as const,
     };
     const labelStyle: React.CSSProperties = {
       fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.4)',
@@ -193,7 +193,7 @@ export default function LeaveRequestPanel() {
     };
 
     return (
-      <div style={{ padding: 10, display: 'grid', gap: 10 }}>
+      <div style={{ padding: 10, display: 'grid', gap: 10, overflow: 'auto' }}>
         <button
           onClick={resetForm}
           style={{
@@ -245,8 +245,8 @@ export default function LeaveRequestPanel() {
                 />
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                <div style={{ flex: '1 1 140px', minWidth: 140 }}>
                   <label style={labelStyle}>Start Date *</label>
                   <input
                     type="date" value={startDate}
@@ -254,7 +254,7 @@ export default function LeaveRequestPanel() {
                     style={{ ...inputStyle, colorScheme: 'dark' }}
                   />
                 </div>
-                <div>
+                <div style={{ flex: '1 1 140px', minWidth: 140 }}>
                   <label style={labelStyle}>End Date *</label>
                   <input
                     type="date" value={endDate}
@@ -371,13 +371,13 @@ export default function LeaveRequestPanel() {
 
   // List view
   return (
-    <div style={{ padding: 10, display: 'grid', gap: 10 }}>
+    <div style={{ padding: 10, display: 'grid', gap: 10, overflow: 'auto' }}>
       {/* Header with New Request button */}
       <div className="glass-card" style={{ padding: '12px 16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <CalendarOutlined style={{ fontSize: 14, opacity: 0.7 }} />
-            <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.9)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <CalendarOutlined style={{ fontSize: 14, opacity: 0.7, flexShrink: 0 }} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.9)', whiteSpace: 'nowrap' }}>
               Leave Requests
             </span>
             <span style={{
@@ -394,7 +394,7 @@ export default function LeaveRequestPanel() {
               background: 'linear-gradient(135deg, #7c5cfc 0%, #6344e0 100%)',
               color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer',
               boxShadow: '0 2px 10px rgba(124, 92, 252, 0.25)',
-              letterSpacing: 0.3,
+              letterSpacing: 0.3, whiteSpace: 'nowrap', flexShrink: 0,
             }}
           >
             <PlusOutlined style={{ fontSize: 10 }} /> New Request
@@ -437,7 +437,7 @@ export default function LeaveRequestPanel() {
               }}
             >
               {/* Top row: subject + status */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
                 <span style={{
                   fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.85)',
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 10,
@@ -448,8 +448,8 @@ export default function LeaveRequestPanel() {
               </div>
 
               {/* Bottom row: dates + days */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', fontWeight: 500 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 }}>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
                   {r.startDate} &mdash; {r.endDate}
                 </span>
                 <span style={{

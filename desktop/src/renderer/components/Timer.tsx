@@ -28,6 +28,24 @@ export default function Timer() {
   const startTimeRef = useRef<Date | null>(null);
   const statusIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [containerWidth, setContainerWidth] = useState(400);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width);
+      }
+    });
+    ro.observe(el);
+    setContainerWidth(el.offsetWidth);
+    return () => ro.disconnect();
+  }, []);
+
+  const isCompact = containerWidth < 400;
+  const isMedium = containerWidth < 550;
 
   const clearTimer = useCallback(() => {
     if (intervalRef.current) {
@@ -168,7 +186,7 @@ export default function Timer() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 24,
+        padding: 16,
         cursor: 'pointer',
         animation: 'error-fade-in 0.3s ease-out',
       }}
@@ -178,7 +196,7 @@ export default function Timer() {
         style={{
           background: '#ffffff',
           borderRadius: 20,
-          padding: '36px 32px 28px',
+          padding: '28px 20px 22px',
           maxWidth: 340,
           width: '100%',
           textAlign: 'center',
@@ -228,21 +246,30 @@ export default function Timer() {
     <>
       {errorOverlay}
       <div
+        ref={containerRef}
         className="glass-card"
         style={{
-          padding: '16px 12px',
+          padding: isCompact ? '12px 8px' : '16px 12px',
           textAlign: 'center',
           position: 'relative',
+          overflow: 'hidden',
         }}
       >
-      {/* Unified horizontal layout — same structure for standby and active */}
-      <div style={{ display: 'flex', alignItems: 'center', padding: '4px 0', position: 'relative' }}>
+      {/* Unified layout — wraps vertically at narrow widths */}
+      <div style={{
+        display: 'flex',
+        alignItems: isCompact ? 'stretch' : 'center',
+        flexDirection: isCompact ? 'column' : 'row',
+        gap: isCompact ? 10 : 0,
+        padding: '4px 0',
+        position: 'relative',
+      }}>
         {/* Left: Orb + text info */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0, zIndex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isCompact ? 10 : 14, flexShrink: isMedium ? 1 : 0, minWidth: 0, zIndex: 1 }}>
           {/* Orb */}
           <div style={{ flexShrink: 0 }}>
             <div style={{
-              width: 48, height: 48, borderRadius: '50%',
+              width: isCompact ? 36 : 48, height: isCompact ? 36 : 48, borderRadius: '50%',
               background: isRunning
                 ? isOvertime
                   ? 'radial-gradient(circle at 40% 40%, #ffc857, #ffab00 50%, #e68a00 100%)'
@@ -258,7 +285,7 @@ export default function Timer() {
               transition: 'all 0.6s ease',
             }}>
               <div style={{
-                width: 10, height: 10, borderRadius: '50%',
+                width: isCompact ? 7 : 10, height: isCompact ? 7 : 10, borderRadius: '50%',
                 background: isRunning
                   ? isOvertime
                     ? 'radial-gradient(circle, #ffe066, rgba(255, 200, 0, 0.4))'
@@ -273,13 +300,14 @@ export default function Timer() {
           </div>
 
           {/* Text info */}
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+          <div style={{ minWidth: 0, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>
               <span style={{
-                fontSize: 14, fontWeight: 600, letterSpacing: -0.3,
+                fontSize: isCompact ? 13 : 15, fontWeight: 600, letterSpacing: -0.3,
+                fontFamily: "'Space Grotesk', 'Inter', sans-serif",
                 color: isRunning
-                  ? isOvertime ? '#ffab00' : 'rgba(255, 255, 255, 0.85)'
-                  : 'rgba(255, 255, 255, 0.55)',
+                  ? isOvertime ? '#ffab00' : 'rgba(255, 255, 255, 0.95)'
+                  : 'rgba(255, 255, 255, 0.7)',
                 transition: 'color 0.3s ease',
               }}>
                 {isRunning
@@ -313,7 +341,14 @@ export default function Timer() {
                 {isRunning ? (isOvertime ? 'Overtime' : 'Active') : 'Standby'}
               </span>
             </div>
-            <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.25)' }}>
+            <span style={{
+              fontSize: isCompact ? 10 : 11,
+              color: 'rgba(255, 255, 255, 0.4)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              display: 'block',
+            }}>
               {isRunning
                 ? AI_STATUS_MESSAGES[statusIndex]
                 : mode === 'overtime' ? 'Overtime mode \u2014 no shift required' : 'Select a mode and activate to begin tracking'}
@@ -321,26 +356,42 @@ export default function Timer() {
           </div>
         </div>
 
-        {/* Center: elapsed time — absolutely centered in the row */}
+        {/* Center: elapsed time — absolutely centered in row on wide, inline on compact */}
         {isRunning && (
-          <div style={{
-            position: 'absolute', left: 0, right: 0, top: 0, bottom: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            pointerEvents: 'none',
-          }}>
+          <div style={isCompact
+            ? {
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: '4px 0',
+              }
+            : {
+                position: 'absolute', left: 0, right: 0, top: 0, bottom: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                pointerEvents: 'none',
+              }
+          }>
             <span style={{
-              fontSize: 28, fontWeight: 700, letterSpacing: 2,
-              color: isOvertime ? '#ffab00' : 'rgba(255, 255, 255, 0.85)',
+              fontSize: isCompact ? 22 : isMedium ? 24 : 30,
+              fontWeight: 700, letterSpacing: 2,
+              color: isOvertime ? '#ffab00' : 'rgba(255, 255, 255, 0.95)',
               fontVariantNumeric: 'tabular-nums',
-              fontFamily: "'Inter', sans-serif",
+              fontFamily: "'Space Grotesk', 'Inter', sans-serif",
             }}>
               {formatElapsedTime(elapsed)}
             </span>
           </div>
         )}
 
-        {/* Right: controls — pushed to the end */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 'auto', zIndex: 1 }}>
+        {/* Right: controls — pushed to the end; wraps to row on compact */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          flexShrink: 0,
+          marginLeft: isCompact ? 0 : 'auto',
+          justifyContent: isCompact ? 'center' : 'flex-end',
+          flexWrap: 'wrap',
+          zIndex: 1,
+        }}>
           {!isRunning && (
             <div style={{
               display: 'inline-flex', background: 'rgba(255, 255, 255, 0.03)',
@@ -351,7 +402,7 @@ export default function Timer() {
                 const isOT = m === 'overtime';
                 return (
                   <button key={m} onClick={() => setMode(m)} style={{
-                    padding: '4px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                    padding: isCompact ? '4px 8px' : '4px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
                     fontSize: 10, fontWeight: 600, letterSpacing: 0.3, textTransform: 'capitalize',
                     transition: 'all 0.25s ease',
                     background: isActive
@@ -372,7 +423,10 @@ export default function Timer() {
           <Button type="primary" shape="round" loading={loading}
             onClick={isRunning ? handleStop : handleStart}
             style={{
-              height: 34, paddingInline: 24, fontSize: 12, fontWeight: 600, letterSpacing: 0.5,
+              height: isCompact ? 30 : 34,
+              paddingInline: isCompact ? 16 : 24,
+              fontSize: isCompact ? 11 : 12,
+              fontWeight: 600, letterSpacing: 0.5,
               border: 'none',
               background: isRunning
                 ? 'rgba(255, 255, 255, 0.06)'

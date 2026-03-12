@@ -98,6 +98,53 @@ export class AiService {
     return this.coachingRepo.save(coachingTip);
   }
 
+  async generateSessionStartTip(
+    userId: string,
+    mode: string = 'regular',
+  ): Promise<AiCoachingTip> {
+    const tips: TipTemplate[] = mode === 'overtime'
+      ? [
+          {
+            category: CoachingCategory.WORKLOAD,
+            observation: 'You\'re starting an overtime session. Remember to pace yourself — sustained performance matters more than long hours.',
+            recommendation: 'Focus on your highest-priority tasks first. Set a target duration and stick to it to avoid fatigue.',
+          },
+          {
+            category: CoachingCategory.TIME_USAGE,
+            observation: 'Overtime session started. Make sure this extra effort is directed toward impactful work.',
+            recommendation: 'List your top 2-3 priorities before diving in. Overtime is most effective when focused on specific deliverables.',
+          },
+        ]
+      : [
+          {
+            category: CoachingCategory.PRODUCTIVITY,
+            observation: 'New session started! The first 20 minutes are crucial for building momentum and entering a focused state.',
+            recommendation: 'Start with a clear task in mind. Silence notifications and close distracting tabs to hit your flow state faster.',
+          },
+          {
+            category: CoachingCategory.PRODUCTIVITY,
+            observation: 'Session is live. Your focus patterns from recent sessions suggest you work best in uninterrupted blocks.',
+            recommendation: 'Set a mini-goal for the next 30 minutes. Having a specific target helps maintain concentration and reduces idle drift.',
+          },
+          {
+            category: CoachingCategory.TIME_USAGE,
+            observation: 'You\'re clocked in and ready to go. Consistent start times and focused sessions lead to better productivity scores.',
+            recommendation: 'Take a moment to plan your session — what will you accomplish? Clear intentions lead to fewer distractions.',
+          },
+        ];
+
+    const tip = this.pickRandom(tips);
+    const coachingTip = this.coachingRepo.create({
+      userId,
+      category: tip.category,
+      observation: tip.observation,
+      recommendation: tip.recommendation,
+      generatedAt: new Date(),
+    });
+
+    return this.coachingRepo.save(coachingTip);
+  }
+
   async generateTeamInsight(teamData: any): Promise<AiResponse> {
     const prompt = `Analyze this team-level productivity data and provide insights:\n${JSON.stringify(teamData)}`;
     return this.callAI(prompt);

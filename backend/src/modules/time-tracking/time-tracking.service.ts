@@ -64,7 +64,18 @@ export class TimeTrackingService {
       mode,
     });
 
-    return this.sessionRepository.save(session);
+    const savedSession = await this.sessionRepository.save(session);
+
+    // Generate an initial coaching tip and focus score so panels show data immediately
+    this.aiService.generateSessionStartTip(userId, mode).catch((err) => {
+      this.logger.error(`Failed to generate session start tip: ${err.message}`);
+    });
+    const today = new Date().toISOString().split('T')[0];
+    this.focusScoreService.calculateDailyScore(userId, today).catch((err) => {
+      this.logger.error(`Failed to calculate initial focus score: ${err.message}`);
+    });
+
+    return savedSession;
   }
 
   /**
