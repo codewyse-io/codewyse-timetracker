@@ -81,7 +81,7 @@ export async function getFocusScore(period?: string) {
 }
 
 export async function getCoachingTips() {
-  const response = await apiClient.get('/coaching/me');
+  const response = await apiClient.get('/insights/coaching/me');
   return response.data;
 }
 

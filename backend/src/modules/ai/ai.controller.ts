@@ -27,6 +27,12 @@ export class AiController {
     return this.aiService.getInsightsForUser(req.user.id);
   }
 
+  @Get('coaching/me')
+  @ApiOperation({ summary: 'Get my coaching tips (employee)' })
+  async getMyCoachingTips(@Req() req: any) {
+    return this.aiService.getCoachingTipsForUser(req.user.id);
+  }
+
   @Get('team')
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Get team AI insights (admin)' })

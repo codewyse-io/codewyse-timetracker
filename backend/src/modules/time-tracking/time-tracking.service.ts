@@ -205,6 +205,16 @@ export class TimeTrackingService {
     this.logger.log(`[reportIdle] Session ${session.id} total idle: ${totalIdle}s`);
     await this.sessionRepository.update(session.id, { idleDuration: totalIdle });
 
+    // Generate a coaching tip for new idle events (not updates to existing ones)
+    if (!existing && durationSeconds >= 60) {
+      const sessionDuration = Math.floor(
+        (Date.now() - session.startTime.getTime()) / 1000,
+      );
+      this.aiService.generateIdleTip(userId, durationSeconds, sessionDuration).catch((err) => {
+        this.logger.error(`Failed to generate idle coaching tip: ${err.message}`);
+      });
+    }
+
     return saved;
   }
 
