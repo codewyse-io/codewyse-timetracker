@@ -99,8 +99,8 @@ export default function CoachingPanel() {
           </span>
         </div>
       ) : (
-        /* Tips as AI message bubbles */
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden' }}>
+        /* Tips */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden' }}>
           {tips.map((tip) => {
             const catColor = categoryColors[tip.category] || '#7c5cfc';
             const catGlow = categoryGlows[tip.category] || 'rgba(124, 92, 252, 0.12)';
@@ -108,77 +108,96 @@ export default function CoachingPanel() {
               <div
                 key={tip.id}
                 style={{
-                  background: 'rgba(255, 255, 255, 0.02)',
-                  border: '1px solid rgba(255, 255, 255, 0.06)',
                   borderRadius: 12,
-                  padding: '10px 12px',
-                  transition: 'border-color 0.3s ease',
                   overflow: 'hidden',
                   minWidth: 0,
+                  background: `linear-gradient(135deg, ${catGlow}, rgba(255,255,255,0.015))`,
+                  border: `1px solid ${catColor}18`,
+                  transition: 'transform 0.2s ease, border-color 0.3s ease',
                 }}
                 onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.borderColor = `${catColor}30`;
+                  (e.currentTarget as HTMLElement).style.borderColor = `${catColor}40`;
+                  (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)';
                 }}
                 onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.06)';
+                  (e.currentTarget as HTMLElement).style.borderColor = `${catColor}18`;
+                  (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
                 }}
               >
-                {/* Category tag */}
-                <div style={{ marginBottom: 8 }}>
-                  <span style={{
-                    display: 'inline-block',
-                    padding: '2px 8px',
-                    borderRadius: 20,
-                    background: catGlow,
-                    border: `1px solid ${catColor}25`,
-                    fontSize: 9,
-                    fontWeight: 600,
-                    color: catColor,
-                    letterSpacing: 0.5,
-                    textTransform: 'uppercase',
-                  }}>
-                    {categoryLabels[tip.category] || tip.category}
-                  </span>
-                </div>
-
-                {/* Observation — AI speaking */}
+                {/* Top accent bar */}
                 <div style={{
-                  fontSize: 12,
-                  color: 'rgba(255,255,255,0.88)',
-                  lineHeight: 1.55,
-                  marginBottom: 8,
-                  wordBreak: 'break-word' as const,
-                  overflowWrap: 'break-word' as const,
-                }}>
-                  {tip.observation}
-                </div>
+                  height: 2,
+                  background: `linear-gradient(90deg, ${catColor}, transparent)`,
+                  opacity: 0.6,
+                }} />
 
-                {/* Recommendation — accent box */}
-                <div style={{
-                  background: 'rgba(124, 92, 252, 0.06)',
-                  border: '1px solid rgba(124, 92, 252, 0.1)',
-                  borderRadius: 8,
-                  padding: '6px 10px',
-                  overflow: 'hidden',
-                }}>
-                  <div style={{
-                    fontSize: 9,
-                    color: '#a78bfa',
-                    fontWeight: 600,
-                    letterSpacing: 0.8,
-                    marginBottom: 4,
-                    textTransform: 'uppercase',
-                  }}>
-                    RECOMMENDATION
+                <div style={{ padding: '10px 12px' }}>
+                  {/* Category + observation row */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
+                    <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '2px 8px',
+                      borderRadius: 6,
+                      background: catGlow,
+                      border: `1px solid ${catColor}20`,
+                      fontSize: 9,
+                      fontWeight: 700,
+                      color: catColor,
+                      letterSpacing: 0.6,
+                      textTransform: 'uppercase',
+                      flexShrink: 0,
+                      whiteSpace: 'nowrap',
+                    }}>
+                      <span style={{
+                        width: 5,
+                        height: 5,
+                        borderRadius: '50%',
+                        background: catColor,
+                        flexShrink: 0,
+                      }} />
+                      {categoryLabels[tip.category] || tip.category}
+                    </span>
                   </div>
+
+                  {/* Observation */}
                   <div style={{
-                    fontSize: 11,
-                    color: 'rgba(255,255,255,0.8)',
-                    lineHeight: 1.5,
+                    fontSize: 12,
+                    color: 'rgba(255,255,255,0.9)',
+                    lineHeight: 1.6,
                     wordBreak: 'break-word' as const,
                     overflowWrap: 'break-word' as const,
                   }}>
-                    {tip.recommendation}
+                    {tip.observation}
+                  </div>
+
+                  {/* Recommendation */}
+                  <div style={{
+                    marginTop: 8,
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 8,
+                    padding: '8px 10px',
+                    borderRadius: 8,
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.05)',
+                  }}>
+                    <BulbOutlined style={{
+                      fontSize: 12,
+                      color: '#a78bfa',
+                      marginTop: 2,
+                      flexShrink: 0,
+                    }} />
+                    <div style={{
+                      fontSize: 11,
+                      color: 'rgba(255,255,255,0.75)',
+                      lineHeight: 1.55,
+                      wordBreak: 'break-word' as const,
+                      overflowWrap: 'break-word' as const,
+                    }}>
+                      {tip.recommendation}
+                    </div>
                   </div>
                 </div>
               </div>

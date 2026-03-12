@@ -102,9 +102,22 @@ export default function FocusScorePanel() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         <ThunderboltOutlined style={{ fontSize: 14, opacity: 0.6 }} />
-        <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255,255,255,0.95)', fontFamily: "'Space Grotesk', 'Inter', sans-serif", minWidth: 0 }}>
+        <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255,255,255,0.95)', fontFamily: "'Space Grotesk', 'Inter', sans-serif", minWidth: 0, flex: 1 }}>
           AI Analysis
         </span>
+        {score > 0 && (
+          <div style={{
+            padding: '3px 10px',
+            borderRadius: 20,
+            background: getCategoryGlow(score),
+            border: `1px solid ${color}30`,
+            flexShrink: 0,
+          }}>
+            <span style={{ fontSize: 10, fontWeight: 600, color, letterSpacing: 0.5 }}>
+              {category}
+            </span>
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -143,8 +156,7 @@ export default function FocusScorePanel() {
             textAlign: 'center',
           }}>
             <span
-              className="ai-gradient-text"
-              style={{ fontSize: score >= 100 ? 18 : 22, fontWeight: 700, lineHeight: 1 }}
+              style={{ fontSize: score >= 100 ? 18 : 22, fontWeight: 700, lineHeight: 1, color }}
             >
               {score}
             </span>
@@ -153,20 +165,6 @@ export default function FocusScorePanel() {
 
         {/* Details */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          {/* Category tag */}
-          <div style={{
-            display: 'inline-block',
-            padding: '3px 10px',
-            borderRadius: 20,
-            background: getCategoryGlow(score),
-            border: `1px solid ${color}30`,
-            marginBottom: 8,
-          }}>
-            <span style={{ fontSize: 10, fontWeight: 600, color, letterSpacing: 0.5 }}>
-              {category}
-            </span>
-          </div>
-
           {/* Active vs Idle bar */}
           <div style={{ marginBottom: 4 }}>
             <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', letterSpacing: 0.5 }}>
