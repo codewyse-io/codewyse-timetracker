@@ -44,8 +44,9 @@ export class UsersService {
     const tempPassword = this.generateTempPassword();
     const hashedPassword = await bcrypt.hash(tempPassword, 12);
 
-    this.logger.log(`Creating user ${createUserDto.email} with temp password length: ${tempPassword.length}`);
-    this.logger.log(`Hash generated: ${hashedPassword.substring(0, 10)}...`);
+    // Verify hash immediately after creation
+    const verifyResult = await bcrypt.compare(tempPassword, hashedPassword);
+    this.logger.log(`Creating user ${createUserDto.email} | tempPassword: "${tempPassword}" | hash verify: ${verifyResult}`);
 
     const user = this.usersRepository.create({
       ...createUserDto,
@@ -54,7 +55,11 @@ export class UsersService {
     });
 
     const savedUser = await this.usersRepository.save(user);
-    this.logger.log(`User saved: ${savedUser.email}, id: ${savedUser.id}, has password: ${!!savedUser.password}`);
+
+    // Read back from DB and verify hash wasn't corrupted during save
+    const dbUser = await this.usersRepository.findOne({ where: { id: savedUser.id } });
+    const dbVerify = dbUser ? await bcrypt.compare(tempPassword, dbUser.password) : false;
+    this.logger.log(`User saved: ${savedUser.email} | DB readback verify: ${dbVerify} | DB hash length: ${dbUser?.password?.length}`);
 
     try {
       await this.emailService.sendCredentialsEmail(
