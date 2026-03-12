@@ -6,11 +6,16 @@ import { invitationTemplate } from './templates/invitation.template';
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  private readonly resend: Resend;
+  private readonly resend: Resend | null = null;
   private readonly from: string;
 
   constructor(private readonly configService: ConfigService) {
-    this.resend = new Resend(this.configService.get<string>('RESEND_API_KEY'));
+    const apiKey = this.configService.get<string>('RESEND_API_KEY');
+    if (apiKey) {
+      this.resend = new Resend(apiKey);
+    } else {
+      this.logger.warn('RESEND_API_KEY is not set — email sending is disabled');
+    }
     this.from = this.configService.get<string>('EMAIL_FROM', 'PulseTrack <onboarding@resend.dev>');
   }
 
@@ -49,6 +54,11 @@ export class EmailService {
     subject: string,
     html: string,
   ): Promise<void> {
+    if (!this.resend) {
+      this.logger.warn(`Email to ${to} skipped — RESEND_API_KEY not configured`);
+      return;
+    }
+
     try {
       const { error } = await this.resend.emails.send({
         from: this.from,
