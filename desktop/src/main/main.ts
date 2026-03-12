@@ -24,7 +24,7 @@ function createWindow(): void {
     minWidth: 400,
     minHeight: 500,
     resizable: true,
-    frame: true,
+    frame: false,
     autoHideMenuBar: true,
     title: 'Pulse',
     webPreferences: {

@@ -193,10 +193,13 @@ export default function DashboardPage() {
       const weekStart = dayjs().startOf('week').format('YYYY-MM-DD');
       const today = dayjs().format('YYYY-MM-DD');
 
-      const [activeRes, focusRes, payrollRes] = await Promise.allSettled([
+      const weekEnd = dayjs().endOf('week').format('YYYY-MM-DD');
+
+      const [activeRes, focusRes, payrollRes, sessionsRes] = await Promise.allSettled([
         timeTrackingApi.getActiveSessions(),
         focusScoreApi.getTeamFocusScores({ startDate: today, endDate: today }),
         payrollApi.getWeeklyPayroll(weekStart),
+        timeTrackingApi.getSessions({ startDate: weekStart, endDate: weekEnd, limit: 500 }),
       ]);
 
       const activeRaw = activeRes.status === 'fulfilled' ? activeRes.value.data : [];
@@ -205,9 +208,10 @@ export default function DashboardPage() {
 
       const focusRaw = focusRes.status === 'fulfilled' ? focusRes.value.data : [];
       const focusScores = Array.isArray(focusRaw) ? focusRaw : (Array.isArray((focusRaw as any)?.data) ? (focusRaw as any).data : []);
+      const validScores = focusScores.filter((f: any) => typeof f.score === 'number' && !isNaN(f.score));
       const avgScore =
-        focusScores.length > 0
-          ? focusScores.reduce((sum: number, f: any) => sum + (f.score || 0), 0) / focusScores.length
+        validScores.length > 0
+          ? validScores.reduce((sum: number, f: any) => sum + f.score, 0) / validScores.length
           : 0;
 
       const payrollData = payrollRes.status === 'fulfilled' ? payrollRes.value.data : null;
@@ -219,25 +223,26 @@ export default function DashboardPage() {
         weeklyPayrollTotal: payrollData?.totalPayable ?? 0,
       });
 
+      // Build weekly hours from real session data
       const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      if (payrollData) {
-        const totalHrs = payrollData.totalActiveHours || 0;
-        const currentDay = dayjs().day();
-        const hoursData: DailyHours[] = days.map((day, i) => ({
-          day,
-          hours:
-            i <= currentDay && currentDay > 0
-              ? Math.round(
-                  (totalHrs / Math.max(currentDay, 1)) *
-                    (0.8 + Math.random() * 0.4) *
-                    10
-                ) / 10
-              : 0,
-        }));
-        setWeeklyHours(hoursData);
-      } else {
-        setWeeklyHours(days.map((day) => ({ day, hours: 0 })));
+      const dayTotals = new Array(7).fill(0);
+      if (sessionsRes.status === 'fulfilled') {
+        const sessionsRaw = sessionsRes.value.data;
+        const sessions: WorkSession[] = Array.isArray(sessionsRaw)
+          ? sessionsRaw
+          : Array.isArray((sessionsRaw as any)?.data)
+            ? (sessionsRaw as any).data
+            : [];
+        sessions.forEach((s: WorkSession) => {
+          const dayIdx = dayjs(s.startTime).day();
+          const hrs = (s.activeDuration || 0) / 3600;
+          dayTotals[dayIdx] += hrs;
+        });
       }
+      setWeeklyHours(days.map((day, i) => ({
+        day,
+        hours: Math.round(dayTotals[i] * 10) / 10,
+      })));
 
       const categoryCount: Record<string, number> = {
         'Deep Focus': 0,
