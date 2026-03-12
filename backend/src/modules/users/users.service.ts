@@ -2,6 +2,7 @@ import {
   Injectable,
   ConflictException,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -18,6 +19,8 @@ import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
@@ -41,6 +44,9 @@ export class UsersService {
     const tempPassword = this.generateTempPassword();
     const hashedPassword = await bcrypt.hash(tempPassword, 12);
 
+    this.logger.log(`Creating user ${createUserDto.email} with temp password length: ${tempPassword.length}`);
+    this.logger.log(`Hash generated: ${hashedPassword.substring(0, 10)}...`);
+
     const user = this.usersRepository.create({
       ...createUserDto,
       password: hashedPassword,
@@ -48,6 +54,7 @@ export class UsersService {
     });
 
     const savedUser = await this.usersRepository.save(user);
+    this.logger.log(`User saved: ${savedUser.email}, id: ${savedUser.id}, has password: ${!!savedUser.password}`);
 
     try {
       await this.emailService.sendCredentialsEmail(

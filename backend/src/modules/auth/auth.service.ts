@@ -2,6 +2,7 @@ import {
   Injectable,
   UnauthorizedException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -12,6 +13,8 @@ import { UserStatus } from '../../common/enums/user-status.enum';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
@@ -114,23 +117,37 @@ export class AuthService {
   }
 
   async validateUser(email: string, password: string): Promise<User | null> {
+    this.logger.log(`Login attempt for email: ${email}`);
+
     const user = await this.usersService.findByEmail(email);
 
-    if (!user || !user.password) {
+    if (!user) {
+      this.logger.warn(`User not found: ${email}`);
       return null;
     }
 
+    if (!user.password) {
+      this.logger.warn(`User ${email} has no password set`);
+      return null;
+    }
+
+    this.logger.log(`User found: ${email}, status: ${user.status}, password hash exists: ${!!user.password}`);
+
     if (user.status === UserStatus.DEACTIVATED) {
+      this.logger.warn(`User ${email} is deactivated`);
       return null;
     }
 
     const isPasswordValid = await this.comparePassword(password, user.password);
+    this.logger.log(`Password validation for ${email}: ${isPasswordValid}`);
+
     if (!isPasswordValid) {
       return null;
     }
 
     // Activate invited users on first login
     if (user.status === UserStatus.INVITED) {
+      this.logger.log(`Activating invited user: ${email}`);
       user.status = UserStatus.ACTIVE;
       await this.usersService.save(user);
     }
