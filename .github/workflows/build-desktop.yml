@@ -1,0 +1,59 @@
+name: Build Desktop App
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'desktop/**'
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '22.x'
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+            artifact: Pulse Setup 1.0.0.exe
+          - os: macos-latest
+            platform: mac
+            artifact: Pulse-1.0.0.dmg
+
+    name: Build (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: desktop
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build & package (Windows)
+        if: matrix.platform == 'win'
+        run: npm run dist
+
+      - name: Build & package (macOS)
+        if: matrix.platform == 'mac'
+        run: npm run dist:mac
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulse-${{ matrix.platform }}
+          path: desktop/release/${{ matrix.artifact }}
+          if-no-files-found: error
