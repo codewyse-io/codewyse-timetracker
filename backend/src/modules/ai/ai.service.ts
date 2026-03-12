@@ -4,6 +4,7 @@ import { Repository, MoreThanOrEqual } from 'typeorm';
 import OpenAI from 'openai';
 import { AiInsight, InsightType } from './entities/ai-insight.entity';
 import { AiCoachingTip, CoachingCategory } from './entities/ai-coaching-tip.entity';
+import { WorkSession } from '../time-tracking/entities/work-session.entity';
 
 interface AiResponse {
   insight: string;
@@ -34,6 +35,8 @@ export class AiService {
     private readonly insightRepo: Repository<AiInsight>,
     @InjectRepository(AiCoachingTip)
     private readonly coachingRepo: Repository<AiCoachingTip>,
+    @InjectRepository(WorkSession)
+    private readonly sessionRepo: Repository<WorkSession>,
   ) {
     const apiKey = process.env.AI_API_KEY;
     if (apiKey) {
@@ -172,11 +175,28 @@ export class AiService {
   async getCoachingTipsForUser(userId: string): Promise<AiCoachingTip[]> {
     const since = new Date();
     since.setHours(since.getHours() - 24);
-    return this.coachingRepo.find({
+    let tips = await this.coachingRepo.find({
       where: { userId, generatedAt: MoreThanOrEqual(since) },
       order: { generatedAt: 'DESC' },
       take: 20,
     });
+
+    // If no tips exist, check for an active session and generate one on the fly
+    if (tips.length === 0) {
+      const activeSession = await this.sessionRepo.findOne({
+        where: { userId, status: 'active' as any },
+      });
+      if (activeSession) {
+        try {
+          const newTip = await this.generateSessionStartTip(userId, activeSession.mode || 'regular');
+          tips = [newTip];
+        } catch (err) {
+          this.logger.warn(`Failed to auto-generate coaching tip: ${err.message}`);
+        }
+      }
+    }
+
+    return tips;
   }
 
   async getTeamCoachingTips(): Promise<AiCoachingTip[]> {
