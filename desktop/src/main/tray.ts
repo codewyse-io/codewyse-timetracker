@@ -2,18 +2,9 @@ import { Tray, Menu, nativeImage, BrowserWindow, app } from 'electron';
 import * as path from 'path';
 
 export function createTray(mainWindow: BrowserWindow): Tray {
-  // Create a simple 16x16 icon programmatically (a blue circle)
-  const icon = nativeImage.createFromBuffer(
-    Buffer.from(
-      'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAA' +
-      'gElEQVR42mNkYPj/n4EBCJgYGBhANDYMYkA2gJGRkQHEBgFk' +
-      'DSAaZgDIIBAbpgmkAWQIyBCQBhANcwFIA8gQkCEgDSAaZACy' +
-      'BpAhIA0gGmQASDNIA8gFIENAGkA0yACQZpAGkAtAhoBcAKJB' +
-      'BqC4AKQBRAMNAGkGaQC5AOQCEBsAAN4wMhFjnEHyAAAAAElF' +
-      'TkSuQmCC',
-      'base64'
-    )
-  );
+  const appRoot = app.isPackaged ? app.getAppPath() : path.join(__dirname, '..', '..');
+  const iconPath = path.join(appRoot, 'build', 'icon.ico');
+  const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
 
   const tray = new Tray(icon);
   tray.setToolTip('Pulse');

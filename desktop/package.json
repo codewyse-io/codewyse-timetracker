@@ -17,10 +17,13 @@
     "appId": "com.codewyse.pulse",
     "productName": "Pulse",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
+    "icon": "build/icon.ico",
     "files": [
       "dist/**/*",
+      "build/**/*",
       "package.json"
     ],
     "win": {

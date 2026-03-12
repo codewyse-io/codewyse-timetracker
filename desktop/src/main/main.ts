@@ -17,6 +17,11 @@ let isQuitting = false;
 
 const isDev = !app.isPackaged;
 
+// In dev: <project>/dist/main/main.js → ../../build/icon.ico
+// In prod (asar): <app>/dist/main/main.js → resolve via app path
+const appRoot = isDev ? path.join(__dirname, '..', '..') : path.join(app.getAppPath());
+const iconPath = path.join(appRoot, 'build', 'icon.ico');
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 800,
@@ -26,6 +31,7 @@ function createWindow(): void {
     resizable: true,
     frame: false,
     autoHideMenuBar: true,
+    icon: iconPath,
     title: 'Pulse',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
