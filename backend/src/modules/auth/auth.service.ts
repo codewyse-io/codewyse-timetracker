@@ -120,13 +120,19 @@ export class AuthService {
       return null;
     }
 
-    if (user.status !== UserStatus.ACTIVE) {
+    if (user.status === UserStatus.DEACTIVATED) {
       return null;
     }
 
     const isPasswordValid = await this.comparePassword(password, user.password);
     if (!isPasswordValid) {
       return null;
+    }
+
+    // Activate invited users on first login
+    if (user.status === UserStatus.INVITED) {
+      user.status = UserStatus.ACTIVE;
+      await this.usersService.save(user);
     }
 
     return user;

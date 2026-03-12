@@ -44,7 +44,7 @@ export class UsersService {
     const user = this.usersRepository.create({
       ...createUserDto,
       password: hashedPassword,
-      status: UserStatus.ACTIVE,
+      status: UserStatus.INVITED,
     });
 
     const savedUser = await this.usersRepository.save(user);
@@ -69,9 +69,6 @@ export class UsersService {
     const hashedPassword = await bcrypt.hash(tempPassword, 12);
 
     user.password = hashedPassword;
-    if (user.status === UserStatus.INVITED) {
-      user.status = UserStatus.ACTIVE;
-    }
     await this.usersRepository.save(user);
 
     await this.emailService.sendCredentialsEmail(
