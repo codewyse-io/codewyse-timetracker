@@ -108,6 +108,22 @@ export interface CoachingTip {
   generatedAt: string;
 }
 
+export interface LeaveRequest {
+  id: string;
+  userId: string;
+  user?: User;
+  subject: string;
+  message: string;
+  startDate: string;
+  endDate: string;
+  totalDays: number;
+  attachments: string[] | null;
+  status: 'pending' | 'approved' | 'rejected';
+  adminNotes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PaginatedResponse<T> {
   data: T[];
   total: number;

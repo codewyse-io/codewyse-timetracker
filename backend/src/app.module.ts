@@ -16,6 +16,9 @@ import { KpisModule } from './modules/kpis/kpis.module';
 import { QueueModule } from './modules/queue/queue.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { AiModule } from './modules/ai/ai.module';
+import { LeaveRequestsModule } from './modules/leave-requests/leave-requests.module';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 
 @Module({
   controllers: [AppController],
@@ -41,6 +44,11 @@ import { AiModule } from './modules/ai/ai.module';
     QueueModule,
     ReportsModule,
     AiModule,
+    LeaveRequestsModule,
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'uploads'),
+      serveRoot: '/uploads',
+    }),
   ],
 })
 export class AppModule {}

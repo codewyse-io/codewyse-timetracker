@@ -24,6 +24,7 @@ import {
   LogoutOutlined,
   ThunderboltOutlined,
   BellOutlined,
+  CalendarOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -38,6 +39,7 @@ const menuItems = [
   { key: '/payroll', icon: <DollarOutlined />, label: 'Payroll' },
   { key: '/kpis', icon: <BarChartOutlined />, label: 'KPIs' },
   { key: '/reports', icon: <FileTextOutlined />, label: 'Reports' },
+  { key: '/leave-requests', icon: <CalendarOutlined />, label: 'Leave Requests' },
   { key: '/ai-insights', icon: <BulbOutlined />, label: 'AI Insights' },
 ];
 
@@ -49,6 +51,7 @@ const pageTitles: Record<string, string> = {
   '/payroll': 'Payroll',
   '/kpis': 'KPIs',
   '/reports': 'Reports',
+  '/leave-requests': 'Leave Requests',
   '/ai-insights': 'AI Insights',
 };
 
@@ -60,6 +63,7 @@ const pageSubtitles: Record<string, string> = {
   '/payroll': 'Track compensation and billing',
   '/kpis': 'Performance metrics & targets',
   '/reports': 'Weekly performance summaries',
+  '/leave-requests': 'Review and manage employee leave requests',
   '/ai-insights': 'AI-powered analysis & coaching',
 };
 

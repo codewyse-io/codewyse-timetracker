@@ -13,10 +13,18 @@ async function bootstrap() {
   const port = configService.get<number>('app.port', 3000);
 
   app.enableCors({
-    origin: [
-      configService.get<string>('app.adminUrl')!,
-      configService.get<string>('app.desktopUrl')!,
-    ],
+    origin: (origin, callback) => {
+      const allowedOrigins = [
+        configService.get<string>('app.adminUrl')!,
+        configService.get<string>('app.desktopUrl')!,
+      ];
+      // Allow requests with no origin (Electron desktop app, mobile apps, curl, etc.)
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
   });
 
