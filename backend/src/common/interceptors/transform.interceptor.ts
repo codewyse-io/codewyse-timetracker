@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
+import { instanceToPlain } from 'class-transformer';
 
 export interface SuccessResponse<T> {
   success: boolean;
@@ -23,7 +24,7 @@ export class TransformInterceptor<T>
     return next.handle().pipe(
       map((data) => ({
         success: true,
-        data,
+        data: instanceToPlain(data) as T,
       })),
     );
   }

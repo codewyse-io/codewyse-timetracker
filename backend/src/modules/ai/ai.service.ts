@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import OpenAI from 'openai';
 import { AiInsight, InsightType } from './entities/ai-insight.entity';
 import { AiCoachingTip, CoachingCategory } from './entities/ai-coaching-tip.entity';
 
@@ -26,13 +27,23 @@ interface TipTemplate {
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
+  private readonly openai: OpenAI | null;
 
   constructor(
     @InjectRepository(AiInsight)
     private readonly insightRepo: Repository<AiInsight>,
     @InjectRepository(AiCoachingTip)
     private readonly coachingRepo: Repository<AiCoachingTip>,
-  ) {}
+  ) {
+    const apiKey = process.env.AI_API_KEY;
+    if (apiKey) {
+      this.openai = new OpenAI({ apiKey });
+      this.logger.log('OpenAI client initialized');
+    } else {
+      this.openai = null;
+      this.logger.warn('AI_API_KEY not set — AI insights will use fallback responses');
+    }
+  }
 
   async generateInsight(
     userId: string,
@@ -299,17 +310,84 @@ export class AiService {
   }
 
   /**
-   * Placeholder AI API call. Replace with actual API integration
-   * (OpenAI, Claude, etc.) when ready.
+   * Call OpenAI API for productivity insights.
+   * Falls back to a template-based response if the API key is missing or the call fails.
    */
   private async callAI(prompt: string): Promise<AiResponse> {
-    this.logger.debug(`AI prompt (mock): ${prompt.substring(0, 100)}...`);
+    if (!this.openai) {
+      this.logger.debug('No OpenAI client — using fallback response');
+      return this.getFallbackInsight(prompt);
+    }
+
+    try {
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are PulseTrack AI, a workplace productivity coach. Analyze the employee data provided and return a JSON object with exactly two fields: "insight" (a concise observation about their work patterns, 1-2 sentences) and "recommendation" (an actionable suggestion to improve, 1-2 sentences). Be specific and reference the actual numbers. Keep the tone supportive and professional.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 300,
+        response_format: { type: 'json_object' },
+      });
+
+      const content = completion.choices[0]?.message?.content;
+      if (!content) {
+        this.logger.warn('Empty response from OpenAI');
+        return this.getFallbackInsight(prompt);
+      }
+
+      const parsed = JSON.parse(content);
+      return {
+        insight: parsed.insight || 'Unable to generate insight.',
+        recommendation: parsed.recommendation || 'Continue maintaining your current work habits.',
+      };
+    } catch (error) {
+      this.logger.error(`OpenAI API error: ${error.message}`);
+      return this.getFallbackInsight(prompt);
+    }
+  }
+
+  /**
+   * Fallback insight when OpenAI is unavailable — parses the prompt data for a contextual response.
+   */
+  private getFallbackInsight(prompt: string): AiResponse {
+    try {
+      const dataMatch = prompt.match(/\{[\s\S]*\}/);
+      if (dataMatch) {
+        const data = JSON.parse(dataMatch[0]);
+        const hours = data.totalHoursThisWeek || 0;
+        const focus = data.focusScore || 0;
+        const interruptions = data.idleInterruptions || 0;
+
+        if (focus >= 80) {
+          return {
+            insight: `Strong performance this period with a focus score of ${focus}% across ${hours} hours of work. Your concentration levels are above average.`,
+            recommendation: 'Maintain your current work habits. Consider mentoring teammates on your focus strategies.',
+          };
+        }
+        if (interruptions > 10) {
+          return {
+            insight: `${interruptions} idle interruptions were recorded across ${hours} hours of work, which is above the recommended threshold. This may be impacting your focus score of ${focus}%.`,
+            recommendation: 'Try batching your breaks and using "Do Not Disturb" mode during deep work blocks to reduce context switching.',
+          };
+        }
+        return {
+          insight: `You logged ${hours} hours this period with a focus score of ${focus}%. There is room to improve your active work ratio.`,
+          recommendation: 'Set clear goals at the start of each session and try the Pomodoro technique (25 min work, 5 min break) to build focus consistency.',
+        };
+      }
+    } catch {
+      // Fall through to generic
+    }
 
     return {
-      insight:
-        'Based on the data provided, the employee shows consistent work patterns with room for improvement in reducing idle interruptions during peak hours.',
-      recommendation:
-        'Consider implementing focused work blocks of 90 minutes with scheduled breaks to maintain productivity and reduce context switching.',
+      insight: 'Your recent work sessions show a mix of focused and interrupted periods.',
+      recommendation: 'Try structuring your work into focused blocks with planned breaks to maximize productivity.',
     };
   }
 }

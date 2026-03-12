@@ -96,7 +96,8 @@ export default function LeaveRequestsPage() {
         leaveRequestsApi.getAttachments(id),
       ]);
       setSelectedRequest(res.data);
-      setAttachmentUrls(Array.isArray(attachments) ? attachments : []);
+      const attData = (attachments as any)?.data ?? attachments;
+      setAttachmentUrls(Array.isArray(attData) ? attData : []);
     } catch {
       message.error('Failed to load request details');
       setDetailOpen(false);
