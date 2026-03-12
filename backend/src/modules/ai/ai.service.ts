@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, MoreThanOrEqual } from 'typeorm';
 import OpenAI from 'openai';
 import { AiInsight, InsightType } from './entities/ai-insight.entity';
 import { AiCoachingTip, CoachingCategory } from './entities/ai-coaching-tip.entity';
@@ -104,8 +104,10 @@ export class AiService {
   }
 
   async getInsightsForUser(userId: string): Promise<AiInsight[]> {
+    const since = new Date();
+    since.setHours(since.getHours() - 24);
     return this.insightRepo.find({
-      where: { userId },
+      where: { userId, generatedAt: MoreThanOrEqual(since) },
       order: { generatedAt: 'DESC' },
       take: 20,
     });
@@ -121,8 +123,10 @@ export class AiService {
   }
 
   async getCoachingTipsForUser(userId: string): Promise<AiCoachingTip[]> {
+    const since = new Date();
+    since.setHours(since.getHours() - 24);
     return this.coachingRepo.find({
-      where: { userId },
+      where: { userId, generatedAt: MoreThanOrEqual(since) },
       order: { generatedAt: 'DESC' },
       take: 20,
     });
