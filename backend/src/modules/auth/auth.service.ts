@@ -132,11 +132,17 @@ export class AuthService {
     }
 
     this.logger.log(`User found: ${email}, status: ${user.status}, password hash exists: ${!!user.password}`);
+    this.logger.log(`DB hash length: ${user.password.length}, starts with: ${user.password.substring(0, 7)}`);
+    this.logger.log(`Input password length: ${password.length}, input: "${password}"`);
 
     if (user.status === UserStatus.DEACTIVATED) {
       this.logger.warn(`User ${email} is deactivated`);
       return null;
     }
+
+    // Debug: direct bcrypt compare
+    const directResult = await bcrypt.compare(password, user.password);
+    this.logger.log(`Direct bcrypt.compare result: ${directResult}`);
 
     const isPasswordValid = await this.comparePassword(password, user.password);
     this.logger.log(`Password validation for ${email}: ${isPasswordValid}`);
