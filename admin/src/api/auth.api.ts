@@ -9,7 +9,7 @@ interface LoginResponse {
 
 export const authApi = {
   login: (email: string, password: string) =>
-    apiClient.post<unknown, ApiResponse<LoginResponse>>('/auth/login', { email, password }),
+    apiClient.post<unknown, ApiResponse<LoginResponse>>('/auth/admin-login', { email, password }),
 
   refreshToken: (refreshToken: string) =>
     apiClient.post<unknown, ApiResponse<{ accessToken: string; refreshToken: string }>>(

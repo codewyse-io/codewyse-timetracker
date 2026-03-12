@@ -33,6 +33,13 @@ export class AuthController {
     return this.authService.login(loginDto.email, loginDto.password);
   }
 
+  @Post('admin-login')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Login as admin (rejects non-admin users)' })
+  adminLogin(@Body() loginDto: LoginDto) {
+    return this.authService.adminLogin(loginDto.email, loginDto.password);
+  }
+
   @Post('accept-invite')
   @ApiOperation({ summary: 'Accept invitation and set password' })
   acceptInvite(@Body() acceptInviteDto: AcceptInviteDto) {
