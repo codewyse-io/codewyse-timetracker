@@ -31,7 +31,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
@@ -40,7 +42,10 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "category": "public.app-category.productivity"
@@ -51,13 +56,21 @@
       "allowToChangeInstallationDirectory": false,
       "shortcutName": "Pulse"
     },
-    "asar": true
+    "asar": true,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "codewyse-io",
+        "repo": "codewyse-timetracker"
+      }
+    ]
   },
   "keywords": [],
   "license": "ISC",
   "dependencies": {
     "axios": "^1.13.6",
-    "electron-store": "^8.2.0"
+    "electron-store": "^8.2.0",
+    "electron-updater": "^6.8.3"
   },
   "devDependencies": {
     "@types/node": "^25.3.5",

@@ -539,61 +539,71 @@ export default function UsersPage() {
           <Select.Option value="employee">Employee</Select.Option>
         </Select>
       </Form.Item>
-      <Form.Item
-        name="designation"
-        label={<span style={labelStyle}>Designation</span>}
-      >
-        <Select
-          placeholder="Select or create designation"
-          allowClear
-          showSearch
-          style={{ borderRadius: 8 }}
-          options={designationOptions}
-          optionFilterProp="label"
-          dropdownRender={(menu) => (
+      <Form.Item noStyle shouldUpdate={(prev, cur) => prev.role !== cur.role}>
+        {({ getFieldValue }) => {
+          const role = getFieldValue('role');
+          if (role === 'admin') return null;
+          return (
             <>
-              {menu}
-              <Divider style={{ margin: '8px 0 4px' }} />
-              <div style={{ display: 'flex', gap: 8, padding: '4px 8px 8px' }}>
-                <Input
-                  placeholder="New designation..."
-                  ref={newDesignationInputRef}
-                  value={newDesignation}
-                  onChange={(e) => setNewDesignation(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddDesignation(); } }}
-                  style={{ borderRadius: 6, fontSize: 13 }}
-                  size="small"
+              <Form.Item
+                name="designation"
+                label={<span style={labelStyle}>Designation</span>}
+              >
+                <Select
+                  placeholder="Select or create designation"
+                  allowClear
+                  showSearch
+                  style={{ borderRadius: 8 }}
+                  options={designationOptions}
+                  optionFilterProp="label"
+                  dropdownRender={(menu) => (
+                    <>
+                      {menu}
+                      <Divider style={{ margin: '8px 0 4px' }} />
+                      <div style={{ display: 'flex', gap: 8, padding: '4px 8px 8px' }}>
+                        <Input
+                          placeholder="New designation..."
+                          ref={newDesignationInputRef}
+                          value={newDesignation}
+                          onChange={(e) => setNewDesignation(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddDesignation(); } }}
+                          style={{ borderRadius: 6, fontSize: 13 }}
+                          size="small"
+                        />
+                        <Button
+                          type="text"
+                          icon={<PlusOutlined />}
+                          onClick={handleAddDesignation}
+                          size="small"
+                          style={{ color: 'var(--primary)', fontWeight: 600, fontSize: 13 }}
+                        >
+                          Add
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 />
-                <Button
-                  type="text"
-                  icon={<PlusOutlined />}
-                  onClick={handleAddDesignation}
-                  size="small"
-                  style={{ color: 'var(--primary)', fontWeight: 600, fontSize: 13 }}
-                >
-                  Add
-                </Button>
-              </div>
+              </Form.Item>
+              <Form.Item
+                name="hourlyRate"
+                label={<span style={labelStyle}>Hourly Rate ($)</span>}
+                rules={[{ required: true, message: 'Hourly rate is required' }]}
+              >
+                <InputNumber min={0} step={0.5} style={{ width: '100%', borderRadius: 8 }} placeholder="25.00" />
+              </Form.Item>
+              <Form.Item name="shiftId" label={<span style={labelStyle}>Shift</span>}>
+                <Select placeholder="Select shift (optional)" allowClear options={shiftOptions} />
+              </Form.Item>
+              <Form.Item
+                name="allowedLeavesPerYear"
+                label={<span style={labelStyle}>Allowed Leaves / Year</span>}
+                initialValue={20}
+              >
+                <InputNumber min={0} max={365} step={1} style={{ width: '100%', borderRadius: 8 }} placeholder="20" />
+              </Form.Item>
             </>
-          )}
-        />
-      </Form.Item>
-      <Form.Item
-        name="hourlyRate"
-        label={<span style={labelStyle}>Hourly Rate ($)</span>}
-        rules={[{ required: true, message: 'Hourly rate is required' }]}
-      >
-        <InputNumber min={0} step={0.5} style={{ width: '100%', borderRadius: 8 }} placeholder="25.00" />
-      </Form.Item>
-      <Form.Item name="shiftId" label={<span style={labelStyle}>Shift</span>}>
-        <Select placeholder="Select shift (optional)" allowClear options={shiftOptions} />
-      </Form.Item>
-      <Form.Item
-        name="allowedLeavesPerYear"
-        label={<span style={labelStyle}>Allowed Leaves / Year</span>}
-        initialValue={20}
-      >
-        <InputNumber min={0} max={365} step={1} style={{ width: '100%', borderRadius: 8 }} placeholder="20" />
+          );
+        }}
       </Form.Item>
       <div style={{
         marginTop: 24,
