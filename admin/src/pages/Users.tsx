@@ -177,6 +177,7 @@ export default function UsersPage() {
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
   const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState<string | undefined>(undefined);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -190,7 +191,7 @@ export default function UsersPage() {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await usersApi.getUsers({ page, limit, search: search || undefined });
+      const response = await usersApi.getUsers({ page, limit, search: search || undefined, role: roleFilter });
       setUsers(response.data.data);
       setTotal(response.data.total);
     } catch {
@@ -198,7 +199,7 @@ export default function UsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, search]);
+  }, [page, limit, search, roleFilter]);
 
   const fetchShifts = useCallback(async () => {
     try {
@@ -660,8 +661,8 @@ export default function UsersPage() {
         </Button>
       </div>
 
-      {/* Search Bar */}
-      <div style={{ marginBottom: 20 }}>
+      {/* Search Bar + Role Filter */}
+      <div style={{ marginBottom: 20, display: 'flex', gap: 12, alignItems: 'center' }}>
         <Input
           placeholder="Search by name or email..."
           prefix={<SearchOutlined style={{ color: 'var(--text-muted)' }} />}
@@ -680,6 +681,17 @@ export default function UsersPage() {
             boxShadow: 'var(--shadow-xs)',
           }}
           allowClear
+        />
+        <Select
+          placeholder="All Roles"
+          value={roleFilter}
+          onChange={(val) => { setRoleFilter(val); setPage(1); }}
+          allowClear
+          style={{ width: 160, height: 42 }}
+          options={[
+            { label: 'Admin', value: 'admin' },
+            { label: 'Employee', value: 'employee' },
+          ]}
         />
       </div>
 
