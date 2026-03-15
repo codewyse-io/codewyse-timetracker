@@ -60,6 +60,13 @@ export class TimeTrackingController {
     return this.timeTrackingService.getTrackingSettings(req.user?.shiftId);
   }
 
+  @Post('heartbeat')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Client heartbeat to prove app is running' })
+  async heartbeat(@Req() req: any) {
+    return this.timeTrackingService.heartbeat(req.user?.id);
+  }
+
   @Post('idle')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({

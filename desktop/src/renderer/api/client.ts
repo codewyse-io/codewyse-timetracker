@@ -75,6 +75,11 @@ export async function reportIdle(data: { startTime: string; endTime: string }) {
   return response.data;
 }
 
+export async function sendHeartbeat() {
+  const response = await apiClient.post('/time-tracking/heartbeat');
+  return response.data;
+}
+
 export async function getFocusScore(period?: string) {
   const response = await apiClient.get('/focus-score/me', { params: { period } });
   return response.data;

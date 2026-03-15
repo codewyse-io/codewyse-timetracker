@@ -6,7 +6,8 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
+import { Repository, LessThanOrEqual, MoreThanOrEqual, LessThan } from 'typeorm';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { WorkSession } from './entities/work-session.entity';
 import { IdleInterval } from './entities/idle-interval.entity';
 import { SessionStatus } from './enums/session-status.enum';
@@ -16,6 +17,13 @@ import { ShiftsService } from '../shifts/shifts.service';
 import { FocusScoreService } from '../focus-score/focus-score.service';
 import { AiService } from '../ai/ai.service';
 import { PaginatedResponseDto } from '../../common/dto/paginated-response.dto';
+
+// ── Anti-manipulation constants ──────────────────────────────────────
+const MAX_SESSION_DURATION_HOURS = 16;
+const MAX_SINGLE_IDLE_SECONDS = 4 * 3600; // 4 hours max for one idle interval
+const HEARTBEAT_TIMEOUT_SECONDS = 180; // 3 minutes — auto-stop if no heartbeat
+const CLOCK_SKEW_TOLERANCE_SECONDS = 30; // allow 30s clock drift
+const MAX_IDLE_INTERVALS_PER_SESSION = 500; // prevent abuse via interval flooding
 
 @Injectable()
 export class TimeTrackingService {
@@ -57,9 +65,11 @@ export class TimeTrackingService {
       }
     }
 
+    const now = new Date();
     const session = this.sessionRepository.create({
       userId,
-      startTime: new Date(),
+      startTime: now,
+      lastHeartbeat: now,
       status: SessionStatus.ACTIVE,
       mode,
     });
@@ -118,6 +128,34 @@ export class TimeTrackingService {
   }
 
   /**
+   * Record a heartbeat from the desktop client to prove it is running.
+   * Also enforces max session duration.
+   */
+  async heartbeat(userId: string): Promise<{ ok: boolean }> {
+    const session = await this.sessionRepository.findOne({
+      where: { userId, status: SessionStatus.ACTIVE },
+    });
+
+    if (!session) {
+      throw new NotFoundException('No active session found.');
+    }
+
+    // Enforce max session duration
+    const elapsed = (Date.now() - session.startTime.getTime()) / 1000;
+    if (elapsed > MAX_SESSION_DURATION_HOURS * 3600) {
+      this.logger.warn(`[heartbeat] Session ${session.id} exceeded max duration (${MAX_SESSION_DURATION_HOURS}h) — auto-stopping`);
+      await this.autoStopSession(session);
+      return { ok: false };
+    }
+
+    await this.sessionRepository.update(session.id, {
+      lastHeartbeat: new Date(),
+    });
+
+    return { ok: true };
+  }
+
+  /**
    * Get the current active session for the user, or null.
    */
   async getCurrentSession(userId: string): Promise<WorkSession | null> {
@@ -143,6 +181,13 @@ export class TimeTrackingService {
    * Report an idle interval from the Electron client.
    * Supports upsert: if an idle interval with the same startTime already exists
    * for this session, it updates it (for ongoing idle tracking).
+   *
+   * Anti-manipulation validations:
+   * - Idle endTime cannot be in the future (+ clock skew tolerance)
+   * - Single idle interval cannot exceed MAX_SINGLE_IDLE_SECONDS
+   * - Total idle cannot exceed total session duration
+   * - No overlapping idle intervals
+   * - Max number of intervals per session
    */
   async reportIdle(
     userId: string,
@@ -161,15 +206,17 @@ export class TimeTrackingService {
     const idleStart = new Date(dto.startTime);
     idleStart.setMilliseconds(0); // Normalize to second precision for DB matching
     const idleEnd = new Date(dto.endTime);
+    const now = new Date();
 
     this.logger.log(`[reportIdle] User ${userId} — start: ${idleStart.toISOString()}, end: ${idleEnd.toISOString()}, session: ${session.id}`);
 
+    // ── Validation 1: endTime must be after startTime ──
     if (idleEnd <= idleStart) {
       this.logger.warn(`[reportIdle] Invalid range — end <= start`);
       throw new BadRequestException('Idle endTime must be after startTime.');
     }
 
-    // Ensure idle interval falls within the session window
+    // ── Validation 2: startTime cannot be before session start ──
     if (idleStart < session.startTime) {
       this.logger.warn(`[reportIdle] Idle start ${idleStart.toISOString()} before session start ${session.startTime.toISOString()}`);
       throw new BadRequestException(
@@ -177,16 +224,67 @@ export class TimeTrackingService {
       );
     }
 
+    // ── Validation 3: endTime cannot be in the future (with tolerance) ──
+    const maxAllowedEnd = new Date(now.getTime() + CLOCK_SKEW_TOLERANCE_SECONDS * 1000);
+    if (idleEnd > maxAllowedEnd) {
+      this.logger.warn(`[reportIdle] Idle endTime ${idleEnd.toISOString()} is in the future (now: ${now.toISOString()})`);
+      throw new BadRequestException('Idle endTime cannot be in the future.');
+    }
+
     const durationSeconds = Math.floor(
       (idleEnd.getTime() - idleStart.getTime()) / 1000,
     );
 
-    // Check for an existing idle interval with the same startTime (ongoing idle update)
+    // ── Validation 4: single idle interval max duration ──
+    if (durationSeconds > MAX_SINGLE_IDLE_SECONDS) {
+      this.logger.warn(`[reportIdle] Idle duration ${durationSeconds}s exceeds max ${MAX_SINGLE_IDLE_SECONDS}s`);
+      throw new BadRequestException(
+        `Single idle interval cannot exceed ${MAX_SINGLE_IDLE_SECONDS / 3600} hours.`,
+      );
+    }
+
+    // ── Validation 5: total idle cannot exceed session elapsed time ──
+    const sessionElapsed = Math.floor((now.getTime() - session.startTime.getTime()) / 1000);
+    const currentTotalIdle = session.idleDuration || 0;
+    // For upsert, we need to check the net change
     const existing = await this.idleRepository
       .createQueryBuilder('idle')
       .where('idle.session_id = :sessionId', { sessionId: session.id })
       .andWhere('idle.start_time = :startTime', { startTime: idleStart })
       .getOne();
+
+    const previousDuration = existing?.duration || 0;
+    const netIncrease = durationSeconds - previousDuration;
+    if (currentTotalIdle + netIncrease > sessionElapsed) {
+      this.logger.warn(`[reportIdle] Total idle (${currentTotalIdle + netIncrease}s) would exceed session elapsed (${sessionElapsed}s)`);
+      throw new BadRequestException('Total idle time cannot exceed session duration.');
+    }
+
+    // ── Validation 6: check for overlapping intervals (skip the one being updated) ──
+    if (!existing) {
+      const overlapQb = this.idleRepository
+        .createQueryBuilder('idle')
+        .where('idle.session_id = :sessionId', { sessionId: session.id })
+        .andWhere('idle.start_time < :idleEnd', { idleEnd })
+        .andWhere('idle.end_time > :idleStart', { idleStart });
+
+      const overlapCount = await overlapQb.getCount();
+      if (overlapCount > 0) {
+        this.logger.warn(`[reportIdle] Overlapping idle interval detected`);
+        throw new BadRequestException('Idle intervals cannot overlap.');
+      }
+    }
+
+    // ── Validation 7: max intervals per session ──
+    if (!existing) {
+      const intervalCount = await this.idleRepository.count({
+        where: { sessionId: session.id },
+      });
+      if (intervalCount >= MAX_IDLE_INTERVALS_PER_SESSION) {
+        this.logger.warn(`[reportIdle] Max idle intervals (${MAX_IDLE_INTERVALS_PER_SESSION}) reached for session ${session.id}`);
+        throw new BadRequestException('Maximum idle intervals reached for this session.');
+      }
+    }
 
     let saved: IdleInterval;
     if (existing) {
@@ -228,6 +326,58 @@ export class TimeTrackingService {
     }
 
     return saved;
+  }
+
+  /**
+   * Cron job: auto-stop sessions with stale heartbeats.
+   * Runs every 2 minutes.
+   */
+  @Cron(CronExpression.EVERY_MINUTE)
+  async handleStaleSessionsCron(): Promise<void> {
+    const cutoff = new Date(Date.now() - HEARTBEAT_TIMEOUT_SECONDS * 1000);
+
+    const staleSessions = await this.sessionRepository.find({
+      where: {
+        status: SessionStatus.ACTIVE,
+        lastHeartbeat: LessThan(cutoff),
+      },
+      relations: ['idleIntervals'],
+    });
+
+    for (const session of staleSessions) {
+      this.logger.warn(`[stale-check] Auto-stopping stale session ${session.id} (user: ${session.userId}, last heartbeat: ${session.lastHeartbeat?.toISOString()})`);
+      await this.autoStopSession(session);
+    }
+
+    // Also auto-stop sessions exceeding max duration
+    const maxDurationCutoff = new Date(Date.now() - MAX_SESSION_DURATION_HOURS * 3600 * 1000);
+    const longSessions = await this.sessionRepository.find({
+      where: {
+        status: SessionStatus.ACTIVE,
+        startTime: LessThan(maxDurationCutoff),
+      },
+      relations: ['idleIntervals'],
+    });
+
+    for (const session of longSessions) {
+      this.logger.warn(`[stale-check] Auto-stopping over-max-duration session ${session.id} (user: ${session.userId})`);
+      await this.autoStopSession(session);
+    }
+  }
+
+  /**
+   * Auto-stop a session: set endTime to last heartbeat (not current time)
+   * so the user doesn't get credit for time the app wasn't running.
+   */
+  private async autoStopSession(session: WorkSession): Promise<void> {
+    // End at last heartbeat time, not now — prevents inflating hours when app crashes
+    session.endTime = session.lastHeartbeat || new Date();
+    session.status = SessionStatus.COMPLETED;
+    this.calculateDurations(session);
+    await this.sessionRepository.save(session);
+
+    const sessionDate = session.startTime.toISOString().split('T')[0];
+    this.focusScoreService.calculateDailyScore(session.userId, sessionDate).catch(() => {});
   }
 
   /**
@@ -325,8 +475,9 @@ export class TimeTrackingService {
       session.idleIntervals?.reduce((sum, idle) => sum + idle.duration, 0) ?? 0;
 
     session.totalDuration = totalSeconds;
-    session.idleDuration = idleSeconds;
-    session.activeDuration = Math.max(0, totalSeconds - idleSeconds);
+    // Idle cannot exceed total — clamp it
+    session.idleDuration = Math.min(idleSeconds, totalSeconds);
+    session.activeDuration = Math.max(0, totalSeconds - session.idleDuration);
   }
 
   /**

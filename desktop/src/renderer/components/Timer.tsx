@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from 'antd';
-import { startSession, stopSession, getCurrentSession, getTrackingSettings } from '../api/client';
+import { startSession, stopSession, getCurrentSession, getTrackingSettings, sendHeartbeat } from '../api/client';
 import { formatElapsedTime } from '../utils/format';
 import { WorkSession } from '../types';
 
@@ -28,6 +28,7 @@ export default function Timer() {
   const startTimeRef = useRef<Date | null>(null);
   const statusIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(400);
 
@@ -71,6 +72,38 @@ export default function Timer() {
       setErrorState({ show: false, message: '' });
     }, 5000);
   }, []);
+
+  // Send heartbeat every 60s to prove the app is alive
+  useEffect(() => {
+    if (isRunning) {
+      const doHeartbeat = () => {
+        sendHeartbeat().catch((err) => {
+          // If session was auto-stopped by server, reset UI
+          if (err.response?.status === 404) {
+            setIsRunning(false);
+            clearTimer();
+            setElapsed(0);
+            setSession(null);
+            window.electronAPI?.stopIdleDetection?.().catch(() => {});
+            window.dispatchEvent(new Event('session-changed'));
+          }
+        });
+      };
+      doHeartbeat(); // immediate first heartbeat
+      heartbeatRef.current = setInterval(doHeartbeat, 60_000);
+    } else {
+      if (heartbeatRef.current) {
+        clearInterval(heartbeatRef.current);
+        heartbeatRef.current = null;
+      }
+    }
+    return () => {
+      if (heartbeatRef.current) {
+        clearInterval(heartbeatRef.current);
+        heartbeatRef.current = null;
+      }
+    };
+  }, [isRunning, clearTimer]);
 
   // Cycle AI status messages when running
   useEffect(() => {

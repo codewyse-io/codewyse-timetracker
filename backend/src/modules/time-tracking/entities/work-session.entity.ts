@@ -44,6 +44,9 @@ export class WorkSession {
   @Column({ type: 'varchar', length: 20, default: 'regular' })
   mode: string; // 'regular' | 'overtime'
 
+  @Column({ name: 'last_heartbeat', type: 'datetime', nullable: true })
+  lastHeartbeat: Date | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
