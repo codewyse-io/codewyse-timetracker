@@ -11,7 +11,7 @@ import {
   Button,
   message,
 } from 'antd';
-import { DownloadOutlined, ClockCircleOutlined, HistoryOutlined } from '@ant-design/icons';
+import { DownloadOutlined, ClockCircleOutlined, HistoryOutlined, CaretRightOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -146,6 +146,38 @@ function ActiveSessionsTab() {
   );
 }
 
+interface DayGroup {
+  key: string;
+  date: string;
+  dateLabel: string;
+  sessionCount: number;
+  totalDuration: number;
+  activeDuration: number;
+  idleDuration: number;
+  sessions: WorkSession[];
+}
+
+function groupSessionsByDate(sessions: WorkSession[]): DayGroup[] {
+  const map = new Map<string, WorkSession[]>();
+  sessions.forEach((s) => {
+    const dateKey = dayjs(s.startTime).format('YYYY-MM-DD');
+    if (!map.has(dateKey)) map.set(dateKey, []);
+    map.get(dateKey)!.push(s);
+  });
+  return Array.from(map.entries())
+    .sort(([a], [b]) => (a > b ? -1 : 1))
+    .map(([dateKey, daySessions]) => ({
+      key: dateKey,
+      date: dateKey,
+      dateLabel: dayjs(dateKey).format('ddd, MMM D, YYYY'),
+      sessionCount: daySessions.length,
+      totalDuration: daySessions.reduce((sum, s) => sum + (s.totalDuration || 0), 0),
+      activeDuration: daySessions.reduce((sum, s) => sum + (s.activeDuration || 0), 0),
+      idleDuration: daySessions.reduce((sum, s) => sum + (s.idleDuration || 0), 0),
+      sessions: daySessions.sort((a, b) => (a.startTime > b.startTime ? -1 : 1)),
+    }));
+}
+
 function SessionHistoryTab() {
   const [sessions, setSessions] = useState<WorkSession[]>([]);
   const [loading, setLoading] = useState(false);
@@ -163,7 +195,7 @@ function SessionHistoryTab() {
     try {
       const params: Record<string, string | number | undefined> = {
         page,
-        limit,
+        limit: userId ? 500 : limit,
       };
       if (dateRange?.[0]) params.startDate = dateRange[0].format('YYYY-MM-DD');
       if (dateRange?.[1]) params.endDate = dateRange[1].format('YYYY-MM-DD');
@@ -223,7 +255,8 @@ function SessionHistoryTab() {
     downloadCsv(csv, `sessions-${dayjs().format('YYYY-MM-DD')}.csv`);
   };
 
-  const columns: ColumnsType<WorkSession> = [
+  // Flat view columns (no employee filter)
+  const flatColumns: ColumnsType<WorkSession> = [
     {
       title: 'Employee',
       key: 'employee',
@@ -287,6 +320,106 @@ function SessionHistoryTab() {
     },
   ];
 
+  // Grouped view columns (employee selected)
+  const groupColumns: ColumnsType<DayGroup> = [
+    {
+      title: 'Date',
+      dataIndex: 'dateLabel',
+      key: 'date',
+      render: (val: string) => (
+        <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 14 }}>{val}</span>
+      ),
+    },
+    {
+      title: 'Sessions',
+      dataIndex: 'sessionCount',
+      key: 'sessions',
+      render: (val: number) => (
+        <span style={{
+          background: 'rgba(99,102,241,0.08)',
+          color: 'var(--primary)',
+          padding: '2px 10px',
+          borderRadius: 12,
+          fontSize: 12,
+          fontWeight: 600,
+        }}>
+          {val} session{val !== 1 ? 's' : ''}
+        </span>
+      ),
+    },
+    {
+      title: 'Total Duration',
+      dataIndex: 'totalDuration',
+      key: 'totalDuration',
+      render: (val: number) => (
+        <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 14 }}>{formatDuration(val)}</span>
+      ),
+    },
+    {
+      title: 'Active Duration',
+      dataIndex: 'activeDuration',
+      key: 'activeDuration',
+      render: (val: number) => (
+        <span style={{ color: '#10b981', fontWeight: 600, fontSize: 14 }}>{formatDuration(val)}</span>
+      ),
+    },
+    {
+      title: 'Idle Duration',
+      dataIndex: 'idleDuration',
+      key: 'idleDuration',
+      render: (val: number) => (
+        <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>{formatDuration(val)}</span>
+      ),
+    },
+  ];
+
+  const sessionSubColumns: ColumnsType<WorkSession> = [
+    {
+      title: 'Start Time',
+      dataIndex: 'startTime',
+      key: 'startTime',
+      render: (val: string) => (
+        <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{formatTime(val)}</span>
+      ),
+    },
+    {
+      title: 'End Time',
+      dataIndex: 'endTime',
+      key: 'endTime',
+      render: (val: string | null) => (
+        <span style={{ color: val ? 'var(--text-secondary)' : '#10b981', fontSize: 13, fontWeight: val ? 400 : 500 }}>
+          {val ? formatTime(val) : 'In Progress'}
+        </span>
+      ),
+    },
+    {
+      title: 'Total Duration',
+      dataIndex: 'totalDuration',
+      key: 'totalDuration',
+      render: (val: number) => (
+        <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{formatDuration(val || 0)}</span>
+      ),
+    },
+    {
+      title: 'Active Duration',
+      dataIndex: 'activeDuration',
+      key: 'activeDuration',
+      render: (val: number) => (
+        <span style={{ color: '#10b981', fontWeight: 500 }}>{formatDuration(val || 0)}</span>
+      ),
+    },
+    {
+      title: 'Idle Duration',
+      dataIndex: 'idleDuration',
+      key: 'idleDuration',
+      render: (val: number) => (
+        <span style={{ color: 'var(--text-muted)' }}>{formatDuration(val || 0)}</span>
+      ),
+    },
+  ];
+
+  const dayGroups = userId ? groupSessionsByDate(sessions) : [];
+
   return (
     <div>
       <div
@@ -347,20 +480,57 @@ function SessionHistoryTab() {
           </Col>
         </Row>
       </div>
-      <Table
-        dataSource={sessions}
-        columns={columns}
-        rowKey="id"
-        loading={loading}
-        rowClassName={() => 'modern-row'}
-        pagination={{
-          current: page,
-          pageSize: limit,
-          total,
-          onChange: (p) => setPage(p),
-          showTotal: (t) => `Total ${t} sessions`,
-        }}
-      />
+
+      {userId ? (
+        <Table
+          dataSource={dayGroups}
+          columns={groupColumns}
+          rowKey="key"
+          loading={loading}
+          rowClassName={() => 'modern-row'}
+          pagination={false}
+          expandable={{
+            expandedRowRender: (record) => (
+              <Table
+                dataSource={record.sessions}
+                columns={sessionSubColumns}
+                rowKey="id"
+                pagination={false}
+                size="small"
+                style={{ margin: '0 0 0 16px' }}
+                rowClassName={() => 'modern-row'}
+              />
+            ),
+            expandIcon: ({ expanded, onExpand, record }) => (
+              <CaretRightOutlined
+                onClick={(e) => onExpand(record, e)}
+                style={{
+                  fontSize: 11,
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s',
+                  transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                }}
+              />
+            ),
+          }}
+        />
+      ) : (
+        <Table
+          dataSource={sessions}
+          columns={flatColumns}
+          rowKey="id"
+          loading={loading}
+          rowClassName={() => 'modern-row'}
+          pagination={{
+            current: page,
+            pageSize: limit,
+            total,
+            onChange: (p) => setPage(p),
+            showTotal: (t) => `Total ${t} sessions`,
+          }}
+        />
+      )}
     </div>
   );
 }

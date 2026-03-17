@@ -92,8 +92,9 @@ export default function PayrollPage() {
   }, [fetchPayroll]);
 
   useEffect(() => {
-    usersApi.getUsers({ limit: 500, role: 'employee' }).then((res) => {
-      setEmployees(res.data.data);
+    usersApi.getUsers({ limit: 200 }).then((res) => {
+      const allUsers = res.data.data ?? [];
+      setEmployees(allUsers.filter((u: User) => u.role === 'employee'));
     }).catch(() => {});
   }, []);
 
