@@ -1,3 +1,4 @@
+// Downloads controller – handles desktop release distribution & email notifications
 import {
   Controller,
   Get,
