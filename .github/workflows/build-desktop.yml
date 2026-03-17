@@ -126,15 +126,18 @@ jobs:
 
       - name: Send update email to all employees
         shell: bash
+        env:
+          API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+          API_KEY: ${{ secrets.DEPLOY_API_KEY }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION=${{ steps.version.outputs.version }}
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
-            -X POST "${{ secrets.VITE_API_BASE_URL }}/downloads/notify/v${VERSION}" \
-            -H "x-api-key: ${{ secrets.DEPLOY_API_KEY }}" \
+            -X POST "${API_BASE_URL}/downloads/notify/v${VERSION}" \
+            -H "x-api-key: ${API_KEY}" \
             -H "Content-Type: application/json")
-          echo "Backend responded with: $RESPONSE"
-          if [ "$RESPONSE" != "201" ] && [ "$RESPONSE" != "200" ]; then
-            echo "Warning: Failed to send notification emails (HTTP $RESPONSE)"
+          echo "Backend responded with: ${RESPONSE}"
+          if [ "${RESPONSE}" != "201" ] && [ "${RESPONSE}" != "200" ]; then
+            echo "Warning: Failed to send notification emails (HTTP ${RESPONSE})"
           fi
 
   cleanup:
