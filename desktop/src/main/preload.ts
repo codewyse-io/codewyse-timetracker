@@ -37,4 +37,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateError: (callback: (message: string) => void): void => {
     ipcRenderer.on('update-error', (_event, message) => callback(message));
   },
+
+  // Main-process heartbeat
+  startHeartbeat: (): Promise<void> => ipcRenderer.invoke('start-heartbeat'),
+  stopHeartbeat: (): Promise<void> => ipcRenderer.invoke('stop-heartbeat'),
+  onSessionForceStopped: (callback: () => void): void => {
+    ipcRenderer.on('session-force-stopped', () => callback());
+  },
 });

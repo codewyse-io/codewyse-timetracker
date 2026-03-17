@@ -21,7 +21,7 @@ import { PaginatedResponseDto } from '../../common/dto/paginated-response.dto';
 // ── Anti-manipulation constants ──────────────────────────────────────
 const MAX_SESSION_DURATION_HOURS = 16;
 const MAX_SINGLE_IDLE_SECONDS = 4 * 3600; // 4 hours max for one idle interval
-const HEARTBEAT_TIMEOUT_SECONDS = 180; // 3 minutes — auto-stop if no heartbeat
+const HEARTBEAT_TIMEOUT_SECONDS = 300; // 5 minutes — auto-stop if no heartbeat
 const CLOCK_SKEW_TOLERANCE_SECONDS = 30; // allow 30s clock drift
 const MAX_IDLE_INTERVALS_PER_SESSION = 500; // prevent abuse via interval flooding
 

@@ -152,6 +152,16 @@ function ActiveSessionsTab() {
   );
 }
 
+interface EmployeeGroup {
+  key: string;
+  employeeName: string;
+  sessionCount: number;
+  totalDuration: number;
+  activeDuration: number;
+  idleDuration: number;
+  sessions: WorkSession[];
+}
+
 interface DayGroup {
   key: string;
   date: string;
@@ -163,12 +173,36 @@ interface DayGroup {
   sessions: WorkSession[];
 }
 
-function groupSessionsByDate(sessions: WorkSession[], tz?: string): DayGroup[] {
+function groupSessionsByEmployee(sessions: WorkSession[]): EmployeeGroup[] {
   const map = new Map<string, WorkSession[]>();
   sessions.forEach((s) => {
-    const dateKey = tz
-      ? dayjs(s.startTime).tz(tz).format('YYYY-MM-DD')
-      : dayjs(s.startTime).format('YYYY-MM-DD');
+    const key = s.userId;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(s);
+  });
+  return Array.from(map.entries())
+    .map(([userId, empSessions]) => {
+      const name = empSessions[0]?.user
+        ? `${empSessions[0].user.firstName} ${empSessions[0].user.lastName}`
+        : userId;
+      return {
+        key: userId,
+        employeeName: name,
+        sessionCount: empSessions.length,
+        totalDuration: empSessions.reduce((sum, s) => sum + (s.totalDuration || 0), 0),
+        activeDuration: empSessions.reduce((sum, s) => sum + (s.activeDuration || 0), 0),
+        idleDuration: empSessions.reduce((sum, s) => sum + (s.idleDuration || 0), 0),
+        sessions: empSessions.sort((a, b) => (a.startTime > b.startTime ? -1 : 1)),
+      };
+    })
+    .sort((a, b) => b.totalDuration - a.totalDuration);
+}
+
+function groupSessionsByDate(sessions: WorkSession[], tz?: string): DayGroup[] {
+  const map = new Map<string, WorkSession[]>();
+  const effectiveTz = tz || 'UTC';
+  sessions.forEach((s) => {
+    const dateKey = dayjs(s.startTime).tz(effectiveTz).format('YYYY-MM-DD');
     if (!map.has(dateKey)) map.set(dateKey, []);
     map.get(dateKey)!.push(s);
   });
@@ -189,9 +223,7 @@ function groupSessionsByDate(sessions: WorkSession[], tz?: string): DayGroup[] {
 function SessionHistoryTab() {
   const [sessions, setSessions] = useState<WorkSession[]>([]);
   const [loading, setLoading] = useState(false);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [limit] = useState(20);
   const [dateRange, setDateRange] = useState<
     [Dayjs | null, Dayjs | null] | null
   >(null);
@@ -204,7 +236,7 @@ function SessionHistoryTab() {
     try {
       const params: Record<string, string | number | undefined> = {
         page,
-        limit: userId ? 500 : limit,
+        limit: 200,
       };
       if (dateRange?.[0]) params.startDate = dateRange[0].format('YYYY-MM-DD');
       if (dateRange?.[1]) params.endDate = dateRange[1].format('YYYY-MM-DD');
@@ -212,13 +244,12 @@ function SessionHistoryTab() {
 
       const res = await timeTrackingApi.getSessions(params);
       setSessions(res.data.data);
-      setTotal(res.data.total);
     } catch {
       message.error('Failed to load session history');
     } finally {
       setLoading(false);
     }
-  }, [page, limit, dateRange, userId]);
+  }, [page, dateRange, userId]);
 
   useEffect(() => {
     fetchSessions();
@@ -273,19 +304,8 @@ function SessionHistoryTab() {
     downloadCsv(csv, `sessions-${dayjs().format('YYYY-MM-DD')}.csv`);
   };
 
-  // Flat view columns (no employee filter)
-  const flatColumns: ColumnsType<WorkSession> = [
-    {
-      title: 'Employee',
-      key: 'employee',
-      render: (_, record) => (
-        <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
-          {record.user
-            ? `${record.user.firstName} ${record.user.lastName}`
-            : record.userId}
-        </span>
-      ),
-    },
+  // Session detail columns (used in expandable sub-tables)
+  const sessionSubColumns: ColumnsType<WorkSession> = [
     {
       title: 'Date',
       dataIndex: 'startTime',
@@ -338,12 +358,38 @@ function SessionHistoryTab() {
     },
   ];
 
-  // Grouped view columns (employee selected)
-  const groupColumns: ColumnsType<DayGroup> = [
+  const sessionBadge = (count: number) => (
+    <span style={{
+      background: 'rgba(99,102,241,0.08)',
+      color: 'var(--primary)',
+      padding: '2px 10px',
+      borderRadius: 12,
+      fontSize: 12,
+      fontWeight: 600,
+    }}>
+      {count} session{count !== 1 ? 's' : ''}
+    </span>
+  );
+
+  // Resolve the selected employee's shift timezone
+  const resolveUserTz = (uid: string): string | undefined => {
+    const u = users.find((usr) => usr.id === uid);
+    if (!u?.shiftId) return undefined;
+    return shifts.find((s) => s.id === u.shiftId)?.timezone;
+  };
+
+  const employeeTz = userId ? resolveUserTz(userId) : undefined;
+
+  // Employee selected → group by date; otherwise → group by employee
+  const employeeGroups = !userId ? groupSessionsByEmployee(sessions) : [];
+  const dayGroups = userId ? groupSessionsByDate(sessions, employeeTz) : [];
+
+  // Employee group columns
+  const employeeGroupColumns: ColumnsType<EmployeeGroup> = [
     {
-      title: 'Date',
-      dataIndex: 'dateLabel',
-      key: 'date',
+      title: 'Employee',
+      dataIndex: 'employeeName',
+      key: 'employee',
       render: (val: string) => (
         <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 14 }}>{val}</span>
       ),
@@ -352,18 +398,7 @@ function SessionHistoryTab() {
       title: 'Sessions',
       dataIndex: 'sessionCount',
       key: 'sessions',
-      render: (val: number) => (
-        <span style={{
-          background: 'rgba(99,102,241,0.08)',
-          color: 'var(--primary)',
-          padding: '2px 10px',
-          borderRadius: 12,
-          fontSize: 12,
-          fontWeight: 600,
-        }}>
-          {val} session{val !== 1 ? 's' : ''}
-        </span>
-      ),
+      render: (val: number) => sessionBadge(val),
     },
     {
       title: 'Total Duration',
@@ -391,31 +426,28 @@ function SessionHistoryTab() {
     },
   ];
 
-  const sessionSubColumns: ColumnsType<WorkSession> = [
+  // Day group columns (when employee is selected)
+  const dayGroupColumns: ColumnsType<DayGroup> = [
     {
-      title: 'Start Time',
-      dataIndex: 'startTime',
-      key: 'startTime',
+      title: 'Date',
+      dataIndex: 'dateLabel',
+      key: 'date',
       render: (val: string) => (
-        <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{formatTime(val)}</span>
+        <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 14 }}>{val}</span>
       ),
     },
     {
-      title: 'End Time',
-      dataIndex: 'endTime',
-      key: 'endTime',
-      render: (val: string | null) => (
-        <span style={{ color: val ? 'var(--text-secondary)' : '#10b981', fontSize: 13, fontWeight: val ? 400 : 500 }}>
-          {val ? formatTime(val) : 'In Progress'}
-        </span>
-      ),
+      title: 'Sessions',
+      dataIndex: 'sessionCount',
+      key: 'sessions',
+      render: (val: number) => sessionBadge(val),
     },
     {
       title: 'Total Duration',
       dataIndex: 'totalDuration',
       key: 'totalDuration',
       render: (val: number) => (
-        <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{formatDuration(val || 0)}</span>
+        <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 14 }}>{formatDuration(val)}</span>
       ),
     },
     {
@@ -423,7 +455,7 @@ function SessionHistoryTab() {
       dataIndex: 'activeDuration',
       key: 'activeDuration',
       render: (val: number) => (
-        <span style={{ color: '#10b981', fontWeight: 500 }}>{formatDuration(val || 0)}</span>
+        <span style={{ color: '#10b981', fontWeight: 600, fontSize: 14 }}>{formatDuration(val)}</span>
       ),
     },
     {
@@ -431,18 +463,10 @@ function SessionHistoryTab() {
       dataIndex: 'idleDuration',
       key: 'idleDuration',
       render: (val: number) => (
-        <span style={{ color: 'var(--text-muted)' }}>{formatDuration(val || 0)}</span>
+        <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>{formatDuration(val)}</span>
       ),
     },
   ];
-
-  // Resolve the selected employee's shift timezone
-  const selectedUser = userId ? users.find((u) => u.id === userId) : undefined;
-  const employeeTz = selectedUser?.shiftId
-    ? shifts.find((s) => s.id === selectedUser.shiftId)?.timezone
-    : undefined;
-
-  const dayGroups = userId ? groupSessionsByDate(sessions, employeeTz) : [];
 
   return (
     <div>
@@ -508,7 +532,7 @@ function SessionHistoryTab() {
       {userId ? (
         <Table
           dataSource={dayGroups}
-          columns={groupColumns}
+          columns={dayGroupColumns}
           rowKey="key"
           loading={loading}
           rowClassName={() => 'modern-row'}
@@ -541,17 +565,41 @@ function SessionHistoryTab() {
         />
       ) : (
         <Table
-          dataSource={sessions}
-          columns={flatColumns}
-          rowKey="id"
+          dataSource={employeeGroups}
+          columns={employeeGroupColumns}
+          rowKey="key"
           loading={loading}
           rowClassName={() => 'modern-row'}
           pagination={{
             current: page,
-            pageSize: limit,
-            total,
-            onChange: (p) => setPage(p),
-            showTotal: (t) => `Total ${t} sessions`,
+            pageSize: 20,
+            total: employeeGroups.length,
+            showTotal: (t) => `Total ${t} employees`,
+          }}
+          expandable={{
+            expandedRowRender: (record) => (
+              <Table
+                dataSource={record.sessions}
+                columns={sessionSubColumns}
+                rowKey="id"
+                pagination={false}
+                size="small"
+                style={{ margin: '0 0 0 16px' }}
+                rowClassName={() => 'modern-row'}
+              />
+            ),
+            expandIcon: ({ expanded, onExpand, record }) => (
+              <CaretRightOutlined
+                onClick={(e) => onExpand(record, e)}
+                style={{
+                  fontSize: 11,
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s',
+                  transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                }}
+              />
+            ),
           }}
         />
       )}

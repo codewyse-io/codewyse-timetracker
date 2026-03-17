@@ -7,6 +7,7 @@ import {
   DashboardOutlined,
   FieldTimeOutlined,
   CalendarOutlined,
+  SoundOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
 } from '@ant-design/icons';
@@ -22,15 +23,18 @@ import TimelinePanel from '../components/TimelinePanel';
 import ProfilePanel from '../components/ProfilePanel';
 import LeaveRequestPanel from '../components/LeaveRequestPanel';
 import OnboardingTutorial from '../components/OnboardingTutorial';
+import UpdateBanner from '../components/UpdateBanner';
+import AnnouncementsPanel from '../components/AnnouncementsPanel';
 
 const { Content } = Layout;
 
-type TabKey = 'dashboard' | 'timeline' | 'leaves' | 'profile';
+type TabKey = 'dashboard' | 'timeline' | 'leaves' | 'announcements' | 'profile';
 
 const NAV_ITEMS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: 'dashboard', label: 'Dashboard', icon: <DashboardOutlined /> },
   { key: 'timeline', label: 'Timeline', icon: <FieldTimeOutlined /> },
   { key: 'leaves', label: 'Leaves', icon: <CalendarOutlined /> },
+  { key: 'announcements', label: 'Notices', icon: <SoundOutlined /> },
 ];
 
 function useLiveClock(timezone?: string) {
@@ -105,6 +109,7 @@ export default function Home() {
   return (
     <Layout style={{ height: '100vh', background: '#0a0a0f', overflow: 'hidden' }}>
       <OnboardingTutorial />
+      <UpdateBanner />
 
       {/* Title Bar — drag region + window controls */}
       <div
@@ -414,6 +419,7 @@ export default function Home() {
             )}
             {activeTab === 'timeline' && <TimelinePanel />}
             {activeTab === 'leaves' && <LeaveRequestPanel />}
+            {activeTab === 'announcements' && <AnnouncementsPanel />}
             {activeTab === 'profile' && <ProfilePanel />}
           </Content>
         </div>

@@ -1,0 +1,148 @@
+name: Build & Publish Desktop App
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'desktop/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22.x'
+  S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+  S3_REGION: ${{ secrets.AWS_S3_REGION }}
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+          - os: macos-latest
+            platform: mac
+
+    name: Build (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: desktop
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build & package (Windows)
+        if: matrix.platform == 'win'
+        run: npm run build && npx electron-builder --win --publish never
+        env:
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+
+      - name: Build & package (macOS)
+        if: matrix.platform == 'mac'
+        run: npm run build && npx electron-builder --mac --publish never
+        env:
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_S3_REGION }}
+
+      - name: Read app version
+        id: version
+        shell: bash
+        run: echo "version=$(node -p \"require('./package.json').version\")" >> $GITHUB_OUTPUT
+
+      - name: Upload to S3 (Windows)
+        if: matrix.platform == 'win'
+        shell: bash
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          aws s3 cp release/ s3://$S3_BUCKET/desktop-releases/v${VERSION}/ \
+            --recursive \
+            --exclude "*" \
+            --include "*.exe" \
+            --include "*.yml" \
+            --include "*.blockmap"
+
+      - name: Upload to S3 (macOS)
+        if: matrix.platform == 'mac'
+        shell: bash
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          aws s3 cp release/ s3://$S3_BUCKET/desktop-releases/v${VERSION}/ \
+            --recursive \
+            --exclude "*" \
+            --include "*.dmg" \
+            --include "*.yml" \
+            --include "*.blockmap"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulse-${{ matrix.platform }}
+          path: |
+            desktop/release/*.exe
+            desktop/release/*.dmg
+            desktop/release/*.yml
+            desktop/release/*.blockmap
+          if-no-files-found: warn
+
+  cleanup:
+    name: Cleanup old S3 releases
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_S3_REGION }}
+
+      - name: Keep only latest 3 versions
+        shell: bash
+        run: |
+          BUCKET="${{ secrets.AWS_S3_BUCKET }}"
+          PREFIX="desktop-releases/"
+          KEEP=3
+
+          # List all version folders, sort by semver descending
+          VERSIONS=$(aws s3 ls "s3://${BUCKET}/${PREFIX}" \
+            | awk '{print $2}' \
+            | sed 's|/||' \
+            | sort -t. -k1,1nr -k2,2nr -k3,3nr)
+
+          echo "Found versions:"
+          echo "$VERSIONS"
+
+          # Skip the latest $KEEP, delete the rest
+          COUNT=0
+          for VERSION in $VERSIONS; do
+            COUNT=$((COUNT + 1))
+            if [ $COUNT -gt $KEEP ]; then
+              echo "Deleting old release: ${VERSION}"
+              aws s3 rm "s3://${BUCKET}/${PREFIX}${VERSION}/" --recursive
+            else
+              echo "Keeping: ${VERSION}"
+            fi
+          done
+
+          echo "Cleanup complete. Kept latest ${KEEP} versions."

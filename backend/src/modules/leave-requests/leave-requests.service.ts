@@ -2,23 +2,33 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ConfigService } from '@nestjs/config';
 import { Repository } from 'typeorm';
 import { LeaveRequest, LeaveStatus } from './entities/leave-request.entity';
 import { CreateLeaveRequestDto } from './dto/create-leave-request.dto';
 import { UpdateLeaveStatusDto } from './dto/update-leave-status.dto';
 import { UsersService } from '../users/users.service';
+import { EmailService } from '../email/email.service';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { PaginatedResponseDto } from '../../common/dto/paginated-response.dto';
 
 @Injectable()
 export class LeaveRequestsService {
+  private readonly logger = new Logger(LeaveRequestsService.name);
+  private readonly adminPanelUrl: string;
+
   constructor(
     @InjectRepository(LeaveRequest)
     private readonly leaveRequestRepo: Repository<LeaveRequest>,
     private readonly usersService: UsersService,
-  ) {}
+    private readonly emailService: EmailService,
+    private readonly configService: ConfigService,
+  ) {
+    this.adminPanelUrl = this.configService.get<string>('ADMIN_PANEL_URL', 'https://hrms.codewyse.site');
+  }
 
   async create(
     userId: string,
@@ -47,7 +57,43 @@ export class LeaveRequestsService {
       status: LeaveStatus.PENDING,
     } as Partial<LeaveRequest>);
 
-    return this.leaveRequestRepo.save(leaveRequest);
+    const saved = await this.leaveRequestRepo.save(leaveRequest);
+
+    // Notify all admins via email
+    this.notifyAdmins(userId, dto, totalDays).catch((err) => {
+      this.logger.error(`Failed to notify admins about leave request: ${err.message}`);
+    });
+
+    return saved;
+  }
+
+  private async notifyAdmins(
+    userId: string,
+    dto: CreateLeaveRequestDto,
+    totalDays: number,
+  ): Promise<void> {
+    const [employee, admins] = await Promise.all([
+      this.usersService.findById(userId),
+      this.usersService.findByRole('admin'),
+    ]);
+
+    const employeeName = `${employee.firstName} ${employee.lastName}`;
+    const leaveRequestsUrl = `${this.adminPanelUrl}/leave-requests`;
+
+    for (const admin of admins) {
+      this.emailService.sendLeaveRequestNotification(
+        admin.email,
+        employeeName,
+        dto.subject,
+        dto.startDate,
+        dto.endDate,
+        totalDays,
+        dto.message || '',
+        leaveRequestsUrl,
+      ).catch((err) => {
+        this.logger.error(`Failed to email admin ${admin.email}: ${err.message}`);
+      });
+    }
   }
 
   async findAll(paginationDto: PaginationDto): Promise<PaginatedResponseDto<LeaveRequest>> {

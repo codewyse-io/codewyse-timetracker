@@ -108,4 +108,9 @@ export async function changePassword(currentPassword: string, newPassword: strin
   return response.data;
 }
 
+export async function getActiveAnnouncements() {
+  const response = await apiClient.get('/announcements/active');
+  return response.data;
+}
+
 export default apiClient;

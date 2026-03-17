@@ -97,6 +97,10 @@ declare global {
       onUpdateDownloadProgress: (callback: (progress: { percent: number; transferred: number; total: number }) => void) => void;
       onUpdateDownloaded: (callback: () => void) => void;
       onUpdateError: (callback: (message: string) => void) => void;
+      // Main-process heartbeat
+      startHeartbeat: () => Promise<void>;
+      stopHeartbeat: () => Promise<void>;
+      onSessionForceStopped: (callback: () => void) => void;
     };
   }
 }

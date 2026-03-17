@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 import { credentialsTemplate } from './templates/credentials.template';
+import { newVersionTemplate } from './templates/new-version.template';
+import { leaveRequestAdminTemplate } from './templates/leave-request-admin.template';
 
 @Injectable()
 export class EmailService {
@@ -31,6 +33,31 @@ export class EmailService {
       'Your PulseTrack Account Credentials',
       html,
     );
+  }
+
+  async sendNewVersionEmail(
+    email: string,
+    version: string,
+    downloadUrl: string,
+  ): Promise<void> {
+    const html = newVersionTemplate(version, downloadUrl);
+    await this.sendEmail(email, `Pulse v${version} — Update Available`, html);
+  }
+
+  async sendLeaveRequestNotification(
+    adminEmail: string,
+    employeeName: string,
+    subject: string,
+    startDate: string,
+    endDate: string,
+    totalDays: number,
+    message: string,
+    adminPanelUrl: string,
+  ): Promise<void> {
+    const html = leaveRequestAdminTemplate(
+      employeeName, subject, startDate, endDate, totalDays, message, adminPanelUrl,
+    );
+    await this.sendEmail(adminEmail, `Leave Request: ${subject} — ${employeeName}`, html);
   }
 
   async sendWeeklyReportEmail(

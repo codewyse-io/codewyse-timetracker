@@ -14,6 +14,7 @@ import KpisPage from './pages/Kpis';
 import ReportsPage from './pages/Reports';
 import AiInsightsPage from './pages/AiInsights';
 import LeaveRequestsPage from './pages/LeaveRequests';
+import AnnouncementsPage from './pages/Announcements';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -103,6 +104,7 @@ function AppRoutes() {
         <Route path="reports" element={<PageErrorBoundary><ReportsPage /></PageErrorBoundary>} />
         <Route path="ai-insights" element={<PageErrorBoundary><AiInsightsPage /></PageErrorBoundary>} />
         <Route path="leave-requests" element={<PageErrorBoundary><LeaveRequestsPage /></PageErrorBoundary>} />
+        <Route path="announcements" element={<PageErrorBoundary><AnnouncementsPage /></PageErrorBoundary>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

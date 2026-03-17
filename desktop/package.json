@@ -64,9 +64,8 @@
     "asar": true,
     "publish": [
       {
-        "provider": "github",
-        "owner": "codewyse-io",
-        "repo": "codewyse-timetracker"
+        "provider": "generic",
+        "url": "https://backend.codewyse.site/downloads/update"
       }
     ]
   },

@@ -150,4 +150,8 @@ export class UsersService {
   async save(user: User): Promise<User> {
     return this.usersRepository.save(user);
   }
+
+  async findByRole(role: string): Promise<User[]> {
+    return this.usersRepository.find({ where: { role: role as any } });
+  }
 }

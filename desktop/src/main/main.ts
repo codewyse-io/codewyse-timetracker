@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, powerMonitor, Tray, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, powerMonitor, Tray, Menu, net } from 'electron';
 import * as path from 'path';
 import { autoUpdater } from 'electron-updater';
 import { IdleDetector } from './idle-detector';
@@ -15,6 +15,57 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let idleDetector: IdleDetector | null = null;
 let isQuitting = false;
+let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+
+// ── Main-process heartbeat (immune to App Nap) ──────────────────────
+const API_BASE_URL = process.env.VITE_API_BASE_URL || 'https://backend.codewyse.site';
+const HEARTBEAT_INTERVAL_MS = 45_000; // 45 seconds
+
+function startMainHeartbeat(): void {
+  stopMainHeartbeat();
+  const sendHeartbeat = () => {
+    const token = store.get('authToken', null) as string | null;
+    if (!token) return;
+
+    const url = `${API_BASE_URL}/time-tracking/heartbeat`;
+    const request = net.request({
+      method: 'POST',
+      url,
+    });
+    request.setHeader('Authorization', `Bearer ${token}`);
+    request.setHeader('Content-Type', 'application/json');
+    request.on('response', (response) => {
+      let body = '';
+      response.on('data', (chunk) => { body += chunk.toString(); });
+      response.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          if (data?.data?.ok === false || data?.ok === false) {
+            console.log('[Heartbeat] Server returned ok: false — session may have been stopped');
+            stopMainHeartbeat();
+            mainWindow?.webContents.send('session-force-stopped');
+          }
+        } catch { /* ignore parse errors */ }
+      });
+    });
+    request.on('error', (err) => {
+      console.log(`[Heartbeat] Error: ${err.message}`);
+    });
+    request.end();
+  };
+
+  sendHeartbeat();
+  heartbeatInterval = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+  console.log('[Heartbeat] Started main-process heartbeat');
+}
+
+function stopMainHeartbeat(): void {
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval);
+    heartbeatInterval = null;
+    console.log('[Heartbeat] Stopped main-process heartbeat');
+  }
+}
 
 const isDev = !app.isPackaged;
 
@@ -25,7 +76,7 @@ const iconPath = path.join(appRoot, 'build', 'icon.ico');
 
 // ── Auto-updater setup ──────────────────────────────────────────────
 function setupAutoUpdater(): void {
-  autoUpdater.autoDownload = false;
+  autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
   autoUpdater.on('update-available', (info) => {
@@ -154,6 +205,15 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle('get-app-version', () => {
     return app.getVersion();
+  });
+
+  // Main-process heartbeat IPC
+  ipcMain.handle('start-heartbeat', () => {
+    startMainHeartbeat();
+  });
+
+  ipcMain.handle('stop-heartbeat', () => {
+    stopMainHeartbeat();
   });
 
   ipcMain.on('minimize-to-tray', () => {

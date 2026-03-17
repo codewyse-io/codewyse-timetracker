@@ -4,6 +4,7 @@ import {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
+  ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v4 as uuidv4 } from 'uuid';
@@ -55,5 +56,27 @@ export class S3Service {
       Key: key,
     });
     return getSignedUrl(this.s3, command, { expiresIn });
+  }
+
+  async getObjectContent(key: string): Promise<string> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+    });
+    const result = await this.s3.send(command);
+    return result.Body?.transformToString('utf-8') || '';
+  }
+
+  async listObjects(prefix: string): Promise<{ key: string; size: number; lastModified: Date }[]> {
+    const command = new ListObjectsV2Command({
+      Bucket: this.bucket,
+      Prefix: prefix,
+    });
+    const result = await this.s3.send(command);
+    return (result.Contents || []).map((obj) => ({
+      key: obj.Key!,
+      size: obj.Size || 0,
+      lastModified: obj.LastModified || new Date(),
+    }));
   }
 }
