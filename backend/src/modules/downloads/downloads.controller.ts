@@ -4,13 +4,16 @@ import {
   Post,
   Param,
   Query,
+  Req,
   Res,
   UseGuards,
   NotFoundException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { Response } from 'express';
+import { ConfigService } from '@nestjs/config';
+import { Request, Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -26,11 +29,16 @@ const RELEASE_PREFIX = 'desktop-releases';
 export class DownloadsController {
   private readonly logger = new Logger(DownloadsController.name);
 
+  private readonly deployApiKey: string;
+
   constructor(
     private readonly s3Service: S3Service,
     private readonly emailService: EmailService,
     private readonly usersService: UsersService,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    this.deployApiKey = this.configService.get<string>('DEPLOY_API_KEY', '');
+  }
 
   // ── Public endpoints for electron-updater ─────────────────────────
 
@@ -111,11 +119,16 @@ export class DownloadsController {
   // ── Admin endpoints ───────────────────────────────────────────────
 
   @Post('notify/:version')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Email all employees about a new version (admin)' })
-  async notifyNewVersion(@Param('version') version: string) {
+  @ApiOperation({ summary: 'Email all employees about a new version (CI or admin)' })
+  async notifyNewVersion(
+    @Param('version') version: string,
+    @Req() req: Request,
+  ) {
+    // Authenticate via x-api-key header (for CI) — no JWT needed
+    const apiKey = req.headers['x-api-key'] as string;
+    if (!apiKey || !this.deployApiKey || apiKey !== this.deployApiKey) {
+      throw new ForbiddenException('Invalid API key');
+    }
     const employees = await this.usersService.findByRole('employee');
     const downloadUrl = `https://backend.codewyse.site/downloads/update/file/${version}`;
 

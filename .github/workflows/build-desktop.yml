@@ -109,9 +109,37 @@ jobs:
             desktop/release/*.blockmap
           if-no-files-found: warn
 
+  notify:
+    name: Notify employees
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Read app version
+        id: version
+        shell: bash
+        run: |
+          APP_VERSION=$(node -e "console.log(require('./desktop/package.json').version)")
+          echo "version=$APP_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Send update email to all employees
+        shell: bash
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "${{ secrets.VITE_API_BASE_URL }}/downloads/notify/v${VERSION}" \
+            -H "x-api-key: ${{ secrets.DEPLOY_API_KEY }}" \
+            -H "Content-Type: application/json")
+          echo "Backend responded with: $RESPONSE"
+          if [ "$RESPONSE" != "201" ] && [ "$RESPONSE" != "200" ]; then
+            echo "Warning: Failed to send notification emails (HTTP $RESPONSE)"
+          fi
+
   cleanup:
     name: Cleanup old S3 releases
-    needs: build
+    needs: [build, notify]
     runs-on: ubuntu-latest
     steps:
       - name: Configure AWS credentials
