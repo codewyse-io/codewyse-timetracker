@@ -176,6 +176,10 @@ export class DownloadsController {
       try {
         await this.emailService.sendNewVersionEmail(emp.email, versionLabel, windowsUrl, macUrl);
         sent++;
+        // Resend rate limit: 5 requests/second
+        if (sent % 4 === 0) {
+          await new Promise((r) => setTimeout(r, 1000));
+        }
       } catch (err) {
         this.logger.error(`Failed to email ${emp.email} about new version: ${err.message}`);
       }
