@@ -1,4 +1,20 @@
-export function newVersionTemplate(version: string, downloadUrl: string): string {
+export function newVersionTemplate(
+  version: string,
+  windowsUrl: string | null,
+  macUrl: string | null,
+): string {
+  const windowsButton = windowsUrl
+    ? `<a href="${windowsUrl}" style="display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #6c63ff, #5b8def); color: #ffffff; text-decoration: none; font-weight: 600; font-size: 14px; border-radius: 8px; box-shadow: 0 4px 12px rgba(108,99,255,0.3); margin: 0 6px 8px;">
+                    &#9679; Download for Windows
+                  </a>`
+    : '';
+
+  const macButton = macUrl
+    ? `<a href="${macUrl}" style="display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #1a1a2e, #374151); color: #ffffff; text-decoration: none; font-weight: 600; font-size: 14px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); margin: 0 6px 8px;">
+                    &#63743; Download for Mac
+                  </a>`
+    : '';
+
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -37,11 +53,10 @@ export function newVersionTemplate(version: string, downloadUrl: string): string
                 A new version of the Pulse desktop app is available. Update now to get the latest features and improvements.
               </p>
 
-              <!-- Download Button -->
+              <!-- Download Buttons -->
               <div style="text-align: center; margin-bottom: 24px;">
-                <a href="${downloadUrl}" style="display: inline-block; padding: 12px 32px; background: linear-gradient(135deg, #6c63ff, #5b8def); color: #ffffff; text-decoration: none; font-weight: 600; font-size: 14px; border-radius: 8px; box-shadow: 0 4px 12px rgba(108,99,255,0.3);">
-                  Download Update
-                </a>
+                ${windowsButton}
+                ${macButton}
               </div>
 
               <p style="margin: 0; font-size: 12px; color: #9ca3af; text-align: center; line-height: 1.5;">

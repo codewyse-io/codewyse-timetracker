@@ -38,9 +38,10 @@ export class EmailService {
   async sendNewVersionEmail(
     email: string,
     version: string,
-    downloadUrl: string,
+    windowsUrl: string | null,
+    macUrl: string | null,
   ): Promise<void> {
-    const html = newVersionTemplate(version, downloadUrl);
+    const html = newVersionTemplate(version, windowsUrl, macUrl);
     await this.sendEmail(email, `Pulse v${version} — Update Available`, html);
   }
 

@@ -96,19 +96,27 @@ export class DownloadsController {
 
   /**
    * Redirects to the correct installer when no filename is specified.
-   * Used by email download links that only include the version.
+   * Used by email download links. Accepts ?platform=win|mac query param.
    */
   @Get('update/file/:version')
   @ApiOperation({ summary: 'Download latest installer for a version (public)' })
   async downloadVersionFile(
     @Param('version') version: string,
+    @Query('platform') platform: string,
     @Res() res: Response,
   ) {
     try {
       const objects = await this.s3Service.listObjects(`${RELEASE_PREFIX}/${version}/`);
-      const exeFile = objects.find((o) => o.key.endsWith('.exe'));
-      const dmgFile = objects.find((o) => o.key.endsWith('.dmg') && !o.key.includes('arm64'));
-      const file = exeFile || dmgFile;
+
+      let file: { key: string } | undefined;
+
+      if (platform === 'mac') {
+        file = objects.find((o) => o.key.endsWith('.dmg') && !o.key.includes('arm64'));
+      } else {
+        // Default to Windows: prefer .exe, fallback to .zip (nsis output)
+        file = objects.find((o) => o.key.endsWith('.exe'))
+            || objects.find((o) => o.key.endsWith('.zip'));
+      }
 
       if (!file) throw new NotFoundException('No installer found for this version');
 
@@ -156,21 +164,9 @@ export class DownloadsController {
     if (!apiKey || !this.deployApiKey || apiKey !== this.deployApiKey) {
       throw new ForbiddenException('Invalid API key');
     }
-    // Find the Windows installer in S3 for the download link
-    const objects = await this.s3Service.listObjects(`${RELEASE_PREFIX}/${version}/`);
-    const exeFile = objects.find((o) => o.key.endsWith('.exe'));
-    const dmgFile = objects.find((o) => o.key.endsWith('.dmg') && !o.key.includes('arm64'));
-
     const baseUrl = 'https://backend.codewyse.site/downloads/update/file';
-    const exeFilename = exeFile ? encodeURIComponent(exeFile.key.split('/').pop()!) : null;
-    const dmgFilename = dmgFile ? encodeURIComponent(dmgFile.key.split('/').pop()!) : null;
-
-    // Default to Windows link, fallback to Mac
-    const downloadUrl = exeFilename
-      ? `${baseUrl}/${version}/${exeFilename}`
-      : dmgFilename
-        ? `${baseUrl}/${version}/${dmgFilename}`
-        : `https://backend.codewyse.site/downloads/update/file/${version}`;
+    const windowsUrl = `${baseUrl}/${version}?platform=win`;
+    const macUrl = `${baseUrl}/${version}?platform=mac`;
 
     const employees = await this.usersService.findByRole('employee');
     const versionLabel = version.replace(/^v/, '');
@@ -178,14 +174,14 @@ export class DownloadsController {
     let sent = 0;
     for (const emp of employees) {
       try {
-        await this.emailService.sendNewVersionEmail(emp.email, versionLabel, downloadUrl);
+        await this.emailService.sendNewVersionEmail(emp.email, versionLabel, windowsUrl, macUrl);
         sent++;
       } catch (err) {
         this.logger.error(`Failed to email ${emp.email} about new version: ${err.message}`);
       }
     }
 
-    return { sent, total: employees.length, downloadUrl };
+    return { sent, total: employees.length, windowsUrl, macUrl };
   }
 
   @Get('releases')
