@@ -83,6 +83,7 @@ jobs:
             --recursive \
             --exclude "*" \
             --include "*.exe" \
+            --include "*.zip" \
             --include "*.yml" \
             --include "*.blockmap"
 
@@ -95,6 +96,7 @@ jobs:
             --recursive \
             --exclude "*" \
             --include "*.dmg" \
+            --include "*.zip" \
             --include "*.yml" \
             --include "*.blockmap"
 

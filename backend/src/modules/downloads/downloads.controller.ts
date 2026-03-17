@@ -95,6 +95,33 @@ export class DownloadsController {
   }
 
   /**
+   * Redirects to the correct installer when no filename is specified.
+   * Used by email download links that only include the version.
+   */
+  @Get('update/file/:version')
+  @ApiOperation({ summary: 'Download latest installer for a version (public)' })
+  async downloadVersionFile(
+    @Param('version') version: string,
+    @Res() res: Response,
+  ) {
+    try {
+      const objects = await this.s3Service.listObjects(`${RELEASE_PREFIX}/${version}/`);
+      const exeFile = objects.find((o) => o.key.endsWith('.exe'));
+      const dmgFile = objects.find((o) => o.key.endsWith('.dmg') && !o.key.includes('arm64'));
+      const file = exeFile || dmgFile;
+
+      if (!file) throw new NotFoundException('No installer found for this version');
+
+      const url = await this.s3Service.getPresignedUrl(file.key, 3600);
+      res.redirect(302, url);
+    } catch (err) {
+      if (err instanceof NotFoundException) throw err;
+      this.logger.error(`Failed to find installer for ${version}: ${err.message}`);
+      throw new NotFoundException('Version not found');
+    }
+  }
+
+  /**
    * Redirects to a presigned S3 URL for the actual installer file.
    * electron-updater calls this to download the update.
    */
@@ -129,20 +156,36 @@ export class DownloadsController {
     if (!apiKey || !this.deployApiKey || apiKey !== this.deployApiKey) {
       throw new ForbiddenException('Invalid API key');
     }
+    // Find the Windows installer in S3 for the download link
+    const objects = await this.s3Service.listObjects(`${RELEASE_PREFIX}/${version}/`);
+    const exeFile = objects.find((o) => o.key.endsWith('.exe'));
+    const dmgFile = objects.find((o) => o.key.endsWith('.dmg') && !o.key.includes('arm64'));
+
+    const baseUrl = 'https://backend.codewyse.site/downloads/update/file';
+    const exeFilename = exeFile ? encodeURIComponent(exeFile.key.split('/').pop()!) : null;
+    const dmgFilename = dmgFile ? encodeURIComponent(dmgFile.key.split('/').pop()!) : null;
+
+    // Default to Windows link, fallback to Mac
+    const downloadUrl = exeFilename
+      ? `${baseUrl}/${version}/${exeFilename}`
+      : dmgFilename
+        ? `${baseUrl}/${version}/${dmgFilename}`
+        : `https://backend.codewyse.site/downloads/update/file/${version}`;
+
     const employees = await this.usersService.findByRole('employee');
-    const downloadUrl = `https://backend.codewyse.site/downloads/update/file/${version}`;
+    const versionLabel = version.replace(/^v/, '');
 
     let sent = 0;
     for (const emp of employees) {
       try {
-        await this.emailService.sendNewVersionEmail(emp.email, version.replace(/^v/, ''), downloadUrl);
+        await this.emailService.sendNewVersionEmail(emp.email, versionLabel, downloadUrl);
         sent++;
       } catch (err) {
         this.logger.error(`Failed to email ${emp.email} about new version: ${err.message}`);
       }
     }
 
-    return { sent, total: employees.length };
+    return { sent, total: employees.length, downloadUrl };
   }
 
   @Get('releases')
