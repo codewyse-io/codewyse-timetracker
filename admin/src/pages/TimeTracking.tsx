@@ -13,13 +13,19 @@ import {
 } from 'antd';
 import { DownloadOutlined, ClockCircleOutlined, HistoryOutlined, CaretRightOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
 import type { ColumnsType } from 'antd/es/table';
 
-import type { WorkSession, User } from '../types';
+import type { WorkSession, User, Shift } from '../types';
 import { timeTrackingApi } from '../api/time-tracking.api';
+import { shiftsApi } from '../api/shifts.api';
 import { formatDuration, formatDate, formatTime } from '../utils/format';
 import { downloadCsv } from '../utils/export';
 import apiClient from '../api/client';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 const { RangePicker } = DatePicker;
 
@@ -157,10 +163,12 @@ interface DayGroup {
   sessions: WorkSession[];
 }
 
-function groupSessionsByDate(sessions: WorkSession[]): DayGroup[] {
+function groupSessionsByDate(sessions: WorkSession[], tz?: string): DayGroup[] {
   const map = new Map<string, WorkSession[]>();
   sessions.forEach((s) => {
-    const dateKey = dayjs(s.startTime).format('YYYY-MM-DD');
+    const dateKey = tz
+      ? dayjs(s.startTime).tz(tz).format('YYYY-MM-DD')
+      : dayjs(s.startTime).format('YYYY-MM-DD');
     if (!map.has(dateKey)) map.set(dateKey, []);
     map.get(dateKey)!.push(s);
   });
@@ -189,6 +197,7 @@ function SessionHistoryTab() {
   >(null);
   const [userId, setUserId] = useState<string | undefined>(undefined);
   const [users, setUsers] = useState<User[]>([]);
+  const [shifts, setShifts] = useState<Shift[]>([]);
 
   const fetchSessions = useCallback(async () => {
     setLoading(true);
@@ -218,12 +227,21 @@ function SessionHistoryTab() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await apiClient.get('/users', { params: { limit: 200 } });
-        const raw = (res as any).data;
-        const list = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
-        setUsers(list);
+        const [usersRes, shiftsRes] = await Promise.allSettled([
+          apiClient.get('/users', { params: { limit: 200 } }),
+          shiftsApi.getShifts(),
+        ]);
+        if (usersRes.status === 'fulfilled') {
+          const raw = (usersRes.value as any).data;
+          const list = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
+          setUsers(list);
+        }
+        if (shiftsRes.status === 'fulfilled') {
+          const raw = shiftsRes.value.data;
+          setShifts(Array.isArray(raw) ? raw : []);
+        }
       } catch {
-        // User filter unavailable
+        // Filter unavailable
       }
     })();
   }, []);
@@ -418,7 +436,13 @@ function SessionHistoryTab() {
     },
   ];
 
-  const dayGroups = userId ? groupSessionsByDate(sessions) : [];
+  // Resolve the selected employee's shift timezone
+  const selectedUser = userId ? users.find((u) => u.id === userId) : undefined;
+  const employeeTz = selectedUser?.shiftId
+    ? shifts.find((s) => s.id === selectedUser.shiftId)?.timezone
+    : undefined;
+
+  const dayGroups = userId ? groupSessionsByDate(sessions, employeeTz) : [];
 
   return (
     <div>
