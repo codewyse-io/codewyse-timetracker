@@ -126,7 +126,6 @@ export class DownloadsController {
   ) {
     // Authenticate via x-api-key header (for CI) — no JWT needed
     const apiKey = req.headers['x-api-key'] as string;
-    this.logger.log(`[notify] API key present: ${!!apiKey}, deploy key configured: ${!!this.deployApiKey}, match: ${apiKey === this.deployApiKey}`);
     if (!apiKey || !this.deployApiKey || apiKey !== this.deployApiKey) {
       throw new ForbiddenException('Invalid API key');
     }
