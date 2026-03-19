@@ -25,6 +25,23 @@ import { UsersService } from '../users/users.service';
 
 const RELEASE_PREFIX = 'desktop-releases';
 
+/**
+ * Compare two semver-style version strings (e.g. "v1.2.3" or "1.2.3").
+ * Returns negative if a < b, positive if a > b, 0 if equal.
+ */
+function compareSemver(a: string, b: string): number {
+  const parse = (v: string) => v.replace(/^v/, '').split('.').map(Number);
+  const pa = parse(a);
+  const pb = parse(b);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const na = pa[i] || 0;
+    const nb = pb[i] || 0;
+    if (na !== nb) return na - nb;
+  }
+  return 0;
+}
+
 @ApiTags('Downloads')
 @Controller('downloads')
 export class DownloadsController {
@@ -68,7 +85,7 @@ export class DownloadsController {
         if (parts[0]) versions.add(parts[0]);
       }
 
-      const latestVersion = Array.from(versions).sort().pop();
+      const latestVersion = Array.from(versions).sort(compareSemver).pop();
       if (!latestVersion) throw new NotFoundException('No releases found');
 
       const key = `${RELEASE_PREFIX}/${latestVersion}/${filename}`;
@@ -222,7 +239,7 @@ export class DownloadsController {
         date: data.date.toISOString(),
         files: data.files.filter((f) => /\.(exe|dmg)$/i.test(f.name)),
       }))
-      .sort((a, b) => b.version.localeCompare(a.version));
+      .sort((a, b) => compareSemver(b.version, a.version));
   }
 
   @Get('presigned')

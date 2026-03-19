@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { User } from '../types';
 import { login as apiLogin, getMe } from '../api/client';
 
@@ -39,7 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loadUser();
   }, [loadUser]);
 
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     setError(null);
     try {
       const response = await apiLogin(email, password);
@@ -58,16 +58,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(message);
       throw new Error(message);
     }
-  };
+  }, [loadUser]);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     await window.electronAPI.clearAuthToken();
     setUser(null);
     setError(null);
-  };
+  }, []);
+
+  // Listen for auth-expired event from 401 interceptor
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      logout();
+    };
+    window.addEventListener('auth-expired', handleAuthExpired);
+    return () => {
+      window.removeEventListener('auth-expired', handleAuthExpired);
+    };
+  }, [logout]);
+
+  const value = useMemo(() => ({
+    user,
+    isAuthenticated,
+    isLoading,
+    login,
+    logout,
+    error,
+  }), [user, isAuthenticated, isLoading, login, logout, error]);
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, isLoading, login, logout, error }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

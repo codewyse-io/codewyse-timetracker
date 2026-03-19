@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, memo } from 'react';
 import { Layout, Button, Tooltip } from 'antd';
 import {
   LogoutOutlined,
@@ -37,7 +37,8 @@ const NAV_ITEMS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: 'announcements', label: 'Notices', icon: <SoundOutlined /> },
 ];
 
-function useLiveClock(timezone?: string) {
+// Isolated clock component — only this re-renders every second, not the entire Home tree
+const LiveClock = memo(function LiveClock({ timezone }: { timezone?: string }) {
   const [time, setTime] = useState('');
   const [tz, setTz] = useState('');
 
@@ -68,11 +69,37 @@ function useLiveClock(timezone?: string) {
     return () => clearInterval(interval);
   }, [timezone]);
 
-  return { time, tz };
-}
+  if (!time) return null;
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, padding: '0 4px' }}>
+      <span style={{
+        fontSize: 12,
+        fontWeight: 600,
+        color: 'rgba(255, 255, 255, 0.6)',
+        fontVariantNumeric: 'tabular-nums',
+        fontFamily: "'Space Grotesk', 'Inter', sans-serif",
+      }}>
+        {time}
+      </span>
+      {tz && (
+        <span style={{
+          fontSize: 9,
+          fontWeight: 500,
+          color: 'rgba(124, 92, 252, 0.6)',
+          letterSpacing: 0.3,
+        }}>
+          {tz}
+        </span>
+      )}
+    </div>
+  );
+});
 
 const SIDEBAR_EXPANDED = 180;
 const SIDEBAR_COLLAPSED = 54;
+
+const TAB_KEYS: TabKey[] = ['dashboard', 'timeline', 'leaves', 'announcements'];
 
 export default function Home() {
   const { user: authUser, logout } = useAuth();
@@ -89,9 +116,43 @@ export default function Home() {
     }).catch(() => {});
   }, []);
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+
+      // Ctrl/Cmd + Shift + S — toggle session
+      if (e.shiftKey && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        window.dispatchEvent(new Event('toggle-session'));
+        return;
+      }
+
+      // Ctrl/Cmd + 1-4 — switch tabs
+      if (e.key >= '1' && e.key <= '4') {
+        e.preventDefault();
+        const idx = parseInt(e.key, 10) - 1;
+        if (idx < TAB_KEYS.length) {
+          setActiveTab(TAB_KEYS[idx]);
+        }
+        return;
+      }
+
+      // Ctrl/Cmd + Q — quit app
+      if (e.key === 'q' || e.key === 'Q') {
+        e.preventDefault();
+        window.electronAPI.quitApp();
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const user = fullUser || authUser;
   const shiftTimezone = fullUser?.shift?.timezone;
-  const { time: clockTime, tz: clockTz } = useLiveClock(shiftTimezone);
   const sidebarWidth = collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED;
 
   const handleMinimize = () => {
@@ -122,6 +183,7 @@ export default function Home() {
           background: 'rgba(255, 255, 255, 0.01)',
           borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
           paddingRight: 4,
+          userSelect: 'none',
           // @ts-ignore
           WebkitAppRegion: 'drag',
         }}
@@ -218,6 +280,7 @@ export default function Home() {
                     fontFamily: "'Inter', sans-serif",
                     letterSpacing: 0.1,
                     transition: 'all 0.2s ease',
+                    userSelect: 'none',
                     background: isActive
                       ? 'linear-gradient(135deg, rgba(124, 92, 252, 0.15), rgba(91, 141, 239, 0.1))'
                       : 'transparent',
@@ -261,29 +324,7 @@ export default function Home() {
             }}
           >
             {/* Clock */}
-            {!collapsed && clockTime && (
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, padding: '0 4px' }}>
-                <span style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: 'rgba(255, 255, 255, 0.6)',
-                  fontVariantNumeric: 'tabular-nums',
-                  fontFamily: "'Space Grotesk', 'Inter', sans-serif",
-                }}>
-                  {clockTime}
-                </span>
-                {clockTz && (
-                  <span style={{
-                    fontSize: 9,
-                    fontWeight: 500,
-                    color: 'rgba(124, 92, 252, 0.6)',
-                    letterSpacing: 0.3,
-                  }}>
-                    {clockTz}
-                  </span>
-                )}
-              </div>
-            )}
+            {!collapsed && <LiveClock timezone={shiftTimezone} />}
 
             {/* User avatar + name — click to open profile */}
             {user && (
@@ -409,18 +450,24 @@ export default function Home() {
               minHeight: 0,
             }}
           >
-            {activeTab === 'dashboard' && (
-              <div style={{ padding: 10, display: 'grid', gap: 10 }}>
-                <Timer />
-                <FocusScorePanel />
-                <SessionHistory />
-                <CoachingPanel />
-              </div>
-            )}
-            {activeTab === 'timeline' && <TimelinePanel />}
-            {activeTab === 'leaves' && <LeaveRequestPanel />}
-            {activeTab === 'announcements' && <AnnouncementsPanel />}
-            {activeTab === 'profile' && <ProfilePanel />}
+            <div style={{ padding: 10, display: activeTab === 'dashboard' ? 'grid' : 'none', gap: 10 }}>
+              <Timer />
+              <FocusScorePanel />
+              <SessionHistory />
+              <CoachingPanel />
+            </div>
+            <div style={{ display: activeTab === 'timeline' ? 'block' : 'none' }}>
+              <TimelinePanel />
+            </div>
+            <div style={{ display: activeTab === 'leaves' ? 'block' : 'none' }}>
+              <LeaveRequestPanel />
+            </div>
+            <div style={{ display: activeTab === 'announcements' ? 'block' : 'none' }}>
+              <AnnouncementsPanel />
+            </div>
+            <div style={{ display: activeTab === 'profile' ? 'block' : 'none' }}>
+              <ProfilePanel />
+            </div>
           </Content>
         </div>
       </div>

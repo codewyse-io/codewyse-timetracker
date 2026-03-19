@@ -85,22 +85,22 @@ declare global {
       stopIdleDetection: () => Promise<void>;
       minimizeToTray: () => void;
       quitApp: () => void;
-      onIdleDetected: (callback: (data: { startTime: string }) => void) => void;
-      onIdleResumed: (callback: (data: IdleEvent) => void) => void;
+      onIdleDetected: (callback: (data: { startTime: string }) => void) => () => void;
+      onIdleResumed: (callback: (data: IdleEvent) => void) => () => void;
       // Auto-update
       checkForUpdates: () => Promise<any>;
       downloadUpdate: () => Promise<any>;
       installUpdate: () => Promise<void>;
       getAppVersion: () => Promise<string>;
-      onUpdateAvailable: (callback: (info: { version: string; releaseNotes: string }) => void) => void;
-      onUpdateNotAvailable: (callback: () => void) => void;
-      onUpdateDownloadProgress: (callback: (progress: { percent: number; transferred: number; total: number }) => void) => void;
-      onUpdateDownloaded: (callback: () => void) => void;
-      onUpdateError: (callback: (message: string) => void) => void;
+      onUpdateAvailable: (callback: (info: { version: string; releaseNotes: string }) => void) => () => void;
+      onUpdateNotAvailable: (callback: () => void) => () => void;
+      onUpdateDownloadProgress: (callback: (progress: { percent: number; transferred: number; total: number }) => void) => () => void;
+      onUpdateDownloaded: (callback: () => void) => () => void;
+      onUpdateError: (callback: (message: string) => void) => () => void;
       // Main-process heartbeat
       startHeartbeat: () => Promise<void>;
       stopHeartbeat: () => Promise<void>;
-      onSessionForceStopped: (callback: () => void) => void;
+      onSessionForceStopped: (callback: () => void) => () => void;
     };
   }
 }

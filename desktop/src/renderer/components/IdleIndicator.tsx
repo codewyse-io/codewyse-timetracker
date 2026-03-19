@@ -6,11 +6,11 @@ const IDLE_REPORT_INTERVAL = 30_000; // Report every 30 seconds while idle
 export default function IdleIndicator() {
   const idleStartRef = useRef<string | null>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const listenersSetRef = useRef(false);
+  const unsubDetectedRef = useRef<(() => void) | null>(null);
+  const unsubResumedRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    if (!window.electronAPI || listenersSetRef.current) return;
-    listenersSetRef.current = true;
+    if (!window.electronAPI) return;
 
     const sendIdleReport = (startTime: string) => {
       const endTime = new Date().toISOString();
@@ -39,14 +39,14 @@ export default function IdleIndicator() {
       }
     };
 
-    window.electronAPI.onIdleDetected((data) => {
+    unsubDetectedRef.current = window.electronAPI.onIdleDetected((data) => {
       console.log('[IdleIndicator] idle-detected event received:', data);
       // Use the actual idle start time from the detector (accounts for the threshold delay)
       idleStartRef.current = data?.startTime || new Date().toISOString();
       startHeartbeat(idleStartRef.current);
     });
 
-    window.electronAPI.onIdleResumed((data) => {
+    unsubResumedRef.current = window.electronAPI.onIdleResumed((data) => {
       console.log('[IdleIndicator] idle-resumed event received:', data);
       stopHeartbeat();
 
@@ -65,6 +65,8 @@ export default function IdleIndicator() {
 
     return () => {
       stopHeartbeat();
+      unsubDetectedRef.current?.();
+      unsubResumedRef.current?.();
     };
   }, []);
 

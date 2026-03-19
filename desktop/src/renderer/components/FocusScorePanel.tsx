@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Typography, Space, Spin } from 'antd';
 import { ThunderboltOutlined } from '@ant-design/icons';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
@@ -37,16 +37,18 @@ export default function FocusScorePanel() {
   useEffect(() => {
     const loadFocusData = async () => {
       try {
-        const response = await getFocusScore('daily');
-        const data = response.data || response;
+        const [response, weekResponse] = await Promise.all([
+          getFocusScore('daily'),
+          getFocusScore('weekly'),
+        ]);
 
+        const data = response.data || response;
         if (Array.isArray(data) && data.length > 0) {
           setFocusData(data[0]);
         } else if (data && !Array.isArray(data)) {
           setFocusData(data);
         }
 
-        const weekResponse = await getFocusScore('weekly');
         const weekData = weekResponse.data || weekResponse;
         setWeeklyData(Array.isArray(weekData) ? weekData : []);
       } catch {
@@ -60,7 +62,7 @@ export default function FocusScorePanel() {
     // Refresh on session changes and periodically while active
     const handleSessionChange = () => loadFocusData();
     window.addEventListener('session-changed', handleSessionChange);
-    const interval = setInterval(loadFocusData, 15_000);
+    const interval = setInterval(loadFocusData, 120_000);
 
     return () => {
       window.removeEventListener('session-changed', handleSessionChange);
@@ -79,10 +81,10 @@ export default function FocusScorePanel() {
   const loggedTime = focusData?.totalLoggedTime ?? 1;
   const activePercent = Math.round((activeTime / loggedTime) * 100) || 0;
 
-  const chartData = weeklyData.map((d) => ({
+  const chartData = useMemo(() => weeklyData.map((d) => ({
     date: formatDate(d.date),
     score: d.score,
-  }));
+  })), [weeklyData]);
 
   // SVG circular gauge calculations
   const radius = 38;

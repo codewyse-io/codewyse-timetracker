@@ -29,19 +29,24 @@ export default function Timer() {
   const statusIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const isRunningRef = useRef(false);
   const [containerWidth, setContainerWidth] = useState(400);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+    let rafId: number;
     const ro = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setContainerWidth(entry.contentRect.width);
-      }
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        for (const entry of entries) {
+          setContainerWidth(entry.contentRect.width);
+        }
+      });
     });
     ro.observe(el);
     setContainerWidth(el.offsetWidth);
-    return () => ro.disconnect();
+    return () => { cancelAnimationFrame(rafId); ro.disconnect(); };
   }, []);
 
   const isCompact = containerWidth < 400;
@@ -72,6 +77,11 @@ export default function Timer() {
     }, 5000);
   }, []);
 
+  // Keep ref in sync with state for use in event handlers
+  useEffect(() => {
+    isRunningRef.current = isRunning;
+  }, [isRunning]);
+
   // Use main-process heartbeat (immune to macOS App Nap)
   useEffect(() => {
     if (isRunning) {
@@ -86,7 +96,7 @@ export default function Timer() {
 
   // Listen for server force-stopping the session
   useEffect(() => {
-    window.electronAPI?.onSessionForceStopped?.(() => {
+    const unsub = window.electronAPI?.onSessionForceStopped?.(() => {
       setIsRunning(false);
       clearTimer();
       setElapsed(0);
@@ -94,7 +104,23 @@ export default function Timer() {
       window.electronAPI?.stopIdleDetection?.().catch(() => {});
       window.dispatchEvent(new Event('session-changed'));
     });
+    return () => {
+      unsub?.();
+    };
   }, [clearTimer]);
+
+  // Listen for toggle-session keyboard shortcut
+  useEffect(() => {
+    const handleToggle = () => {
+      if (isRunningRef.current) {
+        handleStop();
+      } else {
+        handleStart();
+      }
+    };
+    window.addEventListener('toggle-session', handleToggle);
+    return () => window.removeEventListener('toggle-session', handleToggle);
+  }, []);
 
   // Cycle AI status messages when running
   useEffect(() => {

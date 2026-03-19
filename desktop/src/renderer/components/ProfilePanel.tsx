@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Spin, message } from 'antd';
-import { SettingOutlined, LockOutlined, EyeOutlined, EyeInvisibleOutlined, CloudDownloadOutlined, CheckCircleOutlined, SyncOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { SettingOutlined, LockOutlined, EyeOutlined, EyeInvisibleOutlined, SyncOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 import { getMe, changePassword } from '../api/client';
 import { User } from '../types';
@@ -18,50 +18,15 @@ export default function ProfilePanel() {
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  // Auto-update state
+  // App version only — update listeners are handled by UpdateBanner
   const [appVersion, setAppVersion] = useState('');
-  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'uptodate' | 'error'>('idle');
-  const [updateVersion, setUpdateVersion] = useState('');
-  const [downloadPercent, setDownloadPercent] = useState(0);
-  const [updateError, setUpdateError] = useState('');
 
   useEffect(() => {
     window.electronAPI?.getAppVersion?.().then((v) => setAppVersion(v)).catch(() => {});
-
-    window.electronAPI?.onUpdateAvailable?.((info) => {
-      setUpdateStatus('available');
-      setUpdateVersion(info.version);
-    });
-    window.electronAPI?.onUpdateNotAvailable?.(() => {
-      setUpdateStatus('uptodate');
-    });
-    window.electronAPI?.onUpdateDownloadProgress?.((progress) => {
-      setUpdateStatus('downloading');
-      setDownloadPercent(progress.percent);
-    });
-    window.electronAPI?.onUpdateDownloaded?.(() => {
-      setUpdateStatus('ready');
-    });
-    window.electronAPI?.onUpdateError?.((msg) => {
-      setUpdateStatus('error');
-      setUpdateError(msg);
-    });
   }, []);
 
   const handleCheckUpdate = useCallback(async () => {
-    setUpdateStatus('checking');
-    setUpdateError('');
     await window.electronAPI?.checkForUpdates?.();
-  }, []);
-
-  const handleDownloadUpdate = useCallback(async () => {
-    setUpdateStatus('downloading');
-    setDownloadPercent(0);
-    await window.electronAPI?.downloadUpdate?.();
-  }, []);
-
-  const handleInstallUpdate = useCallback(async () => {
-    await window.electronAPI?.installUpdate?.();
   }, []);
 
   useEffect(() => {
@@ -180,21 +145,6 @@ export default function ProfilePanel() {
     outline: 'none',
     transition: 'border-color 0.2s',
     boxSizing: 'border-box' as const,
-  };
-
-  const updateBtnStyle: React.CSSProperties = {
-    padding: '5px 12px',
-    borderRadius: 6,
-    border: '1px solid rgba(255,255,255,0.08)',
-    background: 'rgba(255,255,255,0.04)',
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 11,
-    fontWeight: 500,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 5,
-    transition: 'all 0.2s',
   };
 
   const eyeStyle: React.CSSProperties = {
@@ -393,7 +343,7 @@ export default function ProfilePanel() {
         </button>
       </div>
 
-      {/* App Update Section */}
+      {/* App Version Section — simplified, no duplicate update listeners */}
       <div className="glass-card" style={{ padding: 16, flex: '1 1 100%' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -406,47 +356,25 @@ export default function ProfilePanel() {
             </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {updateStatus === 'idle' && (
-              <button onClick={handleCheckUpdate} style={updateBtnStyle}>
-                <SyncOutlined style={{ fontSize: 11 }} /> Check for Updates
-              </button>
-            )}
-            {updateStatus === 'checking' && (
-              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                <SyncOutlined spin style={{ fontSize: 11 }} /> Checking...
-              </span>
-            )}
-            {updateStatus === 'uptodate' && (
-              <span style={{ fontSize: 11, color: '#00e676', display: 'flex', alignItems: 'center', gap: 5 }}>
-                <CheckCircleOutlined style={{ fontSize: 11 }} /> You're up to date
-              </span>
-            )}
-            {updateStatus === 'available' && (
-              <button onClick={handleDownloadUpdate} style={{ ...updateBtnStyle, background: 'rgba(124, 92, 252, 0.15)', borderColor: 'rgba(124, 92, 252, 0.3)' }}>
-                <CloudDownloadOutlined style={{ fontSize: 11 }} /> Download v{updateVersion}
-              </button>
-            )}
-            {updateStatus === 'downloading' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 160 }}>
-                <div style={{ flex: 1, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-                  <div style={{ width: `${downloadPercent}%`, height: '100%', borderRadius: 2, background: 'linear-gradient(90deg, #7c5cfc, #00d4ff)', transition: 'width 0.3s' }} />
-                </div>
-                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', minWidth: 30, textAlign: 'right' }}>{downloadPercent}%</span>
-              </div>
-            )}
-            {updateStatus === 'ready' && (
-              <button onClick={handleInstallUpdate} style={{ ...updateBtnStyle, background: 'rgba(0, 230, 118, 0.1)', borderColor: 'rgba(0, 230, 118, 0.3)', color: '#00e676' }}>
-                <CheckCircleOutlined style={{ fontSize: 11 }} /> Restart & Install
-              </button>
-            )}
-            {updateStatus === 'error' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 11, color: '#ff5252' }}>Update failed</span>
-                <button onClick={handleCheckUpdate} style={updateBtnStyle}>Retry</button>
-              </div>
-            )}
-          </div>
+          <button
+            onClick={handleCheckUpdate}
+            style={{
+              padding: '5px 12px',
+              borderRadius: 6,
+              border: '1px solid rgba(255,255,255,0.08)',
+              background: 'rgba(255,255,255,0.04)',
+              color: 'rgba(255,255,255,0.7)',
+              fontSize: 11,
+              fontWeight: 500,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              transition: 'all 0.2s',
+            }}
+          >
+            <SyncOutlined style={{ fontSize: 11 }} /> Check for Updates
+          </button>
         </div>
       </div>
     </div>

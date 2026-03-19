@@ -1,6 +1,6 @@
 {
   "name": "pulse-desktop",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "main": "dist/main/main.js",
   "author": "CodeWyse",
   "description": "Pulse — AI Work Companion",
@@ -23,7 +23,8 @@
     "icon": "build/icon.ico",
     "files": [
       "dist/**/*",
-      "build/**/*",
+      "build/icon.ico",
+      "build/icon.png",
       "package.json"
     ],
     "win": {
@@ -46,6 +47,13 @@
             "x64",
             "arm64"
           ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "category": "public.app-category.productivity",
@@ -59,6 +67,7 @@
       "oneClick": true,
       "perMachine": false,
       "allowToChangeInstallationDirectory": false,
+      "deleteAppDataOnUninstall": false,
       "shortcutName": "Pulse"
     },
     "asar": true,
@@ -72,11 +81,11 @@
   "keywords": [],
   "license": "ISC",
   "dependencies": {
-    "axios": "^1.13.6",
     "electron-store": "^8.2.0",
     "electron-updater": "^6.8.3"
   },
   "devDependencies": {
+    "axios": "^1.13.6",
     "@types/node": "^25.3.5",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

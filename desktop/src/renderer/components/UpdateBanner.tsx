@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CloudDownloadOutlined, CheckCircleOutlined, SyncOutlined, RocketOutlined } from '@ant-design/icons';
 
 type UpdateState = 'hidden' | 'downloading' | 'ready';
@@ -8,26 +8,33 @@ export default function UpdateBanner() {
   const [version, setVersion] = useState('');
   const [percent, setPercent] = useState(0);
   const [showModal, setShowModal] = useState(false);
+  const unsubsRef = useRef<((() => void) | undefined)[]>([]);
 
   useEffect(() => {
-    window.electronAPI?.onUpdateAvailable?.((info) => {
+    const u1 = window.electronAPI?.onUpdateAvailable?.((info) => {
       setVersion(info.version);
       setState('downloading');
       setPercent(0);
       // Auto-start download
       window.electronAPI?.downloadUpdate?.();
     });
-    window.electronAPI?.onUpdateDownloadProgress?.((progress) => {
+    const u2 = window.electronAPI?.onUpdateDownloadProgress?.((progress) => {
       setState('downloading');
       setPercent(progress.percent);
     });
-    window.electronAPI?.onUpdateDownloaded?.(() => {
+    const u3 = window.electronAPI?.onUpdateDownloaded?.(() => {
       setState('ready');
       setShowModal(true);
     });
-    window.electronAPI?.onUpdateError?.(() => {
+    const u4 = window.electronAPI?.onUpdateError?.(() => {
       setState('hidden');
     });
+
+    unsubsRef.current = [u1, u2, u3, u4];
+
+    return () => {
+      unsubsRef.current.forEach((unsub) => unsub?.());
+    };
   }, []);
 
   const handleInstall = useCallback(() => {

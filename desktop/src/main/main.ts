@@ -6,16 +6,32 @@ import { createTray } from './tray';
 
 import Store from 'electron-store';
 
+// ── Single-instance lock ─────────────────────────────────────────────
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+}
+
 const store = new Store();
 
 // Remove the default menu bar entirely
 Menu.setApplicationMenu(null);
+
+// ── Global error handlers ────────────────────────────────────────────
+process.on('uncaughtException', (error) => {
+  console.error('[Main] Uncaught exception:', error);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[Main] Unhandled rejection:', reason);
+});
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let idleDetector: IdleDetector | null = null;
 let isQuitting = false;
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+let updateCheckInterval: ReturnType<typeof setInterval> | null = null;
 
 // ── Main-process heartbeat (immune to App Nap) ──────────────────────
 const API_BASE_URL = process.env.VITE_API_BASE_URL || 'https://backend.codewyse.site';
@@ -109,7 +125,7 @@ function setupAutoUpdater(): void {
   // Check for updates every 30 minutes
   if (!isDev) {
     autoUpdater.checkForUpdates().catch(() => {});
-    setInterval(() => {
+    updateCheckInterval = setInterval(() => {
       autoUpdater.checkForUpdates().catch(() => {});
     }, 30 * 60 * 1000);
   }
@@ -140,7 +156,7 @@ function createWindow(): void {
   }
 
   mainWindow.on('close', (event) => {
-    if (!isQuitting) {
+    if (!isQuitting && !(app as any).isQuitting) {
       event.preventDefault();
       mainWindow?.hide();
     }
@@ -231,9 +247,11 @@ app.whenReady().then(() => {
   setupIpcHandlers();
   setupAutoUpdater();
 
-  tray = createTray(mainWindow!);
+  const getMainWindow = () => mainWindow;
 
-  idleDetector = new IdleDetector(mainWindow!);
+  tray = createTray(getMainWindow);
+
+  idleDetector = new IdleDetector(getMainWindow);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -244,6 +262,15 @@ app.whenReady().then(() => {
   });
 });
 
+// ── Single-instance: focus existing window when second instance launches ──
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+});
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
@@ -252,6 +279,11 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   isQuitting = true;
+  stopMainHeartbeat();
+  if (updateCheckInterval) {
+    clearInterval(updateCheckInterval);
+    updateCheckInterval = null;
+  }
   if (idleDetector) {
     idleDetector.stop();
   }

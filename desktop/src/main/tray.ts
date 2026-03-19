@@ -1,7 +1,7 @@
 import { Tray, Menu, nativeImage, BrowserWindow, app } from 'electron';
 import * as path from 'path';
 
-export function createTray(mainWindow: BrowserWindow): Tray {
+export function createTray(getWindow: () => BrowserWindow | null): Tray {
   const appRoot = app.isPackaged ? app.getAppPath() : path.join(__dirname, '..', '..');
   const iconPath = path.join(appRoot, 'build', 'icon.ico');
   const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
@@ -13,23 +13,28 @@ export function createTray(mainWindow: BrowserWindow): Tray {
     {
       label: 'Show Pulse',
       click: () => {
-        mainWindow.show();
-        mainWindow.focus();
+        const win = getWindow();
+        if (win && !win.isDestroyed()) {
+          win.show();
+          win.focus();
+        }
       },
     },
     {
       label: 'Activate Pulse',
       click: () => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('tray-start-timer');
+        const win = getWindow();
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('tray-start-timer');
         }
       },
     },
     {
       label: 'End Session',
       click: () => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('tray-stop-timer');
+        const win = getWindow();
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('tray-stop-timer');
         }
       },
     },
@@ -37,7 +42,6 @@ export function createTray(mainWindow: BrowserWindow): Tray {
     {
       label: 'Quit',
       click: () => {
-        (app as any).isQuitting = true;
         app.quit();
       },
     },
@@ -46,11 +50,14 @@ export function createTray(mainWindow: BrowserWindow): Tray {
   tray.setContextMenu(contextMenu);
 
   tray.on('click', () => {
-    if (mainWindow.isVisible()) {
-      mainWindow.hide();
-    } else {
-      mainWindow.show();
-      mainWindow.focus();
+    const win = getWindow();
+    if (win && !win.isDestroyed()) {
+      if (win.isVisible()) {
+        win.hide();
+      } else {
+        win.show();
+        win.focus();
+      }
     }
   });
 

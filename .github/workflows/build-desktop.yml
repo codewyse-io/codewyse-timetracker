@@ -44,6 +44,14 @@ jobs:
           cache: 'npm'
           cache-dependency-path: desktop/package-lock.json
 
+      - name: Cache Electron
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/AppData/Local/electron/Cache
+            ~/Library/Caches/electron
+          key: electron-${{ runner.os }}-${{ hashFiles('desktop/package-lock.json') }}
+
       - name: Install dependencies
         run: npm ci
 
@@ -59,6 +67,38 @@ jobs:
         env:
           VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Verify build output (Windows)
+        if: matrix.platform == 'win'
+        shell: bash
+        run: |
+          INSTALLER=$(ls release/*.exe 2>/dev/null | head -1)
+          if [ -z "$INSTALLER" ]; then
+            echo "ERROR: No .exe installer found in release/"
+            exit 1
+          fi
+          SIZE=$(stat --printf="%s" "$INSTALLER" 2>/dev/null || stat -f%z "$INSTALLER")
+          echo "Installer: $INSTALLER ($SIZE bytes)"
+          if [ "$SIZE" -lt 52428800 ]; then
+            echo "ERROR: Installer is smaller than 50MB — likely corrupted"
+            exit 1
+          fi
+
+      - name: Verify build output (macOS)
+        if: matrix.platform == 'mac'
+        shell: bash
+        run: |
+          INSTALLER=$(ls release/*.dmg 2>/dev/null | head -1)
+          if [ -z "$INSTALLER" ]; then
+            echo "ERROR: No .dmg installer found in release/"
+            exit 1
+          fi
+          SIZE=$(stat -f%z "$INSTALLER" 2>/dev/null || stat --printf="%s" "$INSTALLER")
+          echo "Installer: $INSTALLER ($SIZE bytes)"
+          if [ "$SIZE" -lt 52428800 ]; then
+            echo "ERROR: Installer is smaller than 50MB — likely corrupted"
+            exit 1
+          fi
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -107,6 +147,7 @@ jobs:
           path: |
             desktop/release/*.exe
             desktop/release/*.dmg
+            desktop/release/*.zip
             desktop/release/*.yml
             desktop/release/*.blockmap
           if-no-files-found: warn
@@ -165,7 +206,9 @@ jobs:
           VERSIONS=$(aws s3 ls "s3://${BUCKET}/${PREFIX}" \
             | awk '{print $2}' \
             | sed 's|/||' \
-            | sort -t. -k1,1nr -k2,2nr -k3,3nr)
+            | sed 's/^v//' \
+            | sort -t. -k1,1nr -k2,2nr -k3,3nr \
+            | sed 's/^/v/')
 
           echo "Found versions:"
           echo "$VERSIONS"

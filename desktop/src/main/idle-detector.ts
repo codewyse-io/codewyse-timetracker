@@ -5,6 +5,7 @@ import { promisify } from 'util';
 const execFileAsync = promisify(execFile);
 
 // Process names that indicate an active meeting/call
+// Only actual meeting apps — no generic browsers
 const MEETING_PROCESSES: Record<string, string[]> = {
   win32: [
     'Zoom.exe',
@@ -26,23 +27,22 @@ const MEETING_PROCESSES: Record<string, string[]> = {
     'Discord',
     'Skype',
     'FaceTime',
-    'Google Chrome',     // for Google Meet
-    'Arc',
-    'Safari',
-    'Firefox',
   ],
 };
 
 export class IdleDetector {
-  private checkInterval: number = 10_000; // 10 seconds
+  private checkInterval: number = 30_000; // 30 seconds
   private idleThreshold: number = 30; // 30 seconds
   private isIdle: boolean = false;
   private idleStartTime: Date | null = null;
   private intervalId: ReturnType<typeof setInterval> | null = null;
-  private window: BrowserWindow;
+  private getWindow: () => BrowserWindow | null;
+  private lastMeetingCheck: number = 0;
+  private lastMeetingResult: boolean = false;
+  private meetingCacheTtl: number = 60_000; // cache meeting check for 60s
 
-  constructor(window: BrowserWindow) {
-    this.window = window;
+  constructor(getWindow: () => BrowserWindow | null) {
+    this.getWindow = getWindow;
   }
 
   setThreshold(seconds: number): void {
@@ -66,6 +66,13 @@ export class IdleDetector {
     this.idleStartTime = null;
   }
 
+  private sendToWindow(channel: string, data?: any): void {
+    const win = this.getWindow();
+    if (win && !win.isDestroyed()) {
+      win.webContents.send(channel, data);
+    }
+  }
+
   private async check(): Promise<void> {
     const idleTime = powerMonitor.getSystemIdleTime();
 
@@ -81,13 +88,11 @@ export class IdleDetector {
           const duration = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
           console.log(`[IdleDetector] Meeting detected — cancelling idle (duration was ${duration}s)`);
           this.isIdle = false;
-          if (this.window && !this.window.isDestroyed()) {
-            this.window.webContents.send('idle-resumed', {
-              startTime: startTime.toISOString(),
-              endTime: endTime.toISOString(),
-              duration,
-            });
-          }
+          this.sendToWindow('idle-resumed', {
+            startTime: startTime.toISOString(),
+            endTime: endTime.toISOString(),
+            duration,
+          });
           this.idleStartTime = null;
         }
         return;
@@ -98,11 +103,9 @@ export class IdleDetector {
       this.isIdle = true;
       this.idleStartTime = new Date(Date.now() - idleTime * 1000);
       console.log(`[IdleDetector] IDLE DETECTED — system idle for ${idleTime}s, start: ${this.idleStartTime.toISOString()}`);
-      if (this.window && !this.window.isDestroyed()) {
-        this.window.webContents.send('idle-detected', {
-          startTime: this.idleStartTime.toISOString(),
-        });
-      }
+      this.sendToWindow('idle-detected', {
+        startTime: this.idleStartTime.toISOString(),
+      });
     } else if (idleTime < this.idleThreshold && this.isIdle) {
       const endTime = new Date();
       const startTime = this.idleStartTime || new Date(Date.now() - this.idleThreshold * 1000);
@@ -111,13 +114,11 @@ export class IdleDetector {
 
       this.isIdle = false;
 
-      if (this.window && !this.window.isDestroyed()) {
-        this.window.webContents.send('idle-resumed', {
-          startTime: startTime.toISOString(),
-          endTime: endTime.toISOString(),
-          duration,
-        });
-      }
+      this.sendToWindow('idle-resumed', {
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString(),
+        duration,
+      });
 
       this.idleStartTime = null;
     }
@@ -126,16 +127,23 @@ export class IdleDetector {
   /**
    * Detects if the user is likely in a meeting by checking:
    * 1. macOS: microphone in use (via system profiler)
-   * 2. Windows: meeting app processes with active audio
-   * 3. Both: known meeting processes running
+   * 2. Windows: microphone actually in use (via PowerShell audio capture check)
    */
   private async isInMeeting(): Promise<boolean> {
+    const now = Date.now();
+    if (now - this.lastMeetingCheck < this.meetingCacheTtl) {
+      return this.lastMeetingResult;
+    }
     try {
+      let result = false;
       if (process.platform === 'darwin') {
-        return await this.isMicInUseMac();
+        result = await this.isMicInUseMac();
       } else if (process.platform === 'win32') {
-        return await this.isMicInUseWindows();
+        result = await this.isMicInUseWindows();
       }
+      this.lastMeetingCheck = now;
+      this.lastMeetingResult = result;
+      return result;
     } catch {
       // If detection fails, don't suppress idle
     }
@@ -182,36 +190,33 @@ export class IdleDetector {
   }
 
   /**
-   * Windows: Check if a meeting app is running AND the microphone is in use.
-   * Uses PowerShell to query audio sessions.
+   * Windows: Check if the microphone is actually in use via PowerShell.
+   * Only suppresses idle if an audio capture device is actively recording.
    */
   private async isMicInUseWindows(): Promise<boolean> {
     try {
-      // Check if any meeting process is running
-      const { stdout: taskOut } = await execFileAsync('tasklist', ['/FO', 'CSV', '/NH'], {
-        timeout: 5000,
-      });
-
-      const processes = MEETING_PROCESSES.win32 || [];
-      const runningMeetingApp = processes.find((name) =>
-        taskOut.toLowerCase().includes(name.toLowerCase())
-      );
-
-      if (!runningMeetingApp) return false;
-
-      // Check if microphone is in use via PowerShell
       const psScript = `
-        Add-Type -AssemblyName System.Runtime.WindowsRuntime
-        $null = [Windows.Devices.Enumeration.DeviceInformation,Windows.Devices.Enumeration,ContentType=WindowsRuntime]
-        $mic = [Windows.Media.Devices.MediaDevice]::GetDefaultAudioCaptureId([Windows.Media.Devices.AudioDeviceRole]::Communications)
-        if ($mic) { Write-Output "mic_available" } else { Write-Output "no_mic" }
+        Get-CimInstance -Namespace 'root/cimv2/mdm/dmmap' -ClassName 'MDM_Policy_Result01_Privacy02' -ErrorAction SilentlyContinue |
+          Select-Object -ExpandProperty LetAppsAccessMicrophone_ForceDenyTheseApps -ErrorAction SilentlyContinue;
+        $mic = Get-PnpDevice -Class 'AudioEndpoint' -Status 'OK' -ErrorAction SilentlyContinue |
+          Where-Object { $_.FriendlyName -match 'Microphone|Mic|Audio Input' };
+        if (-not $mic) { Write-Output 'NO_MIC'; exit 0 }
+        $sessions = Get-Process | Where-Object {
+          try { $_.Modules | Where-Object { $_.ModuleName -match 'audioses|mmdevapi' } } catch {}
+        } | Select-Object -ExpandProperty ProcessName -ErrorAction SilentlyContinue;
+        if ($sessions) { Write-Output "ACTIVE:$($sessions -join ',')" } else { Write-Output 'INACTIVE' }
       `;
 
-      // Simpler approach: just trust that a meeting app running = likely in meeting
-      console.log(`[IdleDetector] Meeting app detected: ${runningMeetingApp} (Windows) — suppressing idle`);
-      return true;
+      const { stdout } = await execFileAsync('powershell', [
+        '-NoProfile', '-NonInteractive', '-Command', psScript,
+      ], { timeout: 5000 });
+
+      if (stdout.includes('ACTIVE:')) {
+        console.log(`[IdleDetector] Microphone actively in use (Windows) — suppressing idle`);
+        return true;
+      }
     } catch {
-      // Silently fail
+      // If PowerShell check fails, don't suppress idle
     }
     return false;
   }

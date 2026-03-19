@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Form, Input, Button, Checkbox, Typography, Alert, Space } from 'antd';
-import { UserOutlined, LockOutlined } from '@ant-design/icons';
+import { UserOutlined, LockOutlined, MinusOutlined, CloseOutlined } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 
 const { Title, Text } = Typography;
@@ -27,14 +27,57 @@ export default function Login() {
       style={{
         height: '100vh',
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        flexDirection: 'column',
         background: '#0a0a0f',
         position: 'relative',
         overflow: 'hidden',
-        padding: 'clamp(12px, 3vw, 16px)',
       }}
     >
+      {/* Title Bar — drag region + window controls */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          height: 32,
+          flexShrink: 0,
+          background: 'rgba(255, 255, 255, 0.01)',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+          paddingRight: 4,
+          userSelect: 'none',
+          // @ts-ignore
+          WebkitAppRegion: 'drag',
+        }}
+      >
+        <div style={{ display: 'flex', gap: 0, flexShrink: 0, WebkitAppRegion: 'no-drag' } as any}>
+          <Button
+            type="text"
+            size="small"
+            icon={<MinusOutlined style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }} />}
+            onClick={() => window.electronAPI.minimizeToTray()}
+            style={{ width: 36, height: 32, border: 'none', borderRadius: 0 }}
+          />
+          <Button
+            type="text"
+            size="small"
+            icon={<CloseOutlined style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }} />}
+            onClick={() => window.electronAPI.quitApp()}
+            style={{ width: 36, height: 32, border: 'none', borderRadius: 0 }}
+          />
+        </div>
+      </div>
+
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          position: 'relative',
+          overflow: 'hidden',
+          padding: 'clamp(12px, 3vw, 16px)',
+        }}
+      >
       {/* Ambient background orbs */}
       <div
         style={{
@@ -254,6 +297,7 @@ export default function Login() {
           color: rgba(255,255,255,0.3) !important;
         }
       `}</style>
+      </div>
     </div>
   );
 }

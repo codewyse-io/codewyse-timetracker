@@ -10,11 +10,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   stopIdleDetection: (): Promise<void> => ipcRenderer.invoke('stop-idle-detection'),
   minimizeToTray: (): void => ipcRenderer.send('minimize-to-tray'),
   quitApp: (): void => ipcRenderer.send('quit-app'),
-  onIdleDetected: (callback: (data: { startTime: string }) => void): void => {
-    ipcRenderer.on('idle-detected', (_event, data) => callback(data));
+  onIdleDetected: (callback: (data: { startTime: string }) => void): (() => void) => {
+    const handler = (_event: any, data: any) => callback(data);
+    ipcRenderer.on('idle-detected', handler);
+    return () => ipcRenderer.removeListener('idle-detected', handler);
   },
-  onIdleResumed: (callback: (data: { startTime: string; endTime: string; duration: number }) => void): void => {
-    ipcRenderer.on('idle-resumed', (_event, data) => callback(data));
+  onIdleResumed: (callback: (data: { startTime: string; endTime: string; duration: number }) => void): (() => void) => {
+    const handler = (_event: any, data: any) => callback(data);
+    ipcRenderer.on('idle-resumed', handler);
+    return () => ipcRenderer.removeListener('idle-resumed', handler);
   },
 
   // Auto-update APIs
@@ -22,26 +26,38 @@ contextBridge.exposeInMainWorld('electronAPI', {
   downloadUpdate: (): Promise<any> => ipcRenderer.invoke('download-update'),
   installUpdate: (): Promise<void> => ipcRenderer.invoke('install-update'),
   getAppVersion: (): Promise<string> => ipcRenderer.invoke('get-app-version'),
-  onUpdateAvailable: (callback: (info: { version: string; releaseNotes: string }) => void): void => {
-    ipcRenderer.on('update-available', (_event, info) => callback(info));
+  onUpdateAvailable: (callback: (info: { version: string; releaseNotes: string }) => void): (() => void) => {
+    const handler = (_event: any, info: any) => callback(info);
+    ipcRenderer.on('update-available', handler);
+    return () => ipcRenderer.removeListener('update-available', handler);
   },
-  onUpdateNotAvailable: (callback: () => void): void => {
-    ipcRenderer.on('update-not-available', () => callback());
+  onUpdateNotAvailable: (callback: () => void): (() => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('update-not-available', handler);
+    return () => ipcRenderer.removeListener('update-not-available', handler);
   },
-  onUpdateDownloadProgress: (callback: (progress: { percent: number; transferred: number; total: number }) => void): void => {
-    ipcRenderer.on('update-download-progress', (_event, progress) => callback(progress));
+  onUpdateDownloadProgress: (callback: (progress: { percent: number; transferred: number; total: number }) => void): (() => void) => {
+    const handler = (_event: any, progress: any) => callback(progress);
+    ipcRenderer.on('update-download-progress', handler);
+    return () => ipcRenderer.removeListener('update-download-progress', handler);
   },
-  onUpdateDownloaded: (callback: () => void): void => {
-    ipcRenderer.on('update-downloaded', () => callback());
+  onUpdateDownloaded: (callback: () => void): (() => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('update-downloaded', handler);
+    return () => ipcRenderer.removeListener('update-downloaded', handler);
   },
-  onUpdateError: (callback: (message: string) => void): void => {
-    ipcRenderer.on('update-error', (_event, message) => callback(message));
+  onUpdateError: (callback: (message: string) => void): (() => void) => {
+    const handler = (_event: any, message: any) => callback(message);
+    ipcRenderer.on('update-error', handler);
+    return () => ipcRenderer.removeListener('update-error', handler);
   },
 
   // Main-process heartbeat
   startHeartbeat: (): Promise<void> => ipcRenderer.invoke('start-heartbeat'),
   stopHeartbeat: (): Promise<void> => ipcRenderer.invoke('stop-heartbeat'),
-  onSessionForceStopped: (callback: () => void): void => {
-    ipcRenderer.on('session-force-stopped', () => callback());
+  onSessionForceStopped: (callback: () => void): (() => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('session-force-stopped', handler);
+    return () => ipcRenderer.removeListener('session-force-stopped', handler);
   },
 });

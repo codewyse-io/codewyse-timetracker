@@ -30,6 +30,7 @@ apiClient.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       window.electronAPI?.clearAuthToken();
+      window.dispatchEvent(new Event('auth-expired'));
     }
     return Promise.reject(error);
   }

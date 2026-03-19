@@ -49,7 +49,7 @@ export default function CoachingPanel() {
     // Refresh on session changes and periodically
     const handleSessionChange = () => loadTips();
     window.addEventListener('session-changed', handleSessionChange);
-    const interval = setInterval(loadTips, 15_000);
+    const interval = setInterval(loadTips, 120_000);
 
     return () => {
       window.removeEventListener('session-changed', handleSessionChange);

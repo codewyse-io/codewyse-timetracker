@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Spin, Collapse } from 'antd';
 import { PlayCircleOutlined, HistoryOutlined } from '@ant-design/icons';
 import { getSessions } from '../api/client';
@@ -76,7 +76,7 @@ export default function SessionHistory() {
     };
     loadSessions();
 
-    const interval = setInterval(loadSessions, 60_000);
+    const interval = setInterval(loadSessions, 120_000);
 
     // Refresh immediately when a session starts or stops
     const handleSessionChange = () => loadSessions();
@@ -88,9 +88,9 @@ export default function SessionHistory() {
     };
   }, []);
 
-  const totalAll = groups.reduce((a, g) => a + g.totalDuration, 0);
-  const activeAll = groups.reduce((a, g) => a + g.activeDuration, 0);
-  const sessionCount = groups.reduce((a, g) => a + g.sessions.length, 0);
+  const totalAll = useMemo(() => groups.reduce((a, g) => a + g.totalDuration, 0), [groups]);
+  const activeAll = useMemo(() => groups.reduce((a, g) => a + g.activeDuration, 0), [groups]);
+  const sessionCount = useMemo(() => groups.reduce((a, g) => a + g.sessions.length, 0), [groups]);
 
   const collapseItems = groups.map((group, idx) => ({
     key: group.date,

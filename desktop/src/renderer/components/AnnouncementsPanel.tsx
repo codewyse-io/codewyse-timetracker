@@ -50,7 +50,7 @@ export default function AnnouncementsPanel() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetch = useCallback(async () => {
+  const loadAnnouncements = useCallback(async () => {
     try {
       const data = await getActiveAnnouncements();
       const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
@@ -63,10 +63,10 @@ export default function AnnouncementsPanel() {
   }, []);
 
   useEffect(() => {
-    fetch();
-    const interval = setInterval(fetch, 5 * 60 * 1000); // refresh every 5 min
+    loadAnnouncements();
+    const interval = setInterval(loadAnnouncements, 5 * 60 * 1000); // refresh every 5 min
     return () => clearInterval(interval);
-  }, [fetch]);
+  }, [loadAnnouncements]);
 
   if (loading) {
     return (
@@ -108,7 +108,7 @@ export default function AnnouncementsPanel() {
           </span>
         </div>
         <button
-          onClick={() => { setLoading(true); fetch(); }}
+          onClick={() => { setLoading(true); loadAnnouncements(); }}
           style={{
             background: 'none',
             border: 'none',
