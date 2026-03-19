@@ -138,7 +138,7 @@ export class DownloadsController {
 
       if (!file) throw new NotFoundException('No installer found for this version');
 
-      const url = await this.s3Service.getPresignedUrl(file.key, 3600);
+      const url = await this.s3Service.getPresignedUrl(file.key, 86400);
       res.redirect(302, url);
     } catch (err) {
       if (err instanceof NotFoundException) throw err;
