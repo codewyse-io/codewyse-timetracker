@@ -96,18 +96,24 @@ export default function Timer() {
 
   // Listen for server force-stopping the session
   useEffect(() => {
-    const unsub = window.electronAPI?.onSessionForceStopped?.(() => {
+    const unsub = window.electronAPI?.onSessionForceStopped?.((reason?: string) => {
       setIsRunning(false);
       clearTimer();
       setElapsed(0);
       setSession(null);
       window.electronAPI?.stopIdleDetection?.().catch(() => {});
       window.dispatchEvent(new Event('session-changed'));
+
+      if (reason === 'shift-ended') {
+        showError('Your shift has ended. The session was automatically stopped.');
+      } else if (reason === 'max-duration') {
+        showError('Maximum session duration reached. The session was automatically stopped.');
+      }
     });
     return () => {
       unsub?.();
     };
-  }, [clearTimer]);
+  }, [clearTimer, showError]);
 
   // Listen for toggle-session keyboard shortcut
   useEffect(() => {
@@ -205,22 +211,28 @@ export default function Timer() {
     setErrorState({ show: false, message: '' });
     try {
       await stopSession();
-      setIsRunning(false);
-      clearTimer();
-      setElapsed(0);
-      setSession(null);
-      try {
-        await window.electronAPI.stopIdleDetection();
-      } catch {
-        // non-critical
-      }
-      window.dispatchEvent(new Event('session-changed'));
     } catch (err: any) {
-      const msg = err.response?.data?.message || 'Failed to end session';
-      showError(msg);
-    } finally {
-      setLoading(false);
+      // If session was already stopped (e.g. shift ended, auto-stopped by server),
+      // treat it as a successful stop instead of showing an error
+      const status = err.response?.status;
+      if (status !== 404) {
+        const msg = err.response?.data?.message || 'Failed to end session';
+        showError(msg);
+        setLoading(false);
+        return;
+      }
     }
+    setIsRunning(false);
+    clearTimer();
+    setElapsed(0);
+    setSession(null);
+    try {
+      await window.electronAPI.stopIdleDetection();
+    } catch {
+      // non-critical
+    }
+    window.dispatchEvent(new Event('session-changed'));
+    setLoading(false);
   };
 
   const isOvertime = mode === 'overtime';

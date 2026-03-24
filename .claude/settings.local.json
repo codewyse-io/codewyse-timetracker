@@ -22,7 +22,9 @@
       "Bash(curl -s \"https://backend.codewyse.site/downloads/update/file/v1.0.1?platform=win\")",
       "Bash(curl -s -X POST \"https://backend.codewyse.site/downloads/notify/v1.0.1\" -H \"x-api-key: 7598eba5af986346d0a6a9b429ac074ecdb6331853391997d5ab18556c02c10d67e20fb00d4fd4568aa91d77fed5c42f5ef2126e54d05ac73942e92e6321cfdd3cb566e7f5ccf110bdc541f28454524e\" -H \"Content-Type: application/json\")",
       "Bash(curl -s \"https://backend.codewyse.site/downloads/update/latest.yml\")",
-      "Bash(curl -s \"https://backend.codewyse.site/downloads/update/latest.yml\" -v)"
+      "Bash(curl -s \"https://backend.codewyse.site/downloads/update/latest.yml\" -v)",
+      "Bash(ls desktop/tsconfig*.json backend/tsconfig*.json)",
+      "Read(//c/Users/usama/AppData/Local/Temp/claude/c--Users-usama-Downloads-codewyse-timetracker/324314cd-bcdb-4405-a84a-8678280f8698/tasks/**)"
     ]
   }
 }

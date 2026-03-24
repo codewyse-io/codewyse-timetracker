@@ -2,7 +2,12 @@ import React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider, theme } from 'antd';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { SocketProvider } from './contexts/SocketContext';
+import { ChatProvider } from './contexts/ChatContext';
+import { CallProvider } from './contexts/CallContext';
 import ErrorBoundary from './components/ErrorBoundary';
+import IncomingCallOverlay from './components/call/IncomingCallOverlay';
+import CallWindow from './components/call/CallWindow';
 import Login from './pages/Login';
 import Home from './pages/Home';
 
@@ -197,11 +202,19 @@ export default function App() {
       }}
     >
       <AuthProvider>
-        <HashRouter>
-          <ErrorBoundary>
-            <AppRoutes />
-          </ErrorBoundary>
-        </HashRouter>
+        <SocketProvider>
+          <ChatProvider>
+            <CallProvider>
+              <HashRouter>
+                <ErrorBoundary>
+                  <AppRoutes />
+                  <IncomingCallOverlay />
+                  <CallWindow />
+                </ErrorBoundary>
+              </HashRouter>
+            </CallProvider>
+          </ChatProvider>
+        </SocketProvider>
       </AuthProvider>
     </ConfigProvider>
   );

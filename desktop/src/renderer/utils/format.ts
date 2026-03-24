@@ -26,6 +26,32 @@ export function formatDate(isoString: string): string {
   });
 }
 
+/**
+ * For active sessions, compute live durations from startTime to now.
+ * For completed sessions, return the stored values as-is.
+ */
+export function getLiveDurations(session: {
+  status?: string;
+  startTime: string;
+  totalDuration: number;
+  activeDuration: number;
+  idleDuration: number;
+}): { totalDuration: number; activeDuration: number; idleDuration: number } {
+  if (session.status === 'active') {
+    const totalDuration = Math.floor(
+      (Date.now() - new Date(session.startTime).getTime()) / 1000,
+    );
+    const idleDuration = session.idleDuration || 0;
+    const activeDuration = Math.max(0, totalDuration - idleDuration);
+    return { totalDuration, activeDuration, idleDuration };
+  }
+  return {
+    totalDuration: session.totalDuration || 0,
+    activeDuration: session.activeDuration || 0,
+    idleDuration: session.idleDuration || 0,
+  };
+}
+
 export function formatElapsedTime(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);

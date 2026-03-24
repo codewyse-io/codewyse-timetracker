@@ -129,11 +129,13 @@ export class TimeTrackingService {
 
   /**
    * Record a heartbeat from the desktop client to prove it is running.
-   * Also enforces max session duration.
+   * Also enforces max session duration and auto-stops regular sessions
+   * when the user's shift ends.
    */
-  async heartbeat(userId: string): Promise<{ ok: boolean }> {
+  async heartbeat(userId: string, shiftId?: string): Promise<{ ok: boolean; reason?: string }> {
     const session = await this.sessionRepository.findOne({
       where: { userId, status: SessionStatus.ACTIVE },
+      relations: ['idleIntervals'],
     });
 
     if (!session) {
@@ -145,7 +147,22 @@ export class TimeTrackingService {
     if (elapsed > MAX_SESSION_DURATION_HOURS * 3600) {
       this.logger.warn(`[heartbeat] Session ${session.id} exceeded max duration (${MAX_SESSION_DURATION_HOURS}h) — auto-stopping`);
       await this.autoStopSession(session);
-      return { ok: false };
+      return { ok: false, reason: 'max-duration' };
+    }
+
+    // Auto-stop regular sessions when shift ends
+    if (session.mode === 'regular' && shiftId) {
+      try {
+        const withinShift = await this.shiftsService.isWithinShift(shiftId);
+        if (!withinShift) {
+          this.logger.warn(`[heartbeat] Session ${session.id} is outside shift schedule — auto-stopping`);
+          await this.autoStopSession(session);
+          return { ok: false, reason: 'shift-ended' };
+        }
+      } catch (err) {
+        // Shift lookup failed — don't block the heartbeat
+        this.logger.error(`[heartbeat] Failed to check shift schedule: ${err.message}`);
+      }
     }
 
     await this.sessionRepository.update(session.id, {
@@ -362,6 +379,29 @@ export class TimeTrackingService {
     for (const session of longSessions) {
       this.logger.warn(`[stale-check] Auto-stopping over-max-duration session ${session.id} (user: ${session.userId})`);
       await this.autoStopSession(session);
+    }
+
+    // Auto-stop regular sessions whose shift has ended
+    const regularSessions = await this.sessionRepository.find({
+      where: {
+        status: SessionStatus.ACTIVE,
+        mode: 'regular',
+      },
+      relations: ['user', 'idleIntervals'],
+    });
+
+    for (const session of regularSessions) {
+      const shiftId = session.user?.shiftId;
+      if (!shiftId) continue;
+      try {
+        const withinShift = await this.shiftsService.isWithinShift(shiftId);
+        if (!withinShift) {
+          this.logger.warn(`[stale-check] Auto-stopping session ${session.id} — shift ended (user: ${session.userId})`);
+          await this.autoStopSession(session);
+        }
+      } catch {
+        // Shift not found — skip
+      }
     }
   }
 

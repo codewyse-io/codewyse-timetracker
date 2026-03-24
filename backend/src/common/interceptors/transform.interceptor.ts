@@ -21,6 +21,11 @@ export class TransformInterceptor<T>
     context: ExecutionContext,
     next: CallHandler,
   ): Observable<SuccessResponse<T>> {
+    // Skip transformation for WebSocket contexts — gateway handlers return raw data
+    if (context.getType() === 'ws') {
+      return next.handle();
+    }
+
     return next.handle().pipe(
       map((data) => ({
         success: true,

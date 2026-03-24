@@ -5,7 +5,6 @@ import { promisify } from 'util';
 const execFileAsync = promisify(execFile);
 
 // Process names that indicate an active meeting/call
-// Only actual meeting apps — no generic browsers
 const MEETING_PROCESSES: Record<string, string[]> = {
   win32: [
     'Zoom.exe',
@@ -27,6 +26,31 @@ const MEETING_PROCESSES: Record<string, string[]> = {
     'Discord',
     'Skype',
     'FaceTime',
+  ],
+};
+
+// Communication apps — if one of these has the foreground window,
+// the user is likely reading/composing messages, not truly idle
+const CHAT_APPS: Record<string, string[]> = {
+  win32: [
+    'whatsapp.exe',
+    'slack.exe',
+    'teams.exe',
+    'ms-teams.exe',
+    'discord.exe',
+    'telegram.exe',
+    'signal.exe',
+    'skype.exe',
+  ],
+  darwin: [
+    'WhatsApp',
+    'Slack',
+    'Microsoft Teams',
+    'Discord',
+    'Telegram',
+    'Signal',
+    'Skype',
+    'Messages',
   ],
 };
 
@@ -76,8 +100,28 @@ export class IdleDetector {
   private async check(): Promise<void> {
     const idleTime = powerMonitor.getSystemIdleTime();
 
-    // If system reports idle, check if user is in a meeting
+    // If system reports idle, check if user is in a meeting or using a chat app
     if (idleTime >= this.idleThreshold) {
+      // Check if a communication app has the foreground window
+      // (user is reading/composing messages — not truly idle)
+      const chatActive = await this.isChatAppInForeground();
+      if (chatActive) {
+        if (this.isIdle) {
+          const endTime = new Date();
+          const startTime = this.idleStartTime || new Date(Date.now() - this.idleThreshold * 1000);
+          const duration = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
+          console.log(`[IdleDetector] Chat app in foreground — cancelling idle (duration was ${duration}s)`);
+          this.isIdle = false;
+          this.sendToWindow('idle-resumed', {
+            startTime: startTime.toISOString(),
+            endTime: endTime.toISOString(),
+            duration,
+          });
+          this.idleStartTime = null;
+        }
+        return;
+      }
+
       const inMeeting = await this.isInMeeting();
       if (inMeeting) {
         // User is in a meeting — don't mark as idle
@@ -122,6 +166,45 @@ export class IdleDetector {
 
       this.idleStartTime = null;
     }
+  }
+
+  /**
+   * Checks if a communication/chat app currently has the foreground window.
+   * If so, the user is likely reading or composing messages — not truly idle.
+   */
+  private async isChatAppInForeground(): Promise<boolean> {
+    try {
+      const apps = CHAT_APPS[process.platform] || [];
+      if (apps.length === 0) return false;
+
+      if (process.platform === 'win32') {
+        // Get the foreground window process name via PowerShell
+        const { stdout } = await execFileAsync('powershell', [
+          '-NoProfile', '-NonInteractive', '-Command',
+          `Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class FG{[DllImport("user32.dll")]public static extern IntPtr GetForegroundWindow();[DllImport("user32.dll")]public static extern uint GetWindowThreadProcessId(IntPtr hWnd,out uint pid);}';$h=[FG]::GetForegroundWindow();$pid=0;[FG]::GetWindowThreadProcessId($h,[ref]$pid)|Out-Null;(Get-Process -Id $pid -ErrorAction SilentlyContinue).ProcessName`,
+        ], { timeout: 3000 });
+
+        const fgProcess = stdout.trim().toLowerCase();
+        if (fgProcess && apps.some((app) => app.toLowerCase().replace('.exe', '') === fgProcess)) {
+          console.log(`[IdleDetector] Chat app in foreground: ${fgProcess} — suppressing idle`);
+          return true;
+        }
+      } else if (process.platform === 'darwin') {
+        // Get the frontmost application name via AppleScript
+        const { stdout } = await execFileAsync('osascript', [
+          '-e', 'tell application "System Events" to get name of first application process whose frontmost is true',
+        ], { timeout: 3000 });
+
+        const fgApp = stdout.trim();
+        if (fgApp && apps.some((app) => fgApp.includes(app))) {
+          console.log(`[IdleDetector] Chat app in foreground: ${fgApp} — suppressing idle`);
+          return true;
+        }
+      }
+    } catch {
+      // If foreground check fails, don't suppress idle
+    }
+    return false;
   }
 
   /**

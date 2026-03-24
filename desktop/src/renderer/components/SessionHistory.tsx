@@ -3,7 +3,7 @@ import { Spin, Collapse } from 'antd';
 import { PlayCircleOutlined, HistoryOutlined } from '@ant-design/icons';
 import { getSessions } from '../api/client';
 import { WorkSession } from '../types';
-import { formatTime, formatDuration } from '../utils/format';
+import { formatTime, formatDuration, getLiveDurations } from '../utils/format';
 
 interface DayGroup {
   date: string;
@@ -34,6 +34,7 @@ function toDateKey(iso: string): string {
 export default function SessionHistory() {
   const [groups, setGroups] = useState<DayGroup[]>([]);
   const [loading, setLoading] = useState(true);
+  const [, setTick] = useState(0);
 
   useEffect(() => {
     const loadSessions = async () => {
@@ -63,8 +64,8 @@ export default function SessionHistory() {
             sessions: sess.sort(
               (a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
             ),
-            totalDuration: sess.reduce((a, s) => a + (s.totalDuration || 0), 0),
-            activeDuration: sess.reduce((a, s) => a + (s.activeDuration || 0), 0),
+            totalDuration: sess.reduce((a, s) => a + getLiveDurations(s).totalDuration, 0),
+            activeDuration: sess.reduce((a, s) => a + getLiveDurations(s).activeDuration, 0),
           }));
 
         setGroups(grouped);
@@ -88,8 +89,22 @@ export default function SessionHistory() {
     };
   }, []);
 
-  const totalAll = useMemo(() => groups.reduce((a, g) => a + g.totalDuration, 0), [groups]);
-  const activeAll = useMemo(() => groups.reduce((a, g) => a + g.activeDuration, 0), [groups]);
+  // Re-render every 30s to update live session durations
+  const hasActive = groups.some((g) => g.sessions.some((s) => s.status === 'active'));
+  useEffect(() => {
+    if (!hasActive) return;
+    const id = setInterval(() => setTick((t) => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, [hasActive]);
+
+  const totalAll = useMemo(() => {
+    return groups.reduce((a, g) =>
+      a + g.sessions.reduce((sa, s) => sa + getLiveDurations(s).totalDuration, 0), 0);
+  }, [groups, hasActive && Date.now()]);
+  const activeAll = useMemo(() => {
+    return groups.reduce((a, g) =>
+      a + g.sessions.reduce((sa, s) => sa + getLiveDurations(s).activeDuration, 0), 0);
+  }, [groups, hasActive && Date.now()]);
   const sessionCount = useMemo(() => groups.reduce((a, g) => a + g.sessions.length, 0), [groups]);
 
   const collapseItems = groups.map((group, idx) => ({
@@ -126,8 +141,8 @@ export default function SessionHistory() {
           </span>
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <MetricPill label="Total" value={formatDuration(group.totalDuration)} small />
-          <MetricPill label="Active" value={formatDuration(group.activeDuration)} color="#00e676" small />
+          <MetricPill label="Total" value={formatDuration(group.sessions.reduce((a, s) => a + getLiveDurations(s).totalDuration, 0))} small />
+          <MetricPill label="Active" value={formatDuration(group.sessions.reduce((a, s) => a + getLiveDurations(s).activeDuration, 0))} color="#00e676" small />
         </div>
       </div>
     ),
@@ -137,6 +152,7 @@ export default function SessionHistory() {
           const isActive = session.status === 'active';
           const isOT = session.mode === 'overtime';
           const accentColor = isActive ? '#00e676' : isOT ? '#ffab00' : 'rgba(255,255,255,0.08)';
+          const live = getLiveDurations(session);
           return (
             <div
               key={session.id}
@@ -184,15 +200,15 @@ export default function SessionHistory() {
                   color: isActive ? '#00e676' : 'rgba(255,255,255,0.45)',
                   fontWeight: 600, fontVariantNumeric: 'tabular-nums', flexShrink: 0,
                 }}>
-                  {formatDuration(session.totalDuration)}
+                  {formatDuration(live.totalDuration)}
                 </span>
               </div>
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>
-                  Active: {formatDuration(session.activeDuration)}
+                  Active: {formatDuration(live.activeDuration)}
                 </span>
                 <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)' }}>
-                  Idle: {formatDuration(session.idleDuration)}
+                  Idle: {formatDuration(live.idleDuration)}
                 </span>
               </div>
             </div>

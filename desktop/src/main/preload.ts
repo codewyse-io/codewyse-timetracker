@@ -55,9 +55,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Main-process heartbeat
   startHeartbeat: (): Promise<void> => ipcRenderer.invoke('start-heartbeat'),
   stopHeartbeat: (): Promise<void> => ipcRenderer.invoke('stop-heartbeat'),
-  onSessionForceStopped: (callback: () => void): (() => void) => {
-    const handler = () => callback();
+  onSessionForceStopped: (callback: (reason?: string) => void): (() => void) => {
+    const handler = (_event: any, reason?: string) => callback(reason);
     ipcRenderer.on('session-force-stopped', handler);
     return () => ipcRenderer.removeListener('session-force-stopped', handler);
+  },
+
+  // Screen sharing & call notifications
+  getDesktopSources: (): Promise<Array<{ id: string; name: string; thumbnail: string }>> =>
+    ipcRenderer.invoke('get-desktop-sources'),
+  selectScreenSource: (sourceId: string): Promise<boolean> =>
+    ipcRenderer.invoke('select-screen-source', sourceId),
+  isWindowVisible: (): Promise<boolean> => ipcRenderer.invoke('is-window-visible'),
+  showCallNotification: (callerName: string): void =>
+    ipcRenderer.send('show-call-notification', callerName),
+
+  // Call detach/attach
+  detachCallWindow: (): Promise<void> => ipcRenderer.invoke('detach-call-window'),
+  attachCallWindow: (): Promise<void> => ipcRenderer.invoke('attach-call-window'),
+  onCallDetached: (callback: () => void): (() => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('call-detached', handler);
+    return () => ipcRenderer.removeListener('call-detached', handler);
+  },
+  onCallAttached: (callback: () => void): (() => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('call-attached', handler);
+    return () => ipcRenderer.removeListener('call-attached', handler);
   },
 });

@@ -14,7 +14,7 @@ export default function IdleIndicator() {
 
     const sendIdleReport = (startTime: string) => {
       const endTime = new Date().toISOString();
-      console.log(`[IdleIndicator] Reporting idle — start: ${startTime}, end: ${endTime}`);
+      // idle report: startTime → endTime
       reportIdle({ startTime, endTime }).catch((err) => {
         console.error('[IdleIndicator] Failed to report idle:', err?.response?.data || err.message);
       });
@@ -22,12 +22,11 @@ export default function IdleIndicator() {
 
     const startHeartbeat = (startTime: string) => {
       stopHeartbeat();
-      console.log(`[IdleIndicator] Starting heartbeat — idle start: ${startTime}`);
+      // heartbeat started
       // Send immediately
       sendIdleReport(startTime);
       // Then send periodically
       heartbeatRef.current = setInterval(() => {
-        console.log(`[IdleIndicator] Heartbeat tick — idle still ongoing`);
         sendIdleReport(startTime);
       }, IDLE_REPORT_INTERVAL);
     };
@@ -40,21 +39,21 @@ export default function IdleIndicator() {
     };
 
     unsubDetectedRef.current = window.electronAPI.onIdleDetected((data) => {
-      console.log('[IdleIndicator] idle-detected event received:', data);
+      // idle detected
       // Use the actual idle start time from the detector (accounts for the threshold delay)
       idleStartRef.current = data?.startTime || new Date().toISOString();
       startHeartbeat(idleStartRef.current);
     });
 
     unsubResumedRef.current = window.electronAPI.onIdleResumed((data) => {
-      console.log('[IdleIndicator] idle-resumed event received:', data);
+      // idle resumed
       stopHeartbeat();
 
       const startTime = data?.startTime || idleStartRef.current;
       const endTime = data?.endTime || new Date().toISOString();
 
       if (startTime) {
-        console.log(`[IdleIndicator] Final idle report — start: ${startTime}, end: ${endTime}`);
+        // final idle report
         reportIdle({ startTime, endTime }).catch((err) => {
           console.error('[IdleIndicator] Failed to report final idle:', err?.response?.data || err.message);
         });

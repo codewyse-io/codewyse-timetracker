@@ -1,6 +1,6 @@
 {
   "name": "pulse-desktop",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "main": "dist/main/main.js",
   "author": "CodeWyse",
   "description": "Pulse — AI Work Companion",
@@ -85,19 +85,21 @@
     "electron-updater": "^6.8.3"
   },
   "devDependencies": {
-    "axios": "^1.13.6",
     "@types/node": "^25.3.5",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.4",
     "antd": "^6.3.1",
+    "axios": "^1.13.6",
     "concurrently": "^9.2.1",
     "electron": "^40.8.0",
     "electron-builder": "^26.8.1",
+    "mediasoup-client": "^3.18.7",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.13.1",
     "recharts": "^3.8.0",
+    "socket.io-client": "^4.8.3",
     "typescript": "^5.9.3",
     "vite": "^7.3.1"
   }

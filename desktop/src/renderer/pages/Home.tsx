@@ -8,6 +8,7 @@ import {
   FieldTimeOutlined,
   CalendarOutlined,
   SoundOutlined,
+  MessageOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
 } from '@ant-design/icons';
@@ -25,14 +26,17 @@ import LeaveRequestPanel from '../components/LeaveRequestPanel';
 import OnboardingTutorial from '../components/OnboardingTutorial';
 import UpdateBanner from '../components/UpdateBanner';
 import AnnouncementsPanel from '../components/AnnouncementsPanel';
+import ChatPanel from '../components/chat/ChatPanel';
+import { useChat } from '../contexts/ChatContext';
 
 const { Content } = Layout;
 
-type TabKey = 'dashboard' | 'timeline' | 'leaves' | 'announcements' | 'profile';
+type TabKey = 'dashboard' | 'timeline' | 'leaves' | 'announcements' | 'chat' | 'profile';
 
 const NAV_ITEMS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: 'dashboard', label: 'Dashboard', icon: <DashboardOutlined /> },
   { key: 'timeline', label: 'Timeline', icon: <FieldTimeOutlined /> },
+  { key: 'chat', label: 'Chat', icon: <MessageOutlined /> },
   { key: 'leaves', label: 'Leaves', icon: <CalendarOutlined /> },
   { key: 'announcements', label: 'Notices', icon: <SoundOutlined /> },
 ];
@@ -99,7 +103,7 @@ const LiveClock = memo(function LiveClock({ timezone }: { timezone?: string }) {
 const SIDEBAR_EXPANDED = 180;
 const SIDEBAR_COLLAPSED = 54;
 
-const TAB_KEYS: TabKey[] = ['dashboard', 'timeline', 'leaves', 'announcements'];
+const TAB_KEYS: TabKey[] = ['dashboard', 'timeline', 'chat', 'leaves', 'announcements'];
 
 export default function Home() {
   const { user: authUser, logout } = useAuth();
@@ -129,8 +133,8 @@ export default function Home() {
         return;
       }
 
-      // Ctrl/Cmd + 1-4 — switch tabs
-      if (e.key >= '1' && e.key <= '4') {
+      // Ctrl/Cmd + 1-5 — switch tabs
+      if (e.key >= '1' && e.key <= '5') {
         e.preventDefault();
         const idx = parseInt(e.key, 10) - 1;
         if (idx < TAB_KEYS.length) {
@@ -151,6 +155,7 @@ export default function Home() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  const { totalUnread } = useChat();
   const user = fullUser || authUser;
   const shiftTimezone = fullUser?.shift?.timezone;
   const sidebarWidth = collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED;
@@ -296,8 +301,30 @@ export default function Home() {
                     display: 'flex',
                     flexShrink: 0,
                     color: isActive ? '#a78bfa' : 'rgba(255, 255, 255, 0.4)',
+                    position: 'relative',
                   }}>
                     {item.icon}
+                    {item.key === 'chat' && totalUnread > 0 && (
+                      <span style={{
+                        position: 'absolute',
+                        top: -4,
+                        right: -6,
+                        minWidth: 14,
+                        height: 14,
+                        borderRadius: 7,
+                        background: '#7c5cfc',
+                        color: '#fff',
+                        fontSize: 8,
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '0 3px',
+                        lineHeight: 1,
+                      }}>
+                        {totalUnread > 99 ? '99+' : totalUnread}
+                      </span>
+                    )}
                   </span>
                   {!collapsed && item.label}
                 </button>
@@ -458,6 +485,9 @@ export default function Home() {
             </div>
             <div style={{ display: activeTab === 'timeline' ? 'block' : 'none' }}>
               <TimelinePanel />
+            </div>
+            <div style={{ display: activeTab === 'chat' ? 'flex' : 'none', height: '100%', minHeight: 0 }}>
+              <ChatPanel />
             </div>
             <div style={{ display: activeTab === 'leaves' ? 'block' : 'none' }}>
               <LeaveRequestPanel />

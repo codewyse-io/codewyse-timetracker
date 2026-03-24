@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, powerMonitor, Tray, Menu, net } from 'electron';
+import { app, BrowserWindow, ipcMain, powerMonitor, Tray, Menu, net, desktopCapturer, session } from 'electron';
 import * as path from 'path';
 import { autoUpdater } from 'electron-updater';
 import { IdleDetector } from './idle-detector';
@@ -27,11 +27,13 @@ process.on('unhandledRejection', (reason) => {
 });
 
 let mainWindow: BrowserWindow | null = null;
+let callWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let idleDetector: IdleDetector | null = null;
 let isQuitting = false;
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 let updateCheckInterval: ReturnType<typeof setInterval> | null = null;
+let pendingScreenSourceId: string | null = null;
 
 // ── Main-process heartbeat (immune to App Nap) ──────────────────────
 const API_BASE_URL = process.env.VITE_API_BASE_URL || 'https://backend.codewyse.site';
@@ -56,10 +58,12 @@ function startMainHeartbeat(): void {
       response.on('end', () => {
         try {
           const data = JSON.parse(body);
-          if (data?.data?.ok === false || data?.ok === false) {
-            console.log('[Heartbeat] Server returned ok: false — session may have been stopped');
+          const payload = data?.data ?? data;
+          if (payload?.ok === false) {
+            const reason = payload.reason || 'unknown';
+            console.log(`[Heartbeat] Server returned ok: false (reason: ${reason}) — session stopped`);
             stopMainHeartbeat();
-            mainWindow?.webContents.send('session-force-stopped');
+            mainWindow?.webContents.send('session-force-stopped', reason);
           }
         } catch { /* ignore parse errors */ }
       });
@@ -133,10 +137,10 @@ function setupAutoUpdater(): void {
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
-    minWidth: 400,
-    minHeight: 500,
+    width: 1400,
+    height: 850,
+    minWidth: 800,
+    minHeight: 600,
     resizable: true,
     frame: false,
     autoHideMenuBar: true,
@@ -146,6 +150,7 @@ function createWindow(): void {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
     },
   });
 
@@ -154,6 +159,17 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   }
+
+  // Prevent navigation hijacking
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    // Only allow navigation to the app's own URLs
+    if (!url.startsWith('http://localhost:5174') && !url.startsWith('file://')) {
+      event.preventDefault();
+    }
+  });
+
+  // Prevent new window creation
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
   mainWindow.on('close', (event) => {
     if (!isQuitting && !(app as any).isQuitting) {
@@ -164,6 +180,29 @@ function createWindow(): void {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+
+  // ── Screen sharing: setDisplayMediaRequestHandler (Electron 17+) ──
+  session.defaultSession.setDisplayMediaRequestHandler(async (_request, callback) => {
+    try {
+      const sourceId = pendingScreenSourceId || 'screen:0:0';
+      pendingScreenSourceId = null;
+
+      const sources = await desktopCapturer.getSources({
+        types: ['screen', 'window'],
+        thumbnailSize: { width: 0, height: 0 },
+      });
+
+      const source = sources.find((s) => s.id === sourceId) || sources[0];
+      if (source) {
+        callback({ video: source, audio: 'loopback' });
+      } else {
+        callback({});
+      }
+    } catch (err) {
+      console.error('[ScreenShare] setDisplayMediaRequestHandler error:', err);
+      callback({});
+    }
   });
 }
 
@@ -216,7 +255,9 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle('install-update', () => {
     isQuitting = true;
-    autoUpdater.quitAndInstall(false, true);
+    // isSilent=true: install without showing NSIS UI (prevents deadlock)
+    // isForceRunAfter=true: relaunch app after install completes
+    setImmediate(() => autoUpdater.quitAndInstall(true, true));
   });
 
   ipcMain.handle('get-app-version', () => {
@@ -239,6 +280,119 @@ function setupIpcHandlers(): void {
   ipcMain.on('quit-app', () => {
     isQuitting = true;
     app.quit();
+  });
+
+  // ── Screen sharing / Call IPC ────────────────────────────────────────
+  ipcMain.handle('get-desktop-sources', async () => {
+    // Try with thumbnails first, fall back to no thumbnails if WGC fails
+    for (const thumbSize of [{ width: 240, height: 135 }, { width: 0, height: 0 }]) {
+      try {
+        const sources = await desktopCapturer.getSources({
+          types: ['screen', 'window'],
+          thumbnailSize: thumbSize,
+        });
+        if (sources.length > 0) {
+          return sources.map((s) => ({
+            id: s.id,
+            name: s.name,
+            thumbnail: thumbSize.width > 0 && s.thumbnail && !s.thumbnail.isEmpty()
+              ? s.thumbnail.toDataURL()
+              : '',
+          }));
+        }
+      } catch (err) {
+        console.error('[DesktopCapturer] Attempt failed, trying fallback:', err);
+      }
+    }
+    // Ultimate fallback — always give at least one option
+    return [{ id: 'screen:0:0', name: 'Entire Screen', thumbnail: '' }];
+  });
+
+  // Store the selected screen source ID before getDisplayMedia is called
+  ipcMain.handle('select-screen-source', (_event, sourceId: string) => {
+    pendingScreenSourceId = sourceId;
+    return true;
+  });
+
+  ipcMain.handle('is-window-visible', () => {
+    return mainWindow?.isVisible() ?? false;
+  });
+
+  ipcMain.on('show-call-notification', (_event: any, callerName: string) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      mainWindow.focus();
+      if (process.platform === 'win32') {
+        mainWindow.flashFrame(true);
+      }
+    }
+  });
+
+  // ── Detach / Attach call window ──────────────────────────────────────
+  ipcMain.handle('detach-call-window', () => {
+    if (callWindow && !callWindow.isDestroyed()) {
+      callWindow.focus();
+      return;
+    }
+
+    const { screen } = require('electron');
+    const display = screen.getPrimaryDisplay();
+    const { width: screenW, height: screenH } = display.workAreaSize;
+
+    callWindow = new BrowserWindow({
+      width: 320,
+      height: 480,
+      x: screenW - 340,
+      y: screenH - 500,
+      minWidth: 260,
+      minHeight: 380,
+      frame: false,
+      alwaysOnTop: true,
+      resizable: true,
+      skipTaskbar: false,
+      icon: iconPath,
+      title: 'Pulse — Call',
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    });
+
+    // Load the same app with a hash flag so the renderer knows it's detached
+    if (isDev) {
+      callWindow.loadURL('http://localhost:5174#/call-detached');
+    } else {
+      callWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'), { hash: '/call-detached' });
+    }
+
+    // Prevent navigation hijacking on call window
+    callWindow.webContents.on('will-navigate', (event, url) => {
+      if (!url.startsWith('http://localhost:5174') && !url.startsWith('file://')) {
+        event.preventDefault();
+      }
+    });
+
+    // Prevent new window creation from call window
+    callWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
+    // Tell the main window that call was detached
+    mainWindow?.webContents.send('call-detached');
+
+    callWindow.on('closed', () => {
+      callWindow = null;
+      // Tell main window to re-attach
+      mainWindow?.webContents.send('call-attached');
+    });
+  });
+
+  ipcMain.handle('attach-call-window', () => {
+    if (callWindow && !callWindow.isDestroyed()) {
+      callWindow.close();
+      callWindow = null;
+    }
+    mainWindow?.webContents.send('call-attached');
   });
 }
 

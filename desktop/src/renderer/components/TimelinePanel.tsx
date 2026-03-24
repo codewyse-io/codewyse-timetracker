@@ -3,7 +3,7 @@ import { Spin } from 'antd';
 import { ClockCircleOutlined, ArrowRightOutlined, CalendarOutlined } from '@ant-design/icons';
 import { getSessions } from '../api/client';
 import { WorkSession } from '../types';
-import { formatTime, formatDuration } from '../utils/format';
+import { formatTime, formatDuration, getLiveDurations } from '../utils/format';
 
 interface GroupedDay {
   date: string;
@@ -36,6 +36,7 @@ function toDateKey(iso: string): string {
 export default function TimelinePanel() {
   const [groups, setGroups] = useState<GroupedDay[]>([]);
   const [loading, setLoading] = useState(true);
+  const [, setTick] = useState(0);
   const [fromDate, setFromDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 6);
@@ -72,8 +73,8 @@ export default function TimelinePanel() {
           sessions: sess.sort(
             (a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
           ),
-          totalDuration: sess.reduce((a, s) => a + (s.totalDuration || 0), 0),
-          activeDuration: sess.reduce((a, s) => a + (s.activeDuration || 0), 0),
+          totalDuration: sess.reduce((a, s) => a + getLiveDurations(s).totalDuration, 0),
+          activeDuration: sess.reduce((a, s) => a + getLiveDurations(s).activeDuration, 0),
         }));
 
       setGroups(grouped);
@@ -88,8 +89,16 @@ export default function TimelinePanel() {
     loadData();
   }, [loadData]);
 
-  const totalAll = groups.reduce((a, g) => a + g.totalDuration, 0);
-  const activeAll = groups.reduce((a, g) => a + g.activeDuration, 0);
+  // Re-render every 30s to update live session durations
+  const hasActive = groups.some((g) => g.sessions.some((s) => s.status === 'active'));
+  useEffect(() => {
+    if (!hasActive) return;
+    const id = setInterval(() => setTick((t) => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, [hasActive]);
+
+  const totalAll = groups.reduce((a, g) => a + g.sessions.reduce((sa, s) => sa + getLiveDurations(s).totalDuration, 0), 0);
+  const activeAll = groups.reduce((a, g) => a + g.sessions.reduce((sa, s) => sa + getLiveDurations(s).activeDuration, 0), 0);
 
   return (
     <div style={{ display: 'grid', gap: 10, padding: 10, overflow: 'hidden', width: '100%', boxSizing: 'border-box' }}>
@@ -241,12 +250,12 @@ export default function TimelinePanel() {
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 <SummaryPill
                   label="Total"
-                  value={formatDuration(group.totalDuration)}
+                  value={formatDuration(group.sessions.reduce((a, s) => a + getLiveDurations(s).totalDuration, 0))}
                   small
                 />
                 <SummaryPill
                   label="Active"
-                  value={formatDuration(group.activeDuration)}
+                  value={formatDuration(group.sessions.reduce((a, s) => a + getLiveDurations(s).activeDuration, 0))}
                   color="#00e676"
                   small
                 />
@@ -268,6 +277,7 @@ export default function TimelinePanel() {
                   : isOT
                     ? '#ffab00'
                     : 'rgba(255,255,255,0.08)';
+                const live = getLiveDurations(session);
 
                 return (
                   <div
@@ -355,7 +365,7 @@ export default function TimelinePanel() {
                           flexShrink: 0,
                         }}
                       >
-                        {formatDuration(session.totalDuration)}
+                        {formatDuration(live.totalDuration)}
                       </span>
                     </div>
                     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -365,7 +375,7 @@ export default function TimelinePanel() {
                           color: 'rgba(255,255,255,0.35)',
                         }}
                       >
-                        Active: {formatDuration(session.activeDuration)}
+                        Active: {formatDuration(live.activeDuration)}
                       </span>
                       <span
                         style={{
@@ -373,7 +383,7 @@ export default function TimelinePanel() {
                           color: 'rgba(255,255,255,0.25)',
                         }}
                       >
-                        Idle: {formatDuration(session.idleDuration)}
+                        Idle: {formatDuration(live.idleDuration)}
                       </span>
                     </div>
                   </div>

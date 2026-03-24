@@ -100,7 +100,17 @@ declare global {
       // Main-process heartbeat
       startHeartbeat: () => Promise<void>;
       stopHeartbeat: () => Promise<void>;
-      onSessionForceStopped: (callback: () => void) => () => void;
+      onSessionForceStopped: (callback: (reason?: string) => void) => () => void;
+      // Screen sharing & call notifications
+      getDesktopSources: () => Promise<Array<{ id: string; name: string; thumbnail: string }>>;
+      selectScreenSource: (sourceId: string) => Promise<boolean>;
+      isWindowVisible: () => Promise<boolean>;
+      showCallNotification: (callerName: string) => void;
+      // Call detach/attach
+      detachCallWindow: () => Promise<void>;
+      attachCallWindow: () => Promise<void>;
+      onCallDetached: (callback: () => void) => () => void;
+      onCallAttached: (callback: () => void) => () => void;
     };
   }
 }

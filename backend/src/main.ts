@@ -41,18 +41,21 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalInterceptors(new TransformInterceptor());
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('PulseTrack API')
-    .setDescription('PulseTrack Time Tracker API Documentation')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
+  const nodeEnv = configService.get('app.nodeEnv') || process.env.NODE_ENV;
+  if (nodeEnv !== 'production') {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('PulseTrack API')
+      .setDescription('PulseTrack Time Tracker API Documentation')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .build();
 
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document);
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api/docs', app, document);
+    console.log(`Swagger docs: http://localhost:${port}/api/docs`);
+  }
 
   await app.listen(port);
   console.log(`Application running on: http://localhost:${port}`);
-  console.log(`Swagger docs: http://localhost:${port}/api/docs`);
 }
 bootstrap();
