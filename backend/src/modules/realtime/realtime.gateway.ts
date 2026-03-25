@@ -67,7 +67,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     private readonly mediasoupService: MediasoupService,
   ) {}
 
-  afterInit(server: Server) {
+  async afterInit(server: Server) {
     // Redis adapter is only needed for horizontal scaling (multiple server instances).
     // Skip it when REDIS_ADAPTER=false or when Redis doesn't support PSUBSCRIBE (e.g., ElastiCache Valkey serverless).
     const useRedisAdapter = this.configService.get<string>('REDIS_ADAPTER', 'false') === 'true';
@@ -87,10 +87,29 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
         pubClient.on('error', (err) => this.logger.warn(`Redis pub client error: ${err.message}`));
         subClient.on('error', (err) => this.logger.warn(`Redis sub client error: ${err.message}`));
 
+        // Verify the Redis instance supports PSUBSCRIBE (required by @socket.io/redis-adapter).
+        // AWS ElastiCache Valkey Serverless does NOT support PSUBSCRIBE, so we must detect this
+        // and fall back to the in-memory adapter instead of crashing the process.
+        await new Promise<void>((resolve, reject) => {
+          const testSub = pubClient.duplicate();
+          testSub.on('error', () => {}); // suppress
+          const timeout = setTimeout(() => { testSub.disconnect(); reject(new Error('psubscribe timeout')); }, 5000);
+          testSub.psubscribe('__test__', (err) => {
+            clearTimeout(timeout);
+            if (err) {
+              testSub.disconnect();
+              reject(err);
+            } else {
+              testSub.punsubscribe('__test__').then(() => testSub.disconnect()).catch(() => testSub.disconnect());
+              resolve();
+            }
+          });
+        });
+
         server.adapter(createAdapter(pubClient, subClient) as any);
         this.logger.log('WebSocket gateway initialized with Redis adapter');
-      } catch (err) {
-        this.logger.warn(`Failed to set up Redis adapter, using in-memory adapter: ${err}`);
+      } catch (err: any) {
+        this.logger.warn(`Redis does not support PSUBSCRIBE (likely Valkey Serverless). Using in-memory adapter. Error: ${err.message}`);
       }
     } else {
       this.logger.log('WebSocket gateway initialized with in-memory adapter (single instance mode)');

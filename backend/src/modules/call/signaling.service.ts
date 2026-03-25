@@ -31,6 +31,7 @@ export class SignalingService implements OnModuleInit {
       maxRetriesPerRequest: 3,
       ...(redisTls ? { tls: {} } : {}),
     });
+    this.redis.on('error', (err) => this.logger.warn(`Redis error: ${err.message}`));
   }
 
   private key(callId: string): string {

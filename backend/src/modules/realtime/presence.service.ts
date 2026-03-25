@@ -24,6 +24,7 @@ export class PresenceService implements OnModuleInit {
       maxRetriesPerRequest: 3,
       ...(redisTls ? { tls: {} } : {}),
     });
+    this.redis.on('error', (err) => this.logger.warn(`Redis error: ${err.message}`));
   }
 
   private key(userId: string): string {
