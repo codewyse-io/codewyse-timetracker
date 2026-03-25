@@ -265,9 +265,20 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle('install-update', () => {
     isQuitting = true;
-    // isSilent=true: install without showing NSIS UI (prevents deadlock)
-    // isForceRunAfter=true: relaunch app after install completes
-    setImmediate(() => autoUpdater.quitAndInstall(true, true));
+
+    // On macOS, quitAndInstall needs the app to fully quit first.
+    // autoUpdater.autoInstallOnAppQuit handles the install on next launch,
+    // but quitAndInstall(false, true) forces immediate install + relaunch.
+    // isSilent=false on macOS (no NSIS), isSilent=true on Windows
+    const isSilent = process.platform !== 'darwin';
+
+    setImmediate(() => {
+      // Force close all windows so the app actually quits on macOS
+      BrowserWindow.getAllWindows().forEach((w) => {
+        if (!w.isDestroyed()) w.destroy();
+      });
+      autoUpdater.quitAndInstall(isSilent, true);
+    });
   });
 
   ipcMain.handle('get-app-version', () => {
