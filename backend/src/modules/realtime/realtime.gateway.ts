@@ -73,7 +73,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     const redisPort = this.configService.get<number>('REDIS_PORT', 6379);
     const redisPassword = this.configService.get<string>('REDIS_PASSWORD', '');
 
-    const pubClient = new Redis({ host: redisHost, port: redisPort, password: redisPassword });
+    const redisTls = this.configService.get<string>('REDIS_TLS', 'false') === 'true';
+    const redisOpts: any = { host: redisHost, port: redisPort, password: redisPassword || undefined };
+    if (redisTls) redisOpts.tls = {};
+
+    const pubClient = new Redis(redisOpts);
     const subClient = pubClient.duplicate();
 
     server.adapter(createAdapter(pubClient, subClient) as any);

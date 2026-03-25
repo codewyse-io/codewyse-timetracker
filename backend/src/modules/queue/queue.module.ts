@@ -10,7 +10,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
         redis: {
           host: configService.get<string>('REDIS_HOST', 'localhost'),
           port: configService.get<number>('REDIS_PORT', 6379),
-          password: configService.get<string>('REDIS_PASSWORD', ''),
+          password: configService.get<string>('REDIS_PASSWORD', '') || undefined,
+          ...(configService.get<string>('REDIS_TLS', 'false') === 'true' ? { tls: {} } : {}),
         },
         defaultJobOptions: {
           removeOnComplete: true,

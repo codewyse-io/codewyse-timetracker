@@ -23,11 +23,13 @@ export class SignalingService implements OnModuleInit {
   constructor(private readonly configService: ConfigService) {}
 
   onModuleInit() {
+    const redisTls = this.configService.get<string>('REDIS_TLS', 'false') === 'true';
     this.redis = new Redis({
       host: this.configService.get<string>('REDIS_HOST', 'localhost'),
       port: this.configService.get<number>('REDIS_PORT', 6379),
-      password: this.configService.get<string>('REDIS_PASSWORD', ''),
+      password: this.configService.get<string>('REDIS_PASSWORD', '') || undefined,
       maxRetriesPerRequest: 3,
+      ...(redisTls ? { tls: {} } : {}),
     });
   }
 
