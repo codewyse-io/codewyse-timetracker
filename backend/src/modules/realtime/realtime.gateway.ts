@@ -68,20 +68,33 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   ) {}
 
   afterInit(server: Server) {
-    // Set up Redis adapter for horizontal scaling
-    const redisHost = this.configService.get<string>('REDIS_HOST', 'localhost');
-    const redisPort = this.configService.get<number>('REDIS_PORT', 6379);
-    const redisPassword = this.configService.get<string>('REDIS_PASSWORD', '');
+    // Redis adapter is only needed for horizontal scaling (multiple server instances).
+    // Skip it when REDIS_ADAPTER=false or when Redis doesn't support PSUBSCRIBE (e.g., ElastiCache Valkey serverless).
+    const useRedisAdapter = this.configService.get<string>('REDIS_ADAPTER', 'false') === 'true';
 
-    const redisTls = this.configService.get<string>('REDIS_TLS', 'false') === 'true';
-    const redisOpts: any = { host: redisHost, port: redisPort, password: redisPassword || undefined };
-    if (redisTls) redisOpts.tls = {};
+    if (useRedisAdapter) {
+      const redisHost = this.configService.get<string>('REDIS_HOST', 'localhost');
+      const redisPort = this.configService.get<number>('REDIS_PORT', 6379);
+      const redisPassword = this.configService.get<string>('REDIS_PASSWORD', '');
+      const redisTls = this.configService.get<string>('REDIS_TLS', 'false') === 'true';
+      const redisOpts: any = { host: redisHost, port: redisPort, password: redisPassword || undefined };
+      if (redisTls) redisOpts.tls = {};
 
-    const pubClient = new Redis(redisOpts);
-    const subClient = pubClient.duplicate();
+      try {
+        const pubClient = new Redis(redisOpts);
+        const subClient = pubClient.duplicate();
 
-    server.adapter(createAdapter(pubClient, subClient) as any);
-    this.logger.log('WebSocket gateway initialized with Redis adapter');
+        pubClient.on('error', (err) => this.logger.warn(`Redis pub client error: ${err.message}`));
+        subClient.on('error', (err) => this.logger.warn(`Redis sub client error: ${err.message}`));
+
+        server.adapter(createAdapter(pubClient, subClient) as any);
+        this.logger.log('WebSocket gateway initialized with Redis adapter');
+      } catch (err) {
+        this.logger.warn(`Failed to set up Redis adapter, using in-memory adapter: ${err}`);
+      }
+    } else {
+      this.logger.log('WebSocket gateway initialized with in-memory adapter (single instance mode)');
+    }
   }
 
   async handleConnection(client: AuthenticatedSocket) {
