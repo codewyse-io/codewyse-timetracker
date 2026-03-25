@@ -30,9 +30,12 @@ export class ChatService {
   async resolveFileUrl(message: Message): Promise<string | null> {
     if (message.type !== 'file' || !message.fileUrl) return message.fileUrl;
     try {
-      return await this.s3Service.getPresignedUrl(message.fileUrl, 3600);
-    } catch {
-      return message.fileUrl; // Fallback to stored value
+      const resolved = await this.s3Service.getPresignedUrl(message.fileUrl, 3600);
+      this.logger.debug(`[resolveFileUrl] key="${message.fileUrl}" → "${resolved.substring(0, 100)}..."`);
+      return resolved;
+    } catch (err: any) {
+      this.logger.warn(`[resolveFileUrl] Failed for key="${message.fileUrl}": ${err.message}`);
+      return message.fileUrl;
     }
   }
 
@@ -42,8 +45,8 @@ export class ChatService {
       if (msg.type === 'file' && msg.fileUrl) {
         try {
           (msg as any).fileUrl = await this.s3Service.getPresignedUrl(msg.fileUrl, 3600);
-        } catch {
-          // Keep original key as fallback
+        } catch (err: any) {
+          this.logger.warn(`[resolveFileUrls] Failed for key="${msg.fileUrl}": ${err.message}`);
         }
       }
     }
