@@ -32,6 +32,8 @@ export class SignalingService implements OnModuleInit {
       ...(redisTls ? { tls: {} } : {}),
     });
     this.redis.on('error', (err) => this.logger.warn(`Redis error: ${err.message}`));
+    this.redis.on('connect', () => this.logger.log('Redis connected (signaling)'));
+    this.redis.on('ready', () => this.logger.log('Redis ready (signaling)'));
   }
 
   private key(callId: string): string {

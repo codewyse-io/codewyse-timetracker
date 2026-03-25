@@ -68,9 +68,12 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   ) {}
 
   async afterInit(server: Server) {
+    this.logger.log('=== WebSocket Gateway Initializing ===');
+
     // Redis adapter is only needed for horizontal scaling (multiple server instances).
     // Skip it when REDIS_ADAPTER=false or when Redis doesn't support PSUBSCRIBE (e.g., ElastiCache Valkey serverless).
     const useRedisAdapter = this.configService.get<string>('REDIS_ADAPTER', 'false') === 'true';
+    this.logger.log(`REDIS_ADAPTER=${useRedisAdapter}`);
 
     if (useRedisAdapter) {
       const redisHost = this.configService.get<string>('REDIS_HOST', 'localhost');
@@ -114,15 +117,20 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     } else {
       this.logger.log('WebSocket gateway initialized with in-memory adapter (single instance mode)');
     }
+
+    this.logger.log(`Registered socket event handlers: [${Array.from(eventHandlers.keys()).join(', ')}]`);
+    this.logger.log('=== WebSocket Gateway Ready ===');
   }
 
   async handleConnection(client: AuthenticatedSocket) {
+    this.logger.log(`[WS] New connection attempt from ${client.id}, transport: ${client.conn?.transport?.name || 'unknown'}`);
     try {
       const token =
         client.handshake?.auth?.token ||
         client.handshake?.headers?.authorization?.replace('Bearer ', '');
 
       if (!token) {
+        this.logger.warn(`[WS] No auth token — disconnecting ${client.id}`);
         client.disconnect();
         return;
       }
@@ -156,14 +164,17 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       });
 
       // Register all dynamic event handlers from other modules (Chat, Call)
+      const handlerNames = Array.from(eventHandlers.keys());
       for (const [event, handler] of eventHandlers.entries()) {
         client.on(event, (data: any, callback?: Function) => {
+          this.logger.log(`[WS] Event '${event}' from ${client.user?.email} (${client.id})`);
           handler(client, data, callback);
         });
       }
 
-      this.logger.log(`Client connected: ${client.user.email} (${client.id})`);
-    } catch {
+      this.logger.log(`[WS] Client connected: ${client.user.email} (${client.id}), handlers: [${handlerNames.join(', ')}]`);
+    } catch (err: any) {
+      this.logger.warn(`[WS] Connection rejected for ${client.id}: ${err.message}`);
       client.disconnect();
     }
   }
@@ -278,6 +289,9 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   /** Utility: emit to a specific user across all their connections */
   emitToUser(userId: string, event: string, data: any): void {
+    const room = this.server.sockets.adapter.rooms.get(`user:${userId}`);
+    const socketCount = room ? room.size : 0;
+    this.logger.debug(`[emitToUser] user=${userId} event=${event} sockets_in_room=${socketCount}`);
     this.server.to(`user:${userId}`).emit(event, data);
   }
 

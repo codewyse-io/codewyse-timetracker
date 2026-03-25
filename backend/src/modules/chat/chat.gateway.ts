@@ -21,14 +21,16 @@ export class ChatGateway implements OnModuleInit {
           return;
         }
 
-        this.logger.log(`chat:send-message from ${client.user.email} in ${data.conversationId}`);
+        this.logger.log(`[Chat] >>> chat:send-message from ${client.user.email} in conv=${data.conversationId}, type=${data.type}, content="${(data.content || '').substring(0, 50)}"`);
 
         // Validate fileUrl matches the expected S3 key pattern for this conversation
         if (data.fileUrl && !data.fileUrl.startsWith(`chat/${data.conversationId}/`)) {
+          this.logger.warn(`[Chat] Invalid fileUrl rejected: ${data.fileUrl}`);
           callback?.({ ok: false, error: 'Invalid file URL' });
           return;
         }
 
+        this.logger.log(`[Chat] Saving message to DB...`);
         const message = await this.chatService.sendMessage(data.conversationId, client.user.id, {
           type: data.type,
           content: data.content,
@@ -38,6 +40,7 @@ export class ChatGateway implements OnModuleInit {
           fileSize: data.fileSize,
           mimeType: data.mimeType,
         });
+        this.logger.log(`[Chat] Message saved: id=${message.id}`);
 
         // Resolve S3 presigned URL for file messages
         const resolvedFileUrl = await this.chatService.resolveFileUrl(message);
@@ -64,10 +67,12 @@ export class ChatGateway implements OnModuleInit {
 
         // Broadcast to all participants
         const participantIds = await this.chatService.getParticipantIds(data.conversationId);
+        this.logger.log(`[Chat] Broadcasting to ${participantIds.length} participants: [${participantIds.join(', ')}]`);
         for (const userId of participantIds) {
           this.realtimeGateway.emitToUser(userId, 'chat:message', messagePayload);
         }
 
+        this.logger.log(`[Chat] <<< Message delivered, calling callback with ok=true`);
         callback?.({ ok: true, message: messagePayload });
       } catch (err: any) {
         this.logger.error(`Error in chat:send-message: ${err.message}`);

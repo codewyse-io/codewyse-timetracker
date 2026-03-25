@@ -25,6 +25,9 @@ export class PresenceService implements OnModuleInit {
       ...(redisTls ? { tls: {} } : {}),
     });
     this.redis.on('error', (err) => this.logger.warn(`Redis error: ${err.message}`));
+    this.redis.on('connect', () => this.logger.log('Redis connected (presence)'));
+    this.redis.on('ready', () => this.logger.log('Redis ready (presence)'));
+    this.redis.on('close', () => this.logger.warn('Redis connection closed (presence)'));
   }
 
   private key(userId: string): string {
