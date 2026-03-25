@@ -95,7 +95,7 @@ interface ChatState {
 
 type ChatAction =
   | { readonly type: 'SET_CONVERSATIONS'; readonly conversations: Conversation[] }
-  | { readonly type: 'ADD_MESSAGE'; readonly message: ChatMessage }
+  | { readonly type: 'ADD_MESSAGE'; readonly message: ChatMessage; readonly currentUserId?: string }
   | { readonly type: 'SET_MESSAGES'; readonly conversationId: string; readonly messages: ChatMessage[] }
   | { readonly type: 'PREPEND_MESSAGES'; readonly conversationId: string; readonly messages: ChatMessage[] }
   | { readonly type: 'SET_ACTIVE_CONVERSATION'; readonly conversationId: string | null }
@@ -145,7 +145,10 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
                   : '',
                 createdAt: action.message.createdAt,
               },
-              unreadCount: convId === state.activeConversationId ? c.unreadCount : c.unreadCount + 1,
+              unreadCount:
+                convId === state.activeConversationId || action.message.senderId === action.currentUserId
+                  ? c.unreadCount
+                  : c.unreadCount + 1,
             }
           : c,
       );
@@ -314,23 +317,31 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const sendMessage = useCallback(
     (conversationId: string, content: string, type: 'text' | 'file' = 'text', fileData?: any) => {
+      console.log('[Chat] sendMessage called, socket:', !!socket, 'connected:', socket?.connected);
       if (!socket) {
+        console.warn('[Chat] No socket — message not sent');
         return;
       }
       if (!socket.connected) {
+        console.warn('[Chat] Socket not connected — message not sent');
         return;
       }
+      const payload = { conversationId, type, content, ...(fileData || {}) };
+      console.log('[Chat] Emitting chat:send-message', payload);
       socket.emit(
         'chat:send-message',
-        { conversationId, type, content, ...(fileData || {}) },
+        payload,
         (response: any) => {
+          console.log('[Chat] chat:send-message callback received:', response);
           if (response?.ok && response.message) {
-            dispatch({ type: 'ADD_MESSAGE', message: response.message });
+            dispatch({ type: 'ADD_MESSAGE', message: response.message, currentUserId: user?.id });
+          } else {
+            console.error('[Chat] chat:send-message failed:', response);
           }
         },
       );
     },
-    [socket],
+    [socket, user?.id],
   );
 
   const setTyping = useCallback(
@@ -376,7 +387,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
     loadConversations();
     const handleMessage = (message: ChatMessage) => {
-      dispatch({ type: 'ADD_MESSAGE', message });
+      console.log('[Chat] Received chat:message event:', message.id, message.content?.substring(0, 30));
+      dispatch({ type: 'ADD_MESSAGE', message, currentUserId: user?.id });
     };
 
     const handleTyping = (indicator: TypingIndicator) => {

@@ -44,7 +44,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       if (!token || cancelled) return;
       const s = io(API_BASE_URL, {
         auth: { token },
-        transports: ['websocket', 'polling'],
+        transports: ['polling', 'websocket'],
+        upgrade: true,
         reconnection: true,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 10000,
@@ -53,15 +54,17 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       });
 
       s.on('connect', () => {
+        console.log('[Socket] Connected! id:', s.id, 'transport:', s.io.engine?.transport?.name);
         if (!cancelled) setConnected(true);
       });
 
       s.on('disconnect', (reason) => {
+        console.log('[Socket] Disconnected, reason:', reason);
         if (!cancelled) setConnected(false);
       });
 
       s.on('connect_error', (err) => {
-        console.error('[Socket] Connection error:', err.message);
+        console.error('[Socket] Connection error:', err.message, 'description:', (err as any).description);
       });
 
       s.io.on('error', (err) => {

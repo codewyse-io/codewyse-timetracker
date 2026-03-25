@@ -160,6 +160,16 @@ function createWindow(): void {
     mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   }
 
+  // Open DevTools with F12 or Ctrl+Shift+I (works in both dev and production)
+  mainWindow.webContents.on('before-input-event', (_event, input) => {
+    if (
+      input.key === 'F12' ||
+      (input.control && input.shift && input.key.toLowerCase() === 'i')
+    ) {
+      mainWindow?.webContents.toggleDevTools();
+    }
+  });
+
   // Prevent navigation hijacking
   mainWindow.webContents.on('will-navigate', (event, url) => {
     // Only allow navigation to the app's own URLs
