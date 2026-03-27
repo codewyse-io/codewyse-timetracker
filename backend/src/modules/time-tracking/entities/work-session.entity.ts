@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { SessionStatus } from '../enums/session-status.enum';
 import { IdleInterval } from './idle-interval.entity';
+import { ActivityLog } from './activity-log.entity';
 import { User } from '../../users/entities/user.entity';
 
 @Entity('work_sessions')
@@ -54,6 +55,18 @@ export class WorkSession {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
+  @Column({ name: 'productive_duration', type: 'int', default: 0 })
+  productiveDuration: number; // seconds in productive apps
+
+  @Column({ name: 'unproductive_duration', type: 'int', default: 0 })
+  unproductiveDuration: number; // seconds in unproductive apps
+
+  @Column({ name: 'neutral_duration', type: 'int', default: 0 })
+  neutralDuration: number; // seconds in neutral apps
+
   @OneToMany(() => IdleInterval, (idle) => idle.session, { cascade: true })
   idleIntervals: IdleInterval[];
+
+  @OneToMany(() => ActivityLog, (log) => log.session, { cascade: true })
+  activityLogs: ActivityLog[];
 }

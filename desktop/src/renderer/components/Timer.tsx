@@ -108,6 +108,10 @@ export default function Timer() {
         showError('Your shift has ended. The session was automatically stopped.');
       } else if (reason === 'max-duration') {
         showError('Maximum session duration reached. The session was automatically stopped.');
+      } else if (reason === 'session-expired') {
+        showError('Your session was ended by the server. Please start a new session to continue.');
+      } else {
+        showError('Your session has ended.');
       }
     });
     return () => {

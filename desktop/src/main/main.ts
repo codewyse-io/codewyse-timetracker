@@ -1,7 +1,8 @@
-import { app, BrowserWindow, ipcMain, powerMonitor, Tray, Menu, net, desktopCapturer, session } from 'electron';
+import { app, BrowserWindow, ipcMain, powerMonitor, Tray, Menu, net, desktopCapturer, session, systemPreferences } from 'electron';
 import * as path from 'path';
 import { autoUpdater } from 'electron-updater';
 import { IdleDetector } from './idle-detector';
+import { ActivityTracker } from './activity-tracker';
 import { createTray } from './tray';
 
 import Store from 'electron-store';
@@ -30,6 +31,7 @@ let mainWindow: BrowserWindow | null = null;
 let callWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let idleDetector: IdleDetector | null = null;
+let activityTracker: ActivityTracker | null = null;
 let isQuitting = false;
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 let updateCheckInterval: ReturnType<typeof setInterval> | null = null;
@@ -41,6 +43,9 @@ const HEARTBEAT_INTERVAL_MS = 45_000; // 45 seconds
 
 function startMainHeartbeat(): void {
   stopMainHeartbeat();
+  // Start activity tracker alongside heartbeat
+  if (!activityTracker) activityTracker = new ActivityTracker();
+  activityTracker.start();
   const sendHeartbeat = () => {
     const token = store.get('authToken', null) as string | null;
     if (!token) return;
@@ -57,6 +62,14 @@ function startMainHeartbeat(): void {
       response.on('data', (chunk) => { body += chunk.toString(); });
       response.on('end', () => {
         try {
+          // 404 = session was already stopped (cron auto-stop, admin action, etc.)
+          if (response.statusCode === 404) {
+            console.log('[Heartbeat] 404 — session no longer exists, cleaning up');
+            stopMainHeartbeat();
+            mainWindow?.webContents.send('session-force-stopped', 'session-expired');
+            return;
+          }
+
           const data = JSON.parse(body);
           const payload = data?.data ?? data;
           if (payload?.ok === false) {
@@ -71,6 +84,13 @@ function startMainHeartbeat(): void {
     request.on('error', (err) => {
       console.log(`[Heartbeat] Error: ${err.message}`);
     });
+
+    // Include activity data in the heartbeat body
+    const activities = activityTracker ? activityTracker.flush() : [];
+    if (activities.length > 0) {
+      const body = JSON.stringify({ activities });
+      request.write(body);
+    }
     request.end();
   };
 
@@ -84,6 +104,9 @@ function stopMainHeartbeat(): void {
     clearInterval(heartbeatInterval);
     heartbeatInterval = null;
     console.log('[Heartbeat] Stopped main-process heartbeat');
+  }
+  if (activityTracker) {
+    activityTracker.stop();
   }
 }
 
@@ -264,25 +287,53 @@ function setupIpcHandlers(): void {
   });
 
   ipcMain.handle('install-update', () => {
+    console.log('[AutoUpdater] install-update called, platform:', process.platform);
     isQuitting = true;
 
-    // On macOS, quitAndInstall needs the app to fully quit first.
-    // autoUpdater.autoInstallOnAppQuit handles the install on next launch,
-    // but quitAndInstall(false, true) forces immediate install + relaunch.
-    // isSilent=false on macOS (no NSIS), isSilent=true on Windows
-    const isSilent = process.platform !== 'darwin';
-
     setImmediate(() => {
-      // Force close all windows so the app actually quits on macOS
-      BrowserWindow.getAllWindows().forEach((w) => {
-        if (!w.isDestroyed()) w.destroy();
-      });
-      autoUpdater.quitAndInstall(isSilent, true);
+      try {
+        // Force close all windows so the app actually quits on macOS
+        BrowserWindow.getAllWindows().forEach((w) => {
+          if (!w.isDestroyed()) w.destroy();
+        });
+
+        if (process.platform === 'darwin') {
+          // On macOS, quitAndInstall can be unreliable.
+          // autoInstallOnAppQuit=true ensures the update is applied on next launch.
+          // So we just relaunch the app — the update will be applied automatically.
+          console.log('[AutoUpdater] macOS: relaunching app to apply update');
+          app.relaunch();
+          app.exit(0);
+        } else {
+          // Windows: use NSIS silent install
+          console.log('[AutoUpdater] Windows: calling quitAndInstall');
+          autoUpdater.quitAndInstall(true, true);
+        }
+      } catch (err) {
+        console.error('[AutoUpdater] Failed to install update:', err);
+        // Fallback: relaunch anyway
+        app.relaunch();
+        app.exit(0);
+      }
     });
   });
 
   ipcMain.handle('get-app-version', () => {
     return app.getVersion();
+  });
+
+  // macOS media permissions — request on-demand from renderer
+  ipcMain.handle('request-media-access', async (_event, mediaType: 'microphone' | 'camera') => {
+    if (process.platform !== 'darwin') return 'granted';
+    const status = systemPreferences.getMediaAccessStatus(mediaType);
+    if (status === 'granted') return 'granted';
+    const granted = await systemPreferences.askForMediaAccess(mediaType);
+    return granted ? 'granted' : 'denied';
+  });
+
+  ipcMain.handle('get-media-access-status', (_event, mediaType: 'microphone' | 'camera' | 'screen') => {
+    if (process.platform !== 'darwin') return 'granted';
+    return systemPreferences.getMediaAccessStatus(mediaType);
   });
 
   // Main-process heartbeat IPC
@@ -417,10 +468,35 @@ function setupIpcHandlers(): void {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   createWindow();
   setupIpcHandlers();
   setupAutoUpdater();
+
+  // macOS: request camera & microphone permissions upfront
+  // This triggers the OS permission dialog so calls/video work
+  if (process.platform === 'darwin') {
+    const micStatus = systemPreferences.getMediaAccessStatus('microphone');
+    const camStatus = systemPreferences.getMediaAccessStatus('camera');
+    if (micStatus !== 'granted') {
+      await systemPreferences.askForMediaAccess('microphone');
+    }
+    if (camStatus !== 'granted') {
+      await systemPreferences.askForMediaAccess('camera');
+    }
+    // Screen capture permission must be granted manually in System Preferences
+    const screenStatus = systemPreferences.getMediaAccessStatus('screen');
+    if (screenStatus !== 'granted') {
+      console.log('[macOS] Screen capture not granted — user must enable in System Preferences > Privacy > Screen Recording');
+    }
+
+    // Accessibility permission (needed for activity tracker to read window titles)
+    const { isTrustedAccessibilityClient } = require('electron').systemPreferences;
+    if (isTrustedAccessibilityClient && !isTrustedAccessibilityClient(false)) {
+      console.log('[macOS] Accessibility not granted — prompting user');
+      isTrustedAccessibilityClient(true); // true = show prompt
+    }
+  }
 
   const getMainWindow = () => mainWindow;
 

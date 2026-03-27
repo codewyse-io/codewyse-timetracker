@@ -282,6 +282,11 @@ body {
   to { opacity: 1; transform: translateX(0); }
 }
 
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 /* ==================== Selection ==================== */
 ::selection {
   background: rgba(99, 102, 241, 0.15);

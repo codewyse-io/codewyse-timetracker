@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Spin, message } from 'antd';
-import { SettingOutlined, LockOutlined, EyeOutlined, EyeInvisibleOutlined, SyncOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { SettingOutlined, LockOutlined, EyeOutlined, EyeInvisibleOutlined, SyncOutlined, InfoCircleOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 import { getMe, changePassword } from '../api/client';
 import { User } from '../types';
@@ -20,12 +20,27 @@ export default function ProfilePanel() {
 
   // App version only — update listeners are handled by UpdateBanner
   const [appVersion, setAppVersion] = useState('');
+  const [updateCheckState, setUpdateCheckState] = useState<'idle' | 'checking' | 'up-to-date'>('idle');
 
   useEffect(() => {
     window.electronAPI?.getAppVersion?.().then((v) => setAppVersion(v)).catch(() => {});
   }, []);
 
+  // Listen for update-not-available only after manual check
+  useEffect(() => {
+    if (updateCheckState !== 'checking') return;
+    const unsub = window.electronAPI?.onUpdateNotAvailable?.(() => {
+      setUpdateCheckState('up-to-date');
+      setTimeout(() => setUpdateCheckState('idle'), 3000);
+    });
+    const unsub2 = window.electronAPI?.onUpdateAvailable?.(() => {
+      setUpdateCheckState('idle'); // UpdateBanner handles the rest
+    });
+    return () => { unsub?.(); unsub2?.(); };
+  }, [updateCheckState]);
+
   const handleCheckUpdate = useCallback(async () => {
+    setUpdateCheckState('checking');
     await window.electronAPI?.checkForUpdates?.();
   }, []);
 
@@ -356,25 +371,45 @@ export default function ProfilePanel() {
             </span>
           </div>
 
-          <button
-            onClick={handleCheckUpdate}
-            style={{
+          {updateCheckState === 'up-to-date' ? (
+            <span style={{
               padding: '5px 12px',
               borderRadius: 6,
-              border: '1px solid rgba(255,255,255,0.08)',
-              background: 'rgba(255,255,255,0.04)',
-              color: 'rgba(255,255,255,0.7)',
+              border: '1px solid rgba(0, 230, 118, 0.2)',
+              background: 'rgba(0, 230, 118, 0.08)',
+              color: '#00e676',
               fontSize: 11,
               fontWeight: 500,
-              cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: 5,
-              transition: 'all 0.2s',
-            }}
-          >
-            <SyncOutlined style={{ fontSize: 11 }} /> Check for Updates
-          </button>
+            }}>
+              <CheckCircleOutlined style={{ fontSize: 11 }} /> You're up to date
+            </span>
+          ) : (
+            <button
+              onClick={handleCheckUpdate}
+              disabled={updateCheckState === 'checking'}
+              style={{
+                padding: '5px 12px',
+                borderRadius: 6,
+                border: '1px solid rgba(255,255,255,0.08)',
+                background: 'rgba(255,255,255,0.04)',
+                color: 'rgba(255,255,255,0.7)',
+                fontSize: 11,
+                fontWeight: 500,
+                cursor: updateCheckState === 'checking' ? 'default' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                transition: 'all 0.2s',
+                opacity: updateCheckState === 'checking' ? 0.6 : 1,
+              }}
+            >
+              <SyncOutlined spin={updateCheckState === 'checking'} style={{ fontSize: 11 }} />
+              {updateCheckState === 'checking' ? 'Checking...' : 'Check for Updates'}
+            </button>
+          )}
         </div>
       </div>
     </div>

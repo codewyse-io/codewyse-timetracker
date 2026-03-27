@@ -25,6 +25,7 @@ import type { TableColumnsType } from 'antd';
 import { usersApi } from '../api/users.api';
 import type { CreateUserData, UpdateUserData } from '../api/users.api';
 import { shiftsApi } from '../api/shifts.api';
+import { timeTrackingApi } from '../api/time-tracking.api';
 import type { User, Shift } from '../types';
 
 
@@ -187,6 +188,7 @@ export default function UsersPage() {
   const [customDesignations, setCustomDesignations] = useState<string[]>([]);
   const [newDesignation, setNewDesignation] = useState('');
   const newDesignationInputRef = useRef<any>(null);
+  const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -235,6 +237,20 @@ export default function UsersPage() {
   useEffect(() => {
     fetchShifts();
   }, [fetchShifts]);
+
+  // Poll active sessions to show online/offline status
+  useEffect(() => {
+    const fetchOnline = async () => {
+      try {
+        const res = await timeTrackingApi.getActiveSessions();
+        const sessions = res.data?.data || res.data || [];
+        setOnlineUserIds(new Set(sessions.map((s: any) => s.userId)));
+      } catch { /* ignore */ }
+    };
+    fetchOnline();
+    const interval = setInterval(fetchOnline, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleAddUser = async (values: CreateUserData) => {
     setSubmitting(true);
@@ -327,7 +343,27 @@ export default function UsersPage() {
       title: 'Member',
       key: 'name',
       render: (_, record) => (
-        <AvatarCell firstName={record.firstName} lastName={record.lastName} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ position: 'relative' }}>
+            <AvatarCell firstName={record.firstName} lastName={record.lastName} />
+            {onlineUserIds.has(record.id) && (
+              <div
+                title="Online — session active"
+                style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  right: 0,
+                  width: 10,
+                  height: 10,
+                  borderRadius: '50%',
+                  background: '#10b981',
+                  border: '2px solid #fff',
+                  boxShadow: '0 0 0 1px rgba(16,185,129,0.2)',
+                }}
+              />
+            )}
+          </div>
+        </div>
       ),
       sorter: (a, b) => a.firstName.localeCompare(b.firstName),
     },
@@ -390,7 +426,34 @@ export default function UsersPage() {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
-      render: (status: string) => <StatusPill status={status} />,
+      render: (status: string, record: User) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <StatusPill status={status} />
+          {onlineUserIds.has(record.id) && (
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              background: 'rgba(16,185,129,0.08)',
+              color: '#10b981',
+              borderRadius: 20,
+              padding: '2px 8px',
+              fontSize: 10,
+              fontWeight: 600,
+              border: '1px solid rgba(16,185,129,0.15)',
+            }}>
+              <span style={{
+                width: 5,
+                height: 5,
+                borderRadius: '50%',
+                background: '#10b981',
+                animation: 'pulse-dot 2s infinite',
+              }} />
+              Online
+            </span>
+          )}
+        </div>
+      ),
     },
     {
       title: 'Actions',

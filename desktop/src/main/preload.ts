@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   downloadUpdate: (): Promise<any> => ipcRenderer.invoke('download-update'),
   installUpdate: (): Promise<void> => ipcRenderer.invoke('install-update'),
   getAppVersion: (): Promise<string> => ipcRenderer.invoke('get-app-version'),
+  requestMediaAccess: (mediaType: 'microphone' | 'camera'): Promise<string> => ipcRenderer.invoke('request-media-access', mediaType),
+  getMediaAccessStatus: (mediaType: 'microphone' | 'camera' | 'screen'): Promise<string> => ipcRenderer.invoke('get-media-access-status', mediaType),
   onUpdateAvailable: (callback: (info: { version: string; releaseNotes: string }) => void): (() => void) => {
     const handler = (_event: any, info: any) => callback(info);
     ipcRenderer.on('update-available', handler);

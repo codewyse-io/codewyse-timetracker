@@ -10,12 +10,15 @@ import { Repository, LessThanOrEqual, MoreThanOrEqual, LessThan } from 'typeorm'
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { WorkSession } from './entities/work-session.entity';
 import { IdleInterval } from './entities/idle-interval.entity';
+import { ActivityLog } from './entities/activity-log.entity';
 import { SessionStatus } from './enums/session-status.enum';
+import { AppCategory } from './enums/app-category.enum';
 import { ReportIdleDto } from './dto/report-idle.dto';
 import { SessionQueryDto } from './dto/session-query.dto';
 import { ShiftsService } from '../shifts/shifts.service';
 import { FocusScoreService } from '../focus-score/focus-score.service';
 import { AiService } from '../ai/ai.service';
+import { AppCategoriesService } from '../app-categories/app-categories.service';
 import { PaginatedResponseDto } from '../../common/dto/paginated-response.dto';
 
 // ── Anti-manipulation constants ──────────────────────────────────────
@@ -34,9 +37,12 @@ export class TimeTrackingService {
     private readonly sessionRepository: Repository<WorkSession>,
     @InjectRepository(IdleInterval)
     private readonly idleRepository: Repository<IdleInterval>,
+    @InjectRepository(ActivityLog)
+    private readonly activityLogRepository: Repository<ActivityLog>,
     private readonly shiftsService: ShiftsService,
     private readonly focusScoreService: FocusScoreService,
     private readonly aiService: AiService,
+    private readonly appCategoriesService: AppCategoriesService,
   ) {}
 
   /**
@@ -132,7 +138,12 @@ export class TimeTrackingService {
    * Also enforces max session duration and auto-stops regular sessions
    * when the user's shift ends.
    */
-  async heartbeat(userId: string, shiftId?: string): Promise<{ ok: boolean; reason?: string }> {
+  async heartbeat(
+    userId: string,
+    shiftId?: string,
+    designation?: string,
+    activities?: { appName: string; windowInfo: string; timestamp: string; durationSeconds: number }[],
+  ): Promise<{ ok: boolean; reason?: string }> {
     const session = await this.sessionRepository.findOne({
       where: { userId, status: SessionStatus.ACTIVE },
       relations: ['idleIntervals'],
@@ -162,6 +173,52 @@ export class TimeTrackingService {
       } catch (err) {
         // Shift lookup failed — don't block the heartbeat
         this.logger.error(`[heartbeat] Failed to check shift schedule: ${err.message}`);
+      }
+    }
+
+    // Process activity snapshots if provided
+    if (activities && activities.length > 0) {
+      let productiveInc = 0;
+      let unproductiveInc = 0;
+      let neutralInc = 0;
+
+      const logs: Partial<ActivityLog>[] = [];
+      for (const snap of activities.slice(0, 10)) { // max 10 per heartbeat
+        const category = await this.appCategoriesService.resolveCategory(
+          snap.appName,
+          snap.windowInfo,
+          designation,
+          shiftId,
+        );
+        const duration = Math.min(Math.max(snap.durationSeconds, 0), 120); // clamp 0-120s
+
+        logs.push({
+          sessionId: session.id,
+          appName: snap.appName.substring(0, 255),
+          windowInfo: (snap.windowInfo || '').substring(0, 255),
+          category,
+          startedAt: new Date(snap.timestamp),
+          durationSeconds: duration,
+        });
+
+        if (category === AppCategory.PRODUCTIVE) productiveInc += duration;
+        else if (category === AppCategory.UNPRODUCTIVE) unproductiveInc += duration;
+        else neutralInc += duration;
+      }
+
+      if (logs.length > 0) {
+        await this.activityLogRepository.save(logs);
+      }
+
+      // Update session summary columns (skip zero-value queries)
+      if (productiveInc > 0) {
+        await this.sessionRepository.increment({ id: session.id }, 'productiveDuration', productiveInc);
+      }
+      if (unproductiveInc > 0) {
+        await this.sessionRepository.increment({ id: session.id }, 'unproductiveDuration', unproductiveInc);
+      }
+      if (neutralInc > 0) {
+        await this.sessionRepository.increment({ id: session.id }, 'neutralDuration', neutralInc);
       }
     }
 

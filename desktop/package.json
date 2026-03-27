@@ -1,6 +1,6 @@
 {
   "name": "pulse-desktop",
-  "version": "1.1.3",
+  "version": "1.1.4",
   "main": "dist/main/main.js",
   "author": "CodeWyse",
   "description": "Pulse — AI Work Companion",
@@ -61,7 +61,12 @@
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
-      "notarize": true
+      "notarize": true,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Pulse needs microphone access for voice and video calls.",
+        "NSCameraUsageDescription": "Pulse needs camera access for video calls.",
+        "NSScreenCaptureUsageDescription": "Pulse needs screen capture access for screen sharing during calls."
+      }
     },
     "nsis": {
       "oneClick": true,

@@ -18,6 +18,7 @@ import { QueueModule } from './modules/queue/queue.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { AiModule } from './modules/ai/ai.module';
 import { LeaveRequestsModule } from './modules/leave-requests/leave-requests.module';
+import { AppCategoriesModule } from './modules/app-categories/app-categories.module';
 import { AnnouncementsModule } from './modules/announcements/announcements.module';
 import { DownloadsModule } from './modules/downloads/downloads.module';
 import { S3Module } from './modules/s3/s3.module';
@@ -81,6 +82,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     RealtimeModule,
     ChatModule,
     CallModule,
+    AppCategoriesModule,
   ],
 })
 export class AppModule {}

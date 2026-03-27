@@ -37,6 +37,15 @@ export class DailyFocusScore {
   @Column({ name: 'idle_interruptions', type: 'int', default: 0 })
   idleInterruptions: number;
 
+  @Column({ name: 'productive_time', type: 'int', default: 0 })
+  productiveTime: number; // seconds
+
+  @Column({ name: 'unproductive_time', type: 'int', default: 0 })
+  unproductiveTime: number; // seconds
+
+  @Column({ name: 'neutral_time', type: 'int', default: 0 })
+  neutralTime: number; // seconds
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

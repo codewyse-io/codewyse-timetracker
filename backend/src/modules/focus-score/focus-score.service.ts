@@ -39,6 +39,9 @@ export class FocusScoreService {
     let totalActiveTime = 0;
     let totalLoggedTime = 0;
     let idleInterruptions = 0;
+    let productiveTime = 0;
+    let unproductiveTime = 0;
+    let neutralTime = 0;
 
     for (const session of sessions) {
       // For active sessions, compute durations live from startTime to now
@@ -55,12 +58,27 @@ export class FocusScoreService {
         totalActiveTime += session.activeDuration;
       }
       idleInterruptions += session.idleIntervals?.length ?? 0;
+
+      // Accumulate app productivity durations
+      productiveTime += session.productiveDuration || 0;
+      unproductiveTime += session.unproductiveDuration || 0;
+      neutralTime += session.neutralDuration || 0;
     }
 
     // Calculate score
     let score = 0;
     if (totalLoggedTime > 0) {
       score = (totalActiveTime / totalLoggedTime) * 100;
+
+      // App productivity bonus/penalty (only when activity data exists)
+      const totalTrackedAppTime = productiveTime + unproductiveTime + neutralTime;
+      if (totalTrackedAppTime > 0) {
+        const productiveRatio = productiveTime / totalTrackedAppTime;
+        const unproductiveRatio = unproductiveTime / totalTrackedAppTime;
+        // Bonus up to +15 for productive, penalty up to -15 for unproductive
+        const appAdjustment = (productiveRatio * 15) - (unproductiveRatio * 15);
+        score += appAdjustment;
+      }
 
       // Penalty: -2 points per idle interruption above 5
       const excessInterruptions = Math.max(0, idleInterruptions - 5);
@@ -77,22 +95,21 @@ export class FocusScoreService {
       where: { userId, date },
     });
 
+    const data = {
+      score,
+      category,
+      totalActiveTime,
+      totalLoggedTime,
+      idleInterruptions,
+      productiveTime,
+      unproductiveTime,
+      neutralTime,
+    };
+
     if (focusScore) {
-      focusScore.score = score;
-      focusScore.category = category;
-      focusScore.totalActiveTime = totalActiveTime;
-      focusScore.totalLoggedTime = totalLoggedTime;
-      focusScore.idleInterruptions = idleInterruptions;
+      Object.assign(focusScore, data);
     } else {
-      focusScore = this.focusScoreRepo.create({
-        userId,
-        date,
-        score,
-        category,
-        totalActiveTime,
-        totalLoggedTime,
-        idleInterruptions,
-      });
+      focusScore = this.focusScoreRepo.create({ userId, date, ...data });
     }
 
     return this.focusScoreRepo.save(focusScore);

@@ -62,9 +62,14 @@ export class TimeTrackingController {
 
   @Post('heartbeat')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Client heartbeat to prove app is running' })
-  async heartbeat(@Req() req: any) {
-    return this.timeTrackingService.heartbeat(req.user?.id, req.user?.shiftId);
+  @ApiOperation({ summary: 'Client heartbeat to prove app is running, optionally with activity data' })
+  async heartbeat(@Req() req: any, @Body() body?: any) {
+    return this.timeTrackingService.heartbeat(
+      req.user?.id,
+      req.user?.shiftId,
+      req.user?.designation,
+      body?.activities,
+    );
   }
 
   @Post('idle')
