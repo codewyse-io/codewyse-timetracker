@@ -8,3 +8,5 @@ coverage/
 desktop/release/
 config.bat
 backend/uploads/storage/
+temp_auto_push.bat
+temp_interactive_push.bat

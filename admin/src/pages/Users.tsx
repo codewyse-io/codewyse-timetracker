@@ -26,7 +26,7 @@ import { usersApi } from '../api/users.api';
 import type { CreateUserData, UpdateUserData } from '../api/users.api';
 import { shiftsApi } from '../api/shifts.api';
 import { timeTrackingApi } from '../api/time-tracking.api';
-import type { User, Shift } from '../types';
+import type { User, Shift, WorkSession } from '../types';
 
 
 function getAvatarColor(name: string): string {
@@ -243,7 +243,7 @@ export default function UsersPage() {
     const fetchOnline = async () => {
       try {
         const res = await timeTrackingApi.getActiveSessions();
-        const sessions = res.data?.data || res.data || [];
+        const sessions = (Array.isArray(res.data) ? res.data : (res as any).data?.data || []) as WorkSession[];
         setOnlineUserIds(new Set(sessions.map((s: any) => s.userId)));
       } catch { /* ignore */ }
     };
