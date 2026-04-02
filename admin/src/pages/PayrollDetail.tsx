@@ -52,7 +52,7 @@ export default function PayrollDetailPage() {
         userId,
         startDate,
         endDate,
-        limit: 500,
+        limit: 200,
       });
       setSessions(res.data?.data || []);
     } catch {
