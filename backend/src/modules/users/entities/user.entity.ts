@@ -62,6 +62,19 @@ export class User {
   @Column({ type: 'datetime', nullable: true })
   invitationExpiry: Date;
 
+  // ── Bank Account Information ──
+  @Column({ name: 'bank_name', type: 'varchar', length: 100, nullable: true })
+  bankName: string;
+
+  @Column({ name: 'account_holder_name', type: 'varchar', length: 150, nullable: true })
+  accountHolderName: string;
+
+  @Column({ name: 'account_number', type: 'varchar', length: 50, nullable: true })
+  accountNumber: string;
+
+  @Column({ name: 'iban', type: 'varchar', length: 50, nullable: true })
+  iban: string;
+
   @Exclude()
   @Column({ nullable: true })
   refreshToken: string;

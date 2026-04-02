@@ -55,4 +55,25 @@ export class CreateUserDto {
   @Min(0)
   @Max(365)
   allowedLeavesPerYear?: number;
+
+  // Bank Account Information
+  @ApiPropertyOptional({ example: 'Meezan Bank' })
+  @IsOptional()
+  @IsString()
+  bankName?: string;
+
+  @ApiPropertyOptional({ example: 'John Doe' })
+  @IsOptional()
+  @IsString()
+  accountHolderName?: string;
+
+  @ApiPropertyOptional({ example: '1234567890' })
+  @IsOptional()
+  @IsString()
+  accountNumber?: string;
+
+  @ApiPropertyOptional({ example: 'PK36MEZN0001234567890123' })
+  @IsOptional()
+  @IsString()
+  iban?: string;
 }

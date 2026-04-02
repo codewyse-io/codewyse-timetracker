@@ -11,6 +11,10 @@ export interface User {
   allowedLeavesPerYear: number;
   consumedLeaves: number;
   status: 'invited' | 'active' | 'deactivated';
+  bankName?: string | null;
+  accountHolderName?: string | null;
+  accountNumber?: string | null;
+  iban?: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -6,10 +6,12 @@ import {
   Button,
   Spin,
   InputNumber,
+  Segmented,
+  DatePicker,
   message,
 } from 'antd';
 import { ArrowLeftOutlined, EditOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
+import dayjs, { type Dayjs } from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 
 import type { WorkSession } from '../types';
@@ -33,9 +35,19 @@ export default function PayrollDetailPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const startDate = searchParams.get('startDate') || dayjs().startOf('week').format('YYYY-MM-DD');
-  const endDate = searchParams.get('endDate') || dayjs().endOf('week').format('YYYY-MM-DD');
+  const initialStart = searchParams.get('startDate') || dayjs().startOf('week').format('YYYY-MM-DD');
   const hourlyRate = parseFloat(searchParams.get('rate') || '0');
+
+  type ViewMode = 'Weekly' | 'Monthly';
+  const [viewMode, setViewMode] = useState<ViewMode>('Weekly');
+  const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs(initialStart));
+
+  const startDate = viewMode === 'Weekly'
+    ? selectedDate.startOf('week').format('YYYY-MM-DD')
+    : selectedDate.startOf('month').format('YYYY-MM-DD');
+  const endDate = viewMode === 'Weekly'
+    ? selectedDate.endOf('week').format('YYYY-MM-DD')
+    : selectedDate.endOf('month').format('YYYY-MM-DD');
 
   const [userName, setUserName] = useState('');
   const [sessions, setSessions] = useState<WorkSession[]>([]);
@@ -265,18 +277,33 @@ export default function PayrollDetailPage() {
   return (
     <div style={{ animation: 'fadeInUp 0.35s ease-out' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-        <Button
-          type="text"
-          icon={<ArrowLeftOutlined />}
-          onClick={() => navigate('/payroll')}
-          style={{ color: 'var(--text-secondary)' }}
-        />
-        <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>
-            {userName || 'Loading...'}
-          </h2>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{periodLabel}</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Button
+            type="text"
+            icon={<ArrowLeftOutlined />}
+            onClick={() => navigate('/payroll')}
+            style={{ color: 'var(--text-secondary)' }}
+          />
+          <div>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>
+              {userName || 'Loading...'}
+            </h2>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{periodLabel}</span>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Segmented
+            options={['Weekly', 'Monthly']}
+            value={viewMode}
+            onChange={(val) => setViewMode(val as ViewMode)}
+          />
+          <DatePicker
+            picker={viewMode === 'Weekly' ? 'week' : 'month'}
+            value={selectedDate}
+            onChange={(date) => { if (date) setSelectedDate(date); }}
+            style={{ borderRadius: 'var(--radius-sm)' }}
+          />
         </div>
       </div>
 
