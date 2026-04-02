@@ -10,6 +10,7 @@ import UsersPage from './pages/Users';
 import ShiftsPage from './pages/Shifts';
 import TimeTrackingPage from './pages/TimeTracking';
 import PayrollPage from './pages/Payroll';
+import PayrollDetailPage from './pages/PayrollDetail';
 import KpisPage from './pages/Kpis';
 import ReportsPage from './pages/Reports';
 import AiInsightsPage from './pages/AiInsights';
@@ -100,6 +101,7 @@ function AppRoutes() {
         <Route path="shifts" element={<PageErrorBoundary><ShiftsPage /></PageErrorBoundary>} />
         <Route path="time-tracking" element={<PageErrorBoundary><TimeTrackingPage /></PageErrorBoundary>} />
         <Route path="payroll" element={<PageErrorBoundary><PayrollPage /></PageErrorBoundary>} />
+        <Route path="payroll/:userId" element={<PageErrorBoundary><PayrollDetailPage /></PageErrorBoundary>} />
         <Route path="kpis" element={<PageErrorBoundary><KpisPage /></PageErrorBoundary>} />
         <Route path="reports" element={<PageErrorBoundary><ReportsPage /></PageErrorBoundary>} />
         <Route path="ai-insights" element={<PageErrorBoundary><AiInsightsPage /></PageErrorBoundary>} />
