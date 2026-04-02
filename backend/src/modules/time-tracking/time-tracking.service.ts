@@ -559,6 +559,34 @@ export class TimeTrackingService {
   }
 
   /**
+   * Admin: manually adjust a session's active duration.
+   * Recalculates idle duration to stay consistent with total.
+   */
+  async adminUpdateSession(sessionId: string, newActiveDuration: number): Promise<WorkSession> {
+    const session = await this.sessionRepository.findOne({
+      where: { id: sessionId },
+      relations: ['idleIntervals'],
+    });
+    if (!session) throw new NotFoundException('Session not found');
+    if (session.status !== SessionStatus.COMPLETED) {
+      throw new BadRequestException('Can only edit completed sessions');
+    }
+
+    // Clamp active duration to valid range
+    const clamped = Math.max(0, Math.min(newActiveDuration, session.totalDuration));
+    session.activeDuration = clamped;
+    session.idleDuration = session.totalDuration - clamped;
+
+    const saved = await this.sessionRepository.save(session);
+
+    // Recalculate focus score for the affected day
+    const sessionDate = session.startTime.toISOString().split('T')[0];
+    this.focusScoreService.calculateDailyScore(session.userId, sessionDate).catch(() => {});
+
+    return saved;
+  }
+
+  /**
    * Calculate total, idle, and active durations for a session.
    */
   private calculateDurations(session: WorkSession): void {

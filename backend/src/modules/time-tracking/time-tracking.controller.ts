@@ -2,6 +2,8 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
+  Param,
   Body,
   Query,
   Req,
@@ -18,6 +20,7 @@ import { WorkSession } from './entities/work-session.entity';
 import { PaginatedResponseDto } from '../../common/dto/paginated-response.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 
 @ApiTags('Time Tracking')
 @ApiBearerAuth()
@@ -106,5 +109,15 @@ export class TimeTrackingController {
       req.user?.id,
       isAdmin,
     );
+  }
+
+  @Patch('sessions/:id')
+  @Roles('admin')
+  @ApiOperation({ summary: 'Admin: update session active duration (manual hour adjustment)' })
+  async updateSession(
+    @Param('id') sessionId: string,
+    @Body() body: { activeDuration: number },
+  ): Promise<WorkSession> {
+    return this.timeTrackingService.adminUpdateSession(sessionId, body.activeDuration);
   }
 }

@@ -9,14 +9,17 @@ import {
   Button,
   Spin,
   Select,
+  Modal,
+  InputNumber,
   message,
 } from 'antd';
-import { DollarOutlined, ClockCircleOutlined, TeamOutlined, DownloadOutlined, RiseOutlined, UserOutlined } from '@ant-design/icons';
+import { DollarOutlined, ClockCircleOutlined, TeamOutlined, DownloadOutlined, RiseOutlined, UserOutlined, EditOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 
-import type { PayrollEntry, User } from '../types';
+import type { PayrollEntry, User, WorkSession } from '../types';
 import { payrollApi, type PayrollSummary } from '../api/payroll.api';
+import { timeTrackingApi } from '../api/time-tracking.api';
 import { usersApi } from '../api/users.api';
 import { formatCurrency, formatDuration } from '../utils/format';
 import { downloadCsv } from '../utils/export';
@@ -66,6 +69,14 @@ export default function PayrollPage() {
   const [employees, setEmployees] = useState<User[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<string | undefined>(undefined);
 
+  // Employee detail modal
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailUser, setDetailUser] = useState<PayrollEntry | null>(null);
+  const [detailSessions, setDetailSessions] = useState<WorkSession[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [editingSession, setEditingSession] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<number>(0);
+
   const fetchPayroll = useCallback(async () => {
     setLoading(true);
     try {
@@ -98,6 +109,50 @@ export default function PayrollPage() {
     }).catch(() => {});
   }, []);
 
+  const openDetail = useCallback(async (entry: PayrollEntry) => {
+    setDetailUser(entry);
+    setDetailOpen(true);
+    setDetailLoading(true);
+    setEditingSession(null);
+    try {
+      let startDate: string;
+      let endDate: string;
+      if (viewMode === 'Weekly') {
+        startDate = selectedDate.startOf('week').format('YYYY-MM-DD');
+        endDate = selectedDate.endOf('week').format('YYYY-MM-DD');
+      } else {
+        startDate = selectedDate.startOf('month').format('YYYY-MM-DD');
+        endDate = selectedDate.endOf('month').format('YYYY-MM-DD');
+      }
+      const res = await timeTrackingApi.getSessions({
+        userId: entry.userId,
+        startDate,
+        endDate,
+        limit: 200,
+      });
+      const sessions = res.data?.data || [];
+      setDetailSessions(sessions);
+    } catch {
+      message.error('Failed to load sessions');
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [viewMode, selectedDate]);
+
+  const handleSaveEdit = useCallback(async (sessionId: string, newActiveSeconds: number) => {
+    try {
+      await timeTrackingApi.updateSession(sessionId, newActiveSeconds);
+      message.success('Hours updated');
+      setEditingSession(null);
+      // Refresh the detail view
+      if (detailUser) openDetail(detailUser);
+      // Refresh the payroll table
+      fetchPayroll();
+    } catch (err: any) {
+      message.error(err?.response?.data?.message || 'Failed to update hours');
+    }
+  }, [detailUser, openDetail, fetchPayroll]);
+
   const filteredEntries = summary?.entries.filter(
     (e) => !selectedEmployee || e.userId === selectedEmployee,
   ) ?? [];
@@ -127,7 +182,16 @@ export default function PayrollPage() {
       title: 'Employee Name',
       key: 'name',
       render: (_, record) => (
-        <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
+        <span
+          onClick={() => openDetail(record)}
+          style={{
+            fontWeight: 500,
+            color: 'var(--primary)',
+            cursor: 'pointer',
+            borderBottom: '1px dashed var(--primary)',
+            paddingBottom: 1,
+          }}
+        >
           {record.user.firstName} {record.user.lastName}
         </span>
       ),
@@ -355,6 +419,197 @@ export default function PayrollPage() {
           </Card>
         </>
       )}
+
+      {/* Employee Detail Modal */}
+      <Modal
+        open={detailOpen}
+        onCancel={() => { setDetailOpen(false); setEditingSession(null); }}
+        title={
+          detailUser ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontWeight: 700 }}>
+                {detailUser.user.firstName} {detailUser.user.lastName}
+              </span>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 400 }}>
+                {viewMode === 'Weekly'
+                  ? `Week of ${selectedDate.startOf('week').format('MMM D')} — ${selectedDate.endOf('week').format('MMM D, YYYY')}`
+                  : selectedDate.format('MMMM YYYY')}
+              </span>
+            </div>
+          ) : 'Session Details'
+        }
+        footer={null}
+        width={720}
+        styles={{ body: { padding: '12px 0 0' } }}
+      >
+        {detailLoading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spin /></div>
+        ) : detailSessions.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
+            No sessions found for this period
+          </div>
+        ) : (
+          <>
+            {/* Summary row */}
+            <div style={{
+              display: 'flex',
+              gap: 24,
+              padding: '0 24px 16px',
+              borderBottom: '1px solid var(--border-light)',
+              marginBottom: 0,
+            }}>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>Total Active</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#10b981' }}>
+                  {formatDuration(detailSessions.reduce((s, ses) => s + (ses.activeDuration || 0), 0))}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>Total Idle</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-secondary)' }}>
+                  {formatDuration(detailSessions.reduce((s, ses) => s + (ses.idleDuration || 0), 0))}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>Sessions</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  {detailSessions.length}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>Payable</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#10b981' }}>
+                  {formatCurrency(
+                    detailSessions.reduce((s, ses) => s + (ses.activeDuration || 0), 0) / 3600 * (detailUser?.hourlyRate || 0)
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <Table
+              dataSource={detailSessions}
+              rowKey="id"
+              pagination={false}
+              size="small"
+              style={{ marginTop: 0 }}
+              columns={[
+                {
+                  title: 'Date',
+                  key: 'date',
+                  width: 120,
+                  render: (_, ses) => (
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                      {dayjs(ses.startTime).format('MMM D, YYYY')}
+                    </span>
+                  ),
+                },
+                {
+                  title: 'Start — End',
+                  key: 'time',
+                  width: 160,
+                  render: (_, ses) => (
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      {dayjs(ses.startTime).format('h:mm A')} — {ses.endTime ? dayjs(ses.endTime).format('h:mm A') : 'Active'}
+                    </span>
+                  ),
+                },
+                {
+                  title: 'Total',
+                  key: 'total',
+                  width: 90,
+                  render: (_, ses) => (
+                    <span style={{ fontSize: 12 }}>{formatDuration(ses.totalDuration || 0)}</span>
+                  ),
+                },
+                {
+                  title: 'Active',
+                  key: 'active',
+                  width: 130,
+                  render: (_, ses) => {
+                    if (editingSession === ses.id) {
+                      const hours = Math.floor(editValue / 3600);
+                      const mins = Math.floor((editValue % 3600) / 60);
+                      return (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <InputNumber
+                            size="small"
+                            min={0}
+                            max={Math.floor(ses.totalDuration / 3600)}
+                            value={hours}
+                            onChange={(h) => setEditValue(((h ?? 0) * 3600) + (mins * 60))}
+                            style={{ width: 48 }}
+                            controls={false}
+                          />
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>h</span>
+                          <InputNumber
+                            size="small"
+                            min={0}
+                            max={59}
+                            value={mins}
+                            onChange={(m) => setEditValue((hours * 3600) + ((m ?? 0) * 60))}
+                            style={{ width: 48 }}
+                            controls={false}
+                          />
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>m</span>
+                          <Button size="small" type="primary" onClick={() => handleSaveEdit(ses.id, editValue)} style={{ fontSize: 11, padding: '0 6px', height: 22 }}>
+                            Save
+                          </Button>
+                          <Button size="small" onClick={() => setEditingSession(null)} style={{ fontSize: 11, padding: '0 6px', height: 22 }}>
+                            ✕
+                          </Button>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 12, color: '#10b981', fontWeight: 500 }}>
+                          {formatDuration(ses.activeDuration || 0)}
+                        </span>
+                        {ses.status === 'completed' && (
+                          <EditOutlined
+                            onClick={() => {
+                              setEditingSession(ses.id);
+                              setEditValue(ses.activeDuration || 0);
+                            }}
+                            style={{ fontSize: 11, color: 'var(--text-muted)', cursor: 'pointer' }}
+                          />
+                        )}
+                      </div>
+                    );
+                  },
+                },
+                {
+                  title: 'Idle',
+                  key: 'idle',
+                  width: 80,
+                  render: (_, ses) => (
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      {formatDuration(ses.idleDuration || 0)}
+                    </span>
+                  ),
+                },
+                {
+                  title: 'Mode',
+                  key: 'mode',
+                  width: 80,
+                  render: (_, ses) => (
+                    <span style={{
+                      fontSize: 10,
+                      fontWeight: 600,
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      background: ses.mode === 'overtime' ? 'rgba(245,158,11,0.1)' : 'rgba(99,102,241,0.08)',
+                      color: ses.mode === 'overtime' ? '#f59e0b' : '#6366f1',
+                    }}>
+                      {ses.mode === 'overtime' ? 'OT' : 'REG'}
+                    </span>
+                  ),
+                },
+              ]}
+            />
+          </>
+        )}
+      </Modal>
     </div>
   );
 }

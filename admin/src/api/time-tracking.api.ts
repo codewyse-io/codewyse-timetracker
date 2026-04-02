@@ -17,4 +17,8 @@ export const timeTrackingApi = {
   getActiveSessions(): Promise<ApiResponse<WorkSession[]>> {
     return apiClient.get('/time-tracking/sessions/active');
   },
+
+  updateSession(sessionId: string, activeDuration: number): Promise<ApiResponse<WorkSession>> {
+    return apiClient.patch(`/time-tracking/sessions/${sessionId}`, { activeDuration });
+  },
 };

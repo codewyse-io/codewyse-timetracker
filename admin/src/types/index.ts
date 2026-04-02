@@ -37,6 +37,7 @@ export interface WorkSession {
   idleDuration: number;
   activeDuration: number;
   status: 'active' | 'completed';
+  mode?: string;
 }
 
 export interface FocusScore {
