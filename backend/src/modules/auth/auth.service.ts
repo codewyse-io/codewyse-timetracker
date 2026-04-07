@@ -44,7 +44,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    if (user.role !== Role.ADMIN) {
+    if (user.role !== Role.ADMIN && user.role !== Role.SUPER_ADMIN) {
       throw new UnauthorizedException('Access denied. Only administrators can sign in here.');
     }
 
