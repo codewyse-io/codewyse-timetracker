@@ -7,7 +7,8 @@
       "Bash(find /c/Users/usama/Downloads/codewyse-timetracker/admin -type f -name *.ts*)",
       "Bash(find /c/Users/usama/Downloads/codewyse-timetracker/admin/src -type f -name *.ts*)",
       "Bash(find /c/Users/usama/Downloads/codewyse-timetracker/desktop/src -type f -name *.tsx)",
-      "WebFetch(domain:www.electron.build)"
+      "WebFetch(domain:www.electron.build)",
+      "Bash(ls dist/database/migrations/*Multi* dist/database/migrations/*SuperAdmin* dist/modules/users/seeds/*super*)"
     ]
   }
 }

@@ -80,10 +80,10 @@ export class User {
   @Column({ nullable: true })
   refreshToken: string;
 
-  @Column({ name: 'organization_id', type: 'varchar', length: 36 })
-  organizationId: string;
+  @Column({ name: 'organization_id', type: 'varchar', length: 36, nullable: true })
+  organizationId: string | null;
 
-  @ManyToOne(() => Organization)
+  @ManyToOne(() => Organization, { nullable: true })
   @JoinColumn({ name: 'organization_id' })
   organization: Organization;
 

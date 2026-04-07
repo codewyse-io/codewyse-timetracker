@@ -88,13 +88,17 @@ export class UsersService {
     user.password = hashedPassword;
     await this.usersRepository.save(user);
 
-    const rawBranding2 = await this.organizationsService.getBranding(user.organizationId);
-    await this.emailService.sendCredentialsEmail(
-      user.email,
-      user.firstName,
-      tempPassword,
-      { ...rawBranding2, logoUrl: rawBranding2.logoUrl ?? undefined },
-    );
+    if (user.organizationId) {
+      const rawBranding2 = await this.organizationsService.getBranding(user.organizationId);
+      await this.emailService.sendCredentialsEmail(
+        user.email,
+        user.firstName,
+        tempPassword,
+        { ...rawBranding2, logoUrl: rawBranding2.logoUrl ?? undefined },
+      );
+    } else {
+      await this.emailService.sendCredentialsEmail(user.email, user.firstName, tempPassword);
+    }
   }
 
   async findByEmail(email: string): Promise<User | null> {

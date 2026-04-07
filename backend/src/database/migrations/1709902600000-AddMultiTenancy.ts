@@ -51,8 +51,9 @@ export class AddMultiTenancy1709902600000 implements MigrationInterface {
       `);
     }
 
-    // 5. Alter columns to NOT NULL
+    // 5. Alter columns to NOT NULL (except users — super admins have no org)
     for (const table of tables) {
+      if (table === 'users') continue; // users.organization_id stays nullable for super_admin
       await queryRunner.query(
         `ALTER TABLE \`${table}\` MODIFY COLUMN \`organization_id\` varchar(36) NOT NULL`,
       );
