@@ -149,12 +149,17 @@ export class UsersService {
     const { page, limit } = paginationDto;
     const skip = (page - 1) * limit;
 
-    const [data, total] = await this.usersRepository.findAndCount({
-      where: { organizationId },
-      skip,
-      take: limit,
-      order: { createdAt: 'DESC' },
-    });
+    const qb = this.usersRepository.createQueryBuilder('user')
+      .where('user.role != :superRole', { superRole: 'super_admin' })
+      .orderBy('user.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit);
+
+    if (organizationId) {
+      qb.andWhere('user.organization_id = :organizationId', { organizationId });
+    }
+
+    const [data, total] = await qb.getManyAndCount();
 
     return new PaginatedResponseDto(data, total, page, limit);
   }
