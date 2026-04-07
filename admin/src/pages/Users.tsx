@@ -27,6 +27,7 @@ import type { CreateUserData, UpdateUserData } from '../api/users.api';
 import { shiftsApi } from '../api/shifts.api';
 import { superAdminApi } from '../api/super-admin.api';
 import { useAuth } from '../contexts/AuthContext';
+import { useOrg } from '../contexts/OrgContext';
 import type { User, Shift, Organization } from '../types';
 
 
@@ -173,6 +174,8 @@ const DEFAULT_DESIGNATIONS = [
 
 export default function UsersPage() {
   const { user: authUser } = useAuth();
+  const { org } = useOrg();
+  const currencySymbol = org?.currencySymbol || '$';
   const [users, setUsers] = useState<User[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
@@ -372,7 +375,7 @@ export default function UsersPage() {
       dataIndex: 'hourlyRate',
       key: 'hourlyRate',
       render: (rate: number) => (
-        <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 13 }}>${Number(rate).toFixed(2)}</span>
+        <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 13 }}>{currencySymbol}{Number(rate).toFixed(2)}</span>
       ),
     },
     {
@@ -627,7 +630,7 @@ export default function UsersPage() {
                         </Form.Item>
                         <Form.Item
                           name="hourlyRate"
-                          label={<span style={labelStyle}>Hourly Rate ($)</span>}
+                          label={<span style={labelStyle}>Hourly Rate ({currencySymbol})</span>}
                           rules={[{ required: true, message: 'Hourly rate is required' }]}
                         >
                           <InputNumber min={0} step={0.5} style={{ width: '100%', borderRadius: 8 }} placeholder="25.00" />
