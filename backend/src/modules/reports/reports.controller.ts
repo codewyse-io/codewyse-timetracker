@@ -34,8 +34,8 @@ export class ReportsController {
     @Req() req: any,
     @CurrentOrg() orgId: string,
   ) {
-    // If not admin, force userId to own
-    if (req.user.role !== 'admin') {
+    // If not admin or super_admin, force userId to own
+    if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
       query.userId = req.user.id;
     }
     return this.reportsService.getWeeklyReports(query, orgId);
