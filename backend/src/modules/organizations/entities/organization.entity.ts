@@ -26,6 +26,12 @@ export class Organization {
   @Column({ name: 'email_from_name', type: 'varchar', length: 100, default: 'PulseTrack' })
   emailFromName: string;
 
+  @Column({ type: 'varchar', length: 10, default: 'USD' })
+  currency: string; // ISO 4217 code: USD, EUR, GBP, PKR, etc.
+
+  @Column({ name: 'currency_symbol', type: 'varchar', length: 5, default: '$' })
+  currencySymbol: string;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

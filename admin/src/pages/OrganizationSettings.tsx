@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Card, Form, Input, Button, Upload, message, Spin, ColorPicker } from 'antd';
+import { Card, Form, Input, Button, Upload, message, Spin, ColorPicker, Select } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { useOrg } from '../contexts/OrgContext';
 import { organizationsApi } from '../api/organizations.api';
@@ -16,11 +16,13 @@ export default function OrganizationSettings() {
         name: org.name,
         primaryColor: org.primaryColor,
         emailFromName: org.emailFromName,
+        currency: org.currency || 'USD',
+        currencySymbol: org.currencySymbol || '$',
       });
     }
   }, [org, form]);
 
-  const handleSave = async (values: { name: string; primaryColor: string; emailFromName: string }) => {
+  const handleSave = async (values: { name: string; primaryColor: string; emailFromName: string; currency: string; currencySymbol: string }) => {
     setSaving(true);
     try {
       const color = typeof values.primaryColor === 'string'
@@ -31,6 +33,8 @@ export default function OrganizationSettings() {
         name: values.name,
         primaryColor: color,
         emailFromName: values.emailFromName,
+        currency: values.currency,
+        currencySymbol: values.currencySymbol,
       });
       await refreshOrg();
       message.success('Organization settings updated successfully');
@@ -125,6 +129,35 @@ export default function OrganizationSettings() {
             rules={[{ required: true, message: 'Please enter the email sender name' }]}
           >
             <Input placeholder="Enter email sender name" />
+          </Form.Item>
+
+          <Form.Item
+            name="currency"
+            label="Currency Code"
+            rules={[{ required: true, message: 'Please select a currency code' }]}
+          >
+            <Select
+              placeholder="Select currency code"
+              options={[
+                { value: 'USD', label: 'USD - US Dollar' },
+                { value: 'EUR', label: 'EUR - Euro' },
+                { value: 'GBP', label: 'GBP - British Pound' },
+                { value: 'PKR', label: 'PKR - Pakistani Rupee' },
+                { value: 'INR', label: 'INR - Indian Rupee' },
+                { value: 'AED', label: 'AED - UAE Dirham' },
+                { value: 'SAR', label: 'SAR - Saudi Riyal' },
+                { value: 'CAD', label: 'CAD - Canadian Dollar' },
+                { value: 'AUD', label: 'AUD - Australian Dollar' },
+              ]}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="currencySymbol"
+            label="Currency Symbol"
+            rules={[{ required: true, message: 'Please enter the currency symbol' }]}
+          >
+            <Input placeholder="e.g. $, €, £, ₨" />
           </Form.Item>
 
           <Form.Item>

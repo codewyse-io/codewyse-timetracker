@@ -21,6 +21,7 @@ import { payrollApi, type PayrollSummary } from '../api/payroll.api';
 import { usersApi } from '../api/users.api';
 import { formatCurrency, formatDuration } from '../utils/format';
 import { downloadCsv } from '../utils/export';
+import { useOrg } from '../contexts/OrgContext';
 
 type ViewMode = 'Weekly' | 'Monthly';
 
@@ -60,6 +61,7 @@ const statCards = [
 ];
 
 export default function PayrollPage() {
+  const { org } = useOrg();
   const [viewMode, setViewMode] = useState<ViewMode>('Weekly');
   const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs());
   const [summary, setSummary] = useState<PayrollSummary | null>(null);
@@ -193,7 +195,7 @@ export default function PayrollPage() {
       dataIndex: 'hourlyRate',
       key: 'hourlyRate',
       render: (val: number) => (
-        <span style={{ color: 'var(--text-secondary)' }}>{formatCurrency(val || 0)}</span>
+        <span style={{ color: 'var(--text-secondary)' }}>{formatCurrency(val || 0, org?.currency || 'USD')}</span>
       ),
       sorter: (a, b) => (a.hourlyRate || 0) - (b.hourlyRate || 0),
     },
@@ -203,7 +205,7 @@ export default function PayrollPage() {
       key: 'payableAmount',
       render: (val: number) => (
         <span style={{ color: '#10b981', fontWeight: 600, fontSize: 15 }}>
-          {formatCurrency(val || 0)}
+          {formatCurrency(val || 0, org?.currency || 'USD')}
         </span>
       ),
       sorter: (a, b) => (a.payableAmount || 0) - (b.payableAmount || 0),
@@ -305,7 +307,7 @@ export default function PayrollPage() {
                       </div>
                       <div style={{ fontSize: 26, fontWeight: 700, color: card.valueColor, lineHeight: 1.2 }}>
                         {card.key === 'totalPayable' || card.key === 'averageHourlyRate'
-                          ? formatCurrency(statValues[card.key] as number)
+                          ? formatCurrency(statValues[card.key] as number, org?.currency || 'USD')
                           : card.key === 'totalActiveHours'
                           ? `${(statValues[card.key] as number).toFixed(1)} hrs`
                           : statValues[card.key]}
@@ -364,12 +366,12 @@ export default function PayrollPage() {
                     </Table.Summary.Cell>
                     <Table.Summary.Cell index={3}>
                       <span style={{ fontWeight: 700, color: '#166534' }}>
-                        {formatCurrency(Math.round(avgRate * 100) / 100)} avg
+                        {formatCurrency(Math.round(avgRate * 100) / 100, org?.currency || 'USD')} avg
                       </span>
                     </Table.Summary.Cell>
                     <Table.Summary.Cell index={4}>
                       <span style={{ fontWeight: 700, color: '#10b981', fontSize: 16 }}>
-                        {formatCurrency(Math.round(totalPay * 100) / 100)}
+                        {formatCurrency(Math.round(totalPay * 100) / 100, org?.currency || 'USD')}
                       </span>
                     </Table.Summary.Cell>
                   </Table.Summary.Row>

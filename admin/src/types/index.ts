@@ -6,6 +6,8 @@ export interface Organization {
   logoUrl: string | null;
   primaryColor: string;
   emailFromName: string;
+  currency: string;
+  currencySymbol: string;
   createdAt: string;
   updatedAt: string;
 }

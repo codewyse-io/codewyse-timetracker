@@ -8,13 +8,18 @@ export function formatDuration(seconds: number): string {
   return `${hours}h ${minutes}m`;
 }
 
-export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
+export function formatCurrency(amount: number, currencyCode = 'USD'): string {
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currencyCode,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    // Fallback if currency code is invalid
+    return `${currencyCode} ${amount.toFixed(2)}`;
+  }
 }
 
 export function formatDate(isoString: string): string {

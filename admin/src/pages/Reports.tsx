@@ -39,6 +39,7 @@ import {
   getFocusScoreCategory,
 } from '../utils/format';
 import { downloadBlob } from '../utils/export';
+import { useOrg } from '../contexts/OrgContext';
 
 function FocusBadge({ score }: { score: number }) {
   const color = getFocusScoreColor(score);
@@ -95,6 +96,7 @@ function FocusBadge({ score }: { score: number }) {
 }
 
 export default function ReportsPage() {
+  const { org } = useOrg();
   const [weekDate, setWeekDate] = useState<Dayjs>(dayjs());
   const [reports, setReports] = useState<WeeklyReport[]>([]);
   const [total, setTotal] = useState(0);
@@ -250,7 +252,7 @@ export default function ReportsPage() {
       dataIndex: 'payableAmount',
       key: 'payableAmount',
       render: (val: number) => (
-        <span style={{ color: '#10b981', fontWeight: 600 }}>{formatCurrency(val || 0)}</span>
+        <span style={{ color: '#10b981', fontWeight: 600 }}>{formatCurrency(val || 0, org?.currency || 'USD')}</span>
       ),
       sorter: (a, b) => (a.payableAmount || 0) - (b.payableAmount || 0),
     },
@@ -409,7 +411,7 @@ export default function ReportsPage() {
                   { label: 'Total Hours', value: formatDuration((selectedReport.totalHoursWorked || 0) * 3600), color: '#6366f1' },
                   { label: 'Active Hours', value: formatDuration((selectedReport.activeHours || 0) * 3600), color: '#10b981' },
                   { label: 'Idle Hours', value: formatDuration((selectedReport.idleHours || 0) * 3600), color: '#94a3b8' },
-                  { label: 'Payable Amount', value: formatCurrency(selectedReport.payableAmount || 0), color: '#10b981' },
+                  { label: 'Payable Amount', value: formatCurrency(selectedReport.payableAmount || 0, org?.currency || 'USD'), color: '#10b981' },
                 ].map((stat) => (
                   <div
                     key={stat.label}

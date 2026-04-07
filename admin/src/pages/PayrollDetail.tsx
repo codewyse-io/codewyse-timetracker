@@ -18,6 +18,7 @@ import type { WorkSession } from '../types';
 import { timeTrackingApi } from '../api/time-tracking.api';
 import { usersApi } from '../api/users.api';
 import { formatCurrency, formatDuration } from '../utils/format';
+import { useOrg } from '../contexts/OrgContext';
 
 interface DailyRow {
   date: string; // YYYY-MM-DD
@@ -31,6 +32,7 @@ interface DailyRow {
 }
 
 export default function PayrollDetailPage() {
+  const { org } = useOrg();
   const { userId } = useParams<{ userId: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -268,7 +270,7 @@ export default function PayrollDetailPage() {
       width: 100,
       render: (_, row) => (
         <span style={{ fontSize: 13, color: '#10b981', fontWeight: 600 }}>
-          {formatCurrency((row.activeDuration / 3600) * hourlyRate)}
+          {formatCurrency((row.activeDuration / 3600) * hourlyRate, org?.currency || 'USD')}
         </span>
       ),
     },
@@ -314,8 +316,8 @@ export default function PayrollDetailPage() {
           { label: 'Total Idle', value: formatDuration(totalIdle), color: 'var(--text-secondary)' },
           { label: 'Working Days', value: String(dailyRows.length), color: '#6366f1' },
           { label: 'Total Sessions', value: String(sessions.length), color: '#3b82f6' },
-          { label: 'Payable', value: formatCurrency(totalPayable), color: '#10b981' },
-          { label: 'Rate', value: formatCurrency(hourlyRate) + '/hr', color: '#8b5cf6' },
+          { label: 'Payable', value: formatCurrency(totalPayable, org?.currency || 'USD'), color: '#10b981' },
+          { label: 'Rate', value: formatCurrency(hourlyRate, org?.currency || 'USD') + '/hr', color: '#8b5cf6' },
         ].map((item) => (
           <Card
             key={item.label}
@@ -392,7 +394,7 @@ export default function PayrollDetailPage() {
                   </Table.Summary.Cell>
                   <Table.Summary.Cell index={5}>
                     <span style={{ fontWeight: 700, color: '#10b981', fontSize: 15 }}>
-                      {formatCurrency(totalPayable)}
+                      {formatCurrency(totalPayable, org?.currency || 'USD')}
                     </span>
                   </Table.Summary.Cell>
                 </Table.Summary.Row>
