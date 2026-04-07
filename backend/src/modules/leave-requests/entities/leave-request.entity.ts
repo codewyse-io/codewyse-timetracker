@@ -8,6 +8,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
+import { Organization } from '../../organizations/entities/organization.entity';
 
 export enum LeaveStatus {
   PENDING = 'pending',
@@ -50,6 +51,13 @@ export class LeaveRequest {
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user: User;
+
+  @Column({ name: 'organization_id', type: 'varchar', length: 36 })
+  organizationId: string;
+
+  @ManyToOne(() => Organization)
+  @JoinColumn({ name: 'organization_id' })
+  organization: Organization;
 
   @CreateDateColumn()
   createdAt: Date;

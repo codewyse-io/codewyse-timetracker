@@ -27,7 +27,7 @@ export class WsJwtGuard implements CanActivate {
       const payload = this.jwtService.verify(token, {
         secret,
       });
-      (client as any).user = { id: payload.sub, email: payload.email, role: payload.role };
+      (client as any).user = { id: payload.sub, email: payload.email, role: payload.role, organizationId: payload.organizationId };
       return true;
     } catch {
       throw new WsException('Invalid authentication token');

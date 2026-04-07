@@ -34,6 +34,7 @@ export class LeaveRequestsService {
     userId: string,
     dto: CreateLeaveRequestDto,
     attachments: string[],
+    organizationId?: string,
   ): Promise<LeaveRequest> {
     const start = new Date(dto.startDate);
     const end = new Date(dto.endDate);
@@ -55,6 +56,7 @@ export class LeaveRequestsService {
       totalDays,
       attachments: attachments.length > 0 ? attachments : undefined,
       status: LeaveStatus.PENDING,
+      ...(organizationId ? { organizationId } : {}),
     } as Partial<LeaveRequest>);
 
     const saved = await this.leaveRequestRepo.save(leaveRequest);
@@ -96,11 +98,17 @@ export class LeaveRequestsService {
     }
   }
 
-  async findAll(paginationDto: PaginationDto): Promise<PaginatedResponseDto<LeaveRequest>> {
+  async findAll(paginationDto: PaginationDto, organizationId?: string): Promise<PaginatedResponseDto<LeaveRequest>> {
     const { page, limit } = paginationDto;
     const skip = (page - 1) * limit;
 
+    const where: any = {};
+    if (organizationId) {
+      where.organizationId = organizationId;
+    }
+
     const [data, total] = await this.leaveRequestRepo.findAndCount({
+      where,
       relations: ['user'],
       order: { createdAt: 'DESC' },
       skip,

@@ -25,13 +25,20 @@ export class EmailService {
     email: string,
     firstName: string,
     password: string,
+    branding?: { appName: string; logoUrl?: string; primaryColor: string; emailFromName?: string },
   ): Promise<void> {
-    const html = credentialsTemplate(firstName, email, password);
+    const html = credentialsTemplate(firstName, email, password, branding);
+
+    const appName = branding?.appName ?? 'PulseTrack';
+    const fromOverride = branding?.emailFromName
+      ? this.from.replace(/^[^<]+/, `${branding.emailFromName} `)
+      : undefined;
 
     await this.sendEmail(
       email,
-      'Your PulseTrack Account Credentials',
+      `Your ${appName} Account Credentials`,
       html,
+      fromOverride,
     );
   }
 
@@ -79,6 +86,7 @@ export class EmailService {
     to: string,
     subject: string,
     html: string,
+    fromOverride?: string,
   ): Promise<void> {
     if (!this.resend) {
       this.logger.warn(`Email to ${to} skipped — RESEND_API_KEY not configured`);
@@ -87,7 +95,7 @@ export class EmailService {
 
     try {
       const { error } = await this.resend.emails.send({
-        from: this.from,
+        from: fromOverride ?? this.from,
         to,
         subject,
         html,

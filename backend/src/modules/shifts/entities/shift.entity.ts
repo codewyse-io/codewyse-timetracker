@@ -5,7 +5,10 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { Organization } from '../../organizations/entities/organization.entity';
 
 @Entity('shifts')
 export class Shift {
@@ -32,6 +35,13 @@ export class Shift {
 
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
+
+  @Column({ name: 'organization_id', type: 'varchar', length: 36 })
+  organizationId: string;
+
+  @ManyToOne(() => Organization)
+  @JoinColumn({ name: 'organization_id' })
+  organization: Organization;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

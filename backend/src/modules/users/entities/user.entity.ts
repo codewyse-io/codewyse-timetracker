@@ -11,6 +11,7 @@ import { Role } from '../../../common/enums/role.enum';
 import { UserStatus } from '../../../common/enums/user-status.enum';
 import { Exclude } from 'class-transformer';
 import { Shift } from '../../shifts/entities/shift.entity';
+import { Organization } from '../../organizations/entities/organization.entity';
 
 @Entity('users')
 export class User {
@@ -78,6 +79,13 @@ export class User {
   @Exclude()
   @Column({ nullable: true })
   refreshToken: string;
+
+  @Column({ name: 'organization_id', type: 'varchar', length: 36 })
+  organizationId: string;
+
+  @ManyToOne(() => Organization)
+  @JoinColumn({ name: 'organization_id' })
+  organization: Organization;
 
   @CreateDateColumn()
   createdAt: Date;

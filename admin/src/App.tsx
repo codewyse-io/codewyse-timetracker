@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Spin } from 'antd';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { OrgProvider } from './contexts/OrgContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import AdminLayout from './layouts/AdminLayout';
 import LoginPage from './pages/Login';
@@ -16,6 +17,8 @@ import ReportsPage from './pages/Reports';
 import AiInsightsPage from './pages/AiInsights';
 import LeaveRequestsPage from './pages/LeaveRequests';
 import AnnouncementsPage from './pages/Announcements';
+import OrganizationSettings from './pages/OrganizationSettings';
+import SuperAdminDashboard from './pages/SuperAdminDashboard';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -92,11 +95,14 @@ function AppRoutes() {
         path="/"
         element={
           <ProtectedRoute>
-            <AdminLayout />
+            <OrgProvider>
+              <AdminLayout />
+            </OrgProvider>
           </ProtectedRoute>
         }
       >
         <Route index element={<PageErrorBoundary><DashboardPage /></PageErrorBoundary>} />
+        <Route path="super-admin" element={<PageErrorBoundary><SuperAdminDashboard /></PageErrorBoundary>} />
         <Route path="users" element={<PageErrorBoundary><UsersPage /></PageErrorBoundary>} />
         <Route path="shifts" element={<PageErrorBoundary><ShiftsPage /></PageErrorBoundary>} />
         <Route path="time-tracking" element={<PageErrorBoundary><TimeTrackingPage /></PageErrorBoundary>} />
@@ -107,6 +113,7 @@ function AppRoutes() {
         <Route path="ai-insights" element={<PageErrorBoundary><AiInsightsPage /></PageErrorBoundary>} />
         <Route path="leave-requests" element={<PageErrorBoundary><LeaveRequestsPage /></PageErrorBoundary>} />
         <Route path="announcements" element={<PageErrorBoundary><AnnouncementsPage /></PageErrorBoundary>} />
+        <Route path="settings" element={<PageErrorBoundary><OrganizationSettings /></PageErrorBoundary>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

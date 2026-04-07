@@ -11,6 +11,7 @@ import { SessionStatus } from '../enums/session-status.enum';
 import { IdleInterval } from './idle-interval.entity';
 import { ActivityLog } from './activity-log.entity';
 import { User } from '../../users/entities/user.entity';
+import { Organization } from '../../organizations/entities/organization.entity';
 
 @Entity('work_sessions')
 export class WorkSession {
@@ -63,6 +64,13 @@ export class WorkSession {
 
   @Column({ name: 'neutral_duration', type: 'int', default: 0 })
   neutralDuration: number; // seconds in neutral apps
+
+  @Column({ name: 'organization_id', type: 'varchar', length: 36 })
+  organizationId: string;
+
+  @ManyToOne(() => Organization)
+  @JoinColumn({ name: 'organization_id' })
+  organization: Organization;
 
   @OneToMany(() => IdleInterval, (idle) => idle.session, { cascade: true })
   idleIntervals: IdleInterval[];

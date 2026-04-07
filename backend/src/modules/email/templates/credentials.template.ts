@@ -2,14 +2,25 @@ export function credentialsTemplate(
   firstName: string,
   email: string,
   password: string,
+  branding: { appName: string; logoUrl?: string; primaryColor: string } = {
+    appName: 'PulseTrack',
+    primaryColor: '#6366f1',
+  },
 ): string {
+  const { appName, logoUrl, primaryColor } = branding;
+  const initial = appName.charAt(0).toUpperCase();
+
+  const logoHtml = logoUrl
+    ? `<img src="${logoUrl}" alt="${appName}" style="width: 40px; height: 40px; border-radius: 12px; display: inline-block;" />`
+    : `<div style="width: 40px; height: 40px; background: linear-gradient(135deg, ${primaryColor}, #8b5cf6); border-radius: 12px; display: inline-block; text-align: center; line-height: 40px; color: #fff; font-weight: 800; font-size: 18px;">${initial}</div>`;
+
   return `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Your PulseTrack Credentials</title>
+  <title>Your ${appName} Credentials</title>
 </head>
 <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f0f2f5; -webkit-font-smoothing: antialiased;">
   <table width="100%" cellpadding="0" cellspacing="0" style="padding: 40px 20px;">
@@ -21,8 +32,8 @@ export function credentialsTemplate(
           <tr>
             <td align="center" style="padding-bottom: 32px;">
               <div style="display: inline-flex; align-items: center; gap: 10px;">
-                <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 12px; display: inline-block; text-align: center; line-height: 40px; color: #fff; font-weight: 800; font-size: 18px;">P</div>
-                <span style="font-size: 22px; font-weight: 700; color: #1e293b; letter-spacing: -0.3px;">PulseTrack</span>
+                ${logoHtml}
+                <span style="font-size: 22px; font-weight: 700; color: #1e293b; letter-spacing: -0.3px;">${appName}</span>
               </div>
             </td>
           </tr>
@@ -32,7 +43,7 @@ export function credentialsTemplate(
             <td style="background: #ffffff; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); overflow: hidden;">
 
               <!-- Header accent -->
-              <div style="height: 4px; background: linear-gradient(90deg, #6366f1, #8b5cf6, #a78bfa);"></div>
+              <div style="height: 4px; background: linear-gradient(90deg, ${primaryColor}, #8b5cf6, #a78bfa);"></div>
 
               <!-- Content -->
               <table width="100%" cellpadding="0" cellspacing="0" style="padding: 40px 36px 36px;">
@@ -43,7 +54,7 @@ export function credentialsTemplate(
                       Welcome aboard, ${firstName}!
                     </h2>
                     <p style="margin: 0 0 28px; font-size: 15px; color: #64748b; line-height: 1.6;">
-                      Your PulseTrack account has been created. Use the credentials below to sign in to the desktop app.
+                      Your ${appName} account has been created. Use the credentials below to sign in to the desktop app.
                     </p>
 
                     <!-- Credentials Box -->
@@ -103,7 +114,7 @@ export function credentialsTemplate(
           <tr>
             <td align="center" style="padding: 28px 0 0;">
               <p style="margin: 0; font-size: 12px; color: #94a3b8;">
-                &copy; ${new Date().getFullYear()} PulseTrack &middot; Powered by CodeWyse
+                &copy; ${new Date().getFullYear()} ${appName} &middot; Powered by CodeWyse
               </p>
             </td>
           </tr>

@@ -8,6 +8,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
+import { Organization } from '../../organizations/entities/organization.entity';
 
 export enum AnnouncementType {
   GENERAL = 'general',
@@ -52,6 +53,13 @@ export class Announcement {
 
   @Column({ name: 'expires_at', type: 'datetime', nullable: true })
   expiresAt: Date | null;
+
+  @Column({ name: 'organization_id', type: 'varchar', length: 36 })
+  organizationId: string;
+
+  @ManyToOne(() => Organization)
+  @JoinColumn({ name: 'organization_id' })
+  organization: Organization;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

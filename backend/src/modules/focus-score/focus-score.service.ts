@@ -23,7 +23,7 @@ export class FocusScoreService {
     private readonly userRepo: Repository<User>,
   ) {}
 
-  async calculateDailyScore(userId: string, date: string): Promise<DailyFocusScore> {
+  async calculateDailyScore(userId: string, date: string, organizationId?: string): Promise<DailyFocusScore> {
     const dayStart = `${date} 00:00:00`;
     const dayEnd = `${date} 23:59:59`;
 
@@ -109,7 +109,7 @@ export class FocusScoreService {
     if (focusScore) {
       Object.assign(focusScore, data);
     } else {
-      focusScore = this.focusScoreRepo.create({ userId, date, ...data });
+      focusScore = this.focusScoreRepo.create({ userId, date, ...data, ...(organizationId ? { organizationId } : {}) });
     }
 
     return this.focusScoreRepo.save(focusScore);
@@ -118,6 +118,7 @@ export class FocusScoreService {
   async getMyFocusScore(
     userId: string,
     period: 'daily' | 'weekly',
+    organizationId?: string,
   ): Promise<DailyFocusScore[]> {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
@@ -134,14 +135,20 @@ export class FocusScoreService {
 
     // Always recalculate today's score live (handles active sessions)
     try {
-      await this.calculateDailyScore(userId, today);
+      await this.calculateDailyScore(userId, today, organizationId);
     } catch (err) {
       this.logger.warn(`Live focus score recalculation failed: ${err.message}`);
     }
 
-    return this.focusScoreRepo
+    const qb = this.focusScoreRepo
       .createQueryBuilder('fs')
-      .where('fs.userId = :userId', { userId })
+      .where('fs.userId = :userId', { userId });
+
+    if (organizationId) {
+      qb.andWhere('fs.organizationId = :organizationId', { organizationId });
+    }
+
+    return qb
       .andWhere('fs.date >= :startDate', { startDate })
       .andWhere('fs.date <= :endDate', { endDate: today })
       .orderBy('fs.date', 'DESC')
@@ -149,6 +156,7 @@ export class FocusScoreService {
   }
 
   async getTeamFocusScores(
+    organizationId: string,
     period: 'daily' | 'weekly',
     page: number = 1,
     limit: number = 10,
@@ -170,7 +178,8 @@ export class FocusScoreService {
     const [data, total] = await this.focusScoreRepo
       .createQueryBuilder('fs')
       .leftJoinAndSelect('fs.user', 'user')
-      .where('fs.date >= :startDate', { startDate })
+      .where('fs.organizationId = :organizationId', { organizationId })
+      .andWhere('fs.date >= :startDate', { startDate })
       .andWhere('fs.date <= :endDate', { endDate })
       .orderBy('fs.date', 'DESC')
       .addOrderBy('fs.score', 'DESC')
@@ -181,16 +190,21 @@ export class FocusScoreService {
     return new PaginatedResponseDto(data, total, page, limit);
   }
 
-  async calculateAllDailyScores(date: string): Promise<void> {
+  async calculateAllDailyScores(date: string, organizationId?: string): Promise<void> {
     this.logger.log(`Calculating daily focus scores for ${date}`);
 
+    const whereClause: any = { status: 'active' as any };
+    if (organizationId) {
+      whereClause.organizationId = organizationId;
+    }
+
     const users = await this.userRepo.find({
-      where: { status: 'active' as any },
+      where: whereClause,
     });
 
     for (const user of users) {
       try {
-        await this.calculateDailyScore(user.id, date);
+        await this.calculateDailyScore(user.id, date, organizationId);
       } catch (error) {
         this.logger.error(
           `Failed to calculate focus score for user ${user.id}: ${error.message}`,

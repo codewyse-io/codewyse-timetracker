@@ -7,8 +7,8 @@ import { AppCategory } from '../time-tracking/enums/app-category.enum';
 @Injectable()
 export class AppCategoriesService {
   private readonly logger = new Logger(AppCategoriesService.name);
-  private rulesCache: AppCategoryRule[] = [];
-  private cacheTimestamp = 0;
+  private rulesCache: Map<string, AppCategoryRule[]> = new Map();
+  private cacheTimestamps: Map<string, number> = new Map();
   private readonly cacheTtl = 5 * 60 * 1000; // 5 minutes
 
   constructor(
@@ -16,19 +16,28 @@ export class AppCategoriesService {
     private readonly ruleRepo: Repository<AppCategoryRule>,
   ) {}
 
-  private async loadRules(): Promise<AppCategoryRule[]> {
+  private async loadRules(organizationId?: string): Promise<AppCategoryRule[]> {
+    const cacheKey = organizationId ?? '__global__';
     const now = Date.now();
-    if (this.rulesCache.length > 0 && now - this.cacheTimestamp < this.cacheTtl) {
-      return this.rulesCache;
+    const cached = this.rulesCache.get(cacheKey);
+    const ts = this.cacheTimestamps.get(cacheKey) ?? 0;
+    if (cached && cached.length > 0 && now - ts < this.cacheTtl) {
+      return cached;
     }
-    this.rulesCache = await this.ruleRepo.find();
-    this.cacheTimestamp = now;
-    return this.rulesCache;
+    const where: any = {};
+    if (organizationId) {
+      where.organizationId = organizationId;
+    }
+    const rules = await this.ruleRepo.find({ where });
+    this.rulesCache.set(cacheKey, rules);
+    this.cacheTimestamps.set(cacheKey, now);
+    return rules;
   }
 
   /** Invalidate the in-memory cache (call after CRUD operations) */
   invalidateCache(): void {
-    this.cacheTimestamp = 0;
+    this.rulesCache.clear();
+    this.cacheTimestamps.clear();
   }
 
   /**
@@ -40,8 +49,9 @@ export class AppCategoriesService {
     windowInfo: string,
     designation?: string | null,
     shiftId?: string | null,
+    organizationId?: string | null,
   ): Promise<AppCategory> {
-    const rules = await this.loadRules();
+    const rules = await this.loadRules(organizationId ?? undefined);
     const lowerApp = appName.toLowerCase();
     const lowerWindow = windowInfo.toLowerCase();
 
@@ -96,15 +106,16 @@ export class AppCategoriesService {
 
   // ── CRUD for admin panel ──
 
-  async findAll(shiftId?: string, designation?: string): Promise<AppCategoryRule[]> {
+  async findAll(organizationId?: string, shiftId?: string, designation?: string): Promise<AppCategoryRule[]> {
     const qb = this.ruleRepo.createQueryBuilder('r');
+    if (organizationId) qb.andWhere('r.organizationId = :organizationId', { organizationId });
     if (shiftId) qb.andWhere('r.shift_id = :shiftId', { shiftId });
     if (designation) qb.andWhere('r.designation = :designation', { designation });
     return qb.orderBy('r.app_identifier', 'ASC').getMany();
   }
 
-  async create(data: Partial<AppCategoryRule>): Promise<AppCategoryRule> {
-    const rule = this.ruleRepo.create(data);
+  async create(data: Partial<AppCategoryRule>, organizationId?: string): Promise<AppCategoryRule> {
+    const rule = this.ruleRepo.create({ ...data, ...(organizationId ? { organizationId } : {}) });
     const saved = await this.ruleRepo.save(rule);
     this.invalidateCache();
     return saved;

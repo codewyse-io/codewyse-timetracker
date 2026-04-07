@@ -21,6 +21,7 @@ import { PaginatedResponseDto } from '../../common/dto/paginated-response.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentOrg } from '../../common/decorators/current-org.decorator';
 
 @ApiTags('Time Tracking')
 @ApiBearerAuth()
@@ -35,11 +36,12 @@ export class TimeTrackingController {
   async startSession(
     @Body() dto: StartSessionDto,
     @Req() req: any,
+    @CurrentOrg() orgId: string,
   ): Promise<WorkSession> {
     const userId = req.user?.id;
     const shiftId = req.user?.shiftId;
     const mode = dto.mode || 'regular';
-    return this.timeTrackingService.startSession(userId, shiftId, mode);
+    return this.timeTrackingService.startSession(userId, shiftId, mode, orgId);
   }
 
   @Post('stop')
@@ -91,8 +93,9 @@ export class TimeTrackingController {
   @ApiOperation({ summary: 'Get all active sessions (admin)' })
   async getActiveSessions(
     @Req() req: any,
+    @CurrentOrg() orgId: string,
   ): Promise<WorkSession[]> {
-    return this.timeTrackingService.getActiveSessions();
+    return this.timeTrackingService.getActiveSessions(orgId);
   }
 
   @Get('sessions')
@@ -102,12 +105,14 @@ export class TimeTrackingController {
   async getSessions(
     @Query() query: SessionQueryDto,
     @Req() req: any,
+    @CurrentOrg() orgId: string,
   ): Promise<PaginatedResponseDto<WorkSession>> {
     const isAdmin = req.user?.role === 'admin';
     return this.timeTrackingService.getSessions(
       query,
       req.user?.id,
       isAdmin,
+      orgId,
     );
   }
 

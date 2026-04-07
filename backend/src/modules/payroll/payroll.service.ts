@@ -38,12 +38,12 @@ export class PayrollService {
   /**
    * Get weekly payroll starting from a given Monday.
    */
-  async getWeeklyPayroll(weekStart: Date): Promise<PayrollSummary> {
+  async getWeeklyPayroll(weekStart: Date, organizationId: string): Promise<PayrollSummary> {
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekEnd.getDate() + 6);
     weekEnd.setHours(23, 59, 59, 999);
 
-    return this.computePayroll(weekStart, weekEnd);
+    return this.computePayroll(weekStart, weekEnd, organizationId);
   }
 
   /**
@@ -52,11 +52,12 @@ export class PayrollService {
   async getMonthlyPayroll(
     year: number,
     month: number,
+    organizationId: string,
   ): Promise<PayrollSummary> {
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 0, 23, 59, 59, 999); // last day of month
 
-    return this.computePayroll(startDate, endDate);
+    return this.computePayroll(startDate, endDate, organizationId);
   }
 
   /**
@@ -66,12 +67,13 @@ export class PayrollService {
     userId: string,
     startDate?: Date,
     endDate?: Date,
+    organizationId?: string,
   ): Promise<PayrollEntry> {
     const start = startDate ?? this.getMonthStart();
     const end = endDate ?? new Date();
     end.setHours(23, 59, 59, 999);
 
-    const rows = await this.getAggregatedPayrollData(start, end, userId);
+    const rows = await this.getAggregatedPayrollData(start, end, userId, organizationId);
 
     if (!rows.length) {
       throw new NotFoundException(
@@ -88,9 +90,10 @@ export class PayrollService {
   async getPayrollSummary(
     startDate: Date,
     endDate: Date,
+    organizationId: string,
   ): Promise<PayrollSummary> {
     endDate.setHours(23, 59, 59, 999);
-    return this.computePayroll(startDate, endDate);
+    return this.computePayroll(startDate, endDate, organizationId);
   }
 
   // ── Private helpers ──────────────────────────────────────────────
@@ -98,8 +101,9 @@ export class PayrollService {
   private async computePayroll(
     startDate: Date,
     endDate: Date,
+    organizationId?: string,
   ): Promise<PayrollSummary> {
-    const rows = await this.getAggregatedPayrollData(startDate, endDate);
+    const rows = await this.getAggregatedPayrollData(startDate, endDate, undefined, organizationId);
 
     const entries = rows.map((row) => this.mapRowToEntry(row));
 
@@ -133,6 +137,7 @@ export class PayrollService {
     startDate: Date,
     endDate: Date,
     userId?: string,
+    organizationId?: string,
   ): Promise<any[]> {
     let query = `
       SELECT
@@ -151,6 +156,11 @@ export class PayrollService {
     `;
 
     const params: any[] = [SessionStatus.COMPLETED, startDate, endDate];
+
+    if (organizationId) {
+      query += ' AND u.organization_id = ?';
+      params.push(organizationId);
+    }
 
     if (userId) {
       query += ' AND ws.user_id = ?';

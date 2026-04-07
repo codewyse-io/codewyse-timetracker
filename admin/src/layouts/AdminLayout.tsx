@@ -26,13 +26,17 @@ import {
   BellOutlined,
   CalendarOutlined,
   NotificationOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
+import { useOrg } from '../contexts/OrgContext';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
 
-const menuItems = [
+import { BankOutlined } from '@ant-design/icons';
+
+const adminMenuItems = [
   { key: '/', icon: <DashboardOutlined />, label: 'Dashboard' },
   { key: '/users', icon: <TeamOutlined />, label: 'Team Members' },
   { key: '/shifts', icon: <ScheduleOutlined />, label: 'Shifts' },
@@ -43,10 +47,19 @@ const menuItems = [
   { key: '/leave-requests', icon: <CalendarOutlined />, label: 'Leave Requests' },
   { key: '/announcements', icon: <NotificationOutlined />, label: 'Announcements' },
   { key: '/ai-insights', icon: <BulbOutlined />, label: 'AI Insights' },
+  { key: '/settings', icon: <SettingOutlined />, label: 'Settings' },
+];
+
+const superAdminMenuItems = [
+  { key: '/', icon: <DashboardOutlined />, label: 'Dashboard' },
+  { key: '/super-admin', icon: <BankOutlined />, label: 'Organizations' },
+  { key: '/users', icon: <TeamOutlined />, label: 'All Users' },
+  { key: '/settings', icon: <SettingOutlined />, label: 'Settings' },
 ];
 
 const pageTitles: Record<string, string> = {
   '/': 'Dashboard',
+  '/super-admin': 'Organizations',
   '/users': 'Team Members',
   '/shifts': 'Shifts',
   '/time-tracking': 'Time Tracking',
@@ -56,10 +69,12 @@ const pageTitles: Record<string, string> = {
   '/leave-requests': 'Leave Requests',
   '/announcements': 'Announcements',
   '/ai-insights': 'AI Insights',
+  '/settings': 'Settings',
 };
 
 const pageSubtitles: Record<string, string> = {
   '/': 'Welcome back! Here\'s your overview.',
+  '/super-admin': 'Manage all organizations and their settings',
   '/users': 'Manage your team and their roles',
   '/shifts': 'Configure work schedules',
   '/time-tracking': 'Monitor sessions and activity',
@@ -69,6 +84,7 @@ const pageSubtitles: Record<string, string> = {
   '/leave-requests': 'Review and manage employee leave requests',
   '/announcements': 'Send notifications to your team',
   '/ai-insights': 'AI-powered analysis & coaching',
+  '/settings': 'Manage your organization settings',
 };
 
 const SIDEBAR_WIDTH = 256;
@@ -79,6 +95,9 @@ export default function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { org } = useOrg();
+  const isSuperAdmin = user?.role === 'super_admin';
+  const menuItems = isSuperAdmin ? superAdminMenuItems : adminMenuItems;
 
   const handleMenuClick = ({ key }: { key: string }) => {
     navigate(key);
@@ -167,20 +186,24 @@ export default function AdminLayout() {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 10,
-                  background: 'linear-gradient(135deg, #6366f1 0%, #818cf8 100%)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}
-              >
-                <ThunderboltOutlined style={{ color: '#fff', fontSize: 16 }} />
-              </div>
+              {org?.logoUrl ? (
+                <img src={org.logoUrl} style={{ width: 28, height: 28, borderRadius: 8, flexShrink: 0 }} alt="Logo" />
+              ) : (
+                <div
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 10,
+                    background: 'linear-gradient(135deg, #6366f1 0%, #818cf8 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <ThunderboltOutlined style={{ color: '#fff', fontSize: 16 }} />
+                </div>
+              )}
               {!collapsed && (
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   <Text
@@ -193,7 +216,7 @@ export default function AdminLayout() {
                       lineHeight: 1.2,
                     }}
                   >
-                    PulseTrack
+                    {org?.name || 'PulseTrack'}
                   </Text>
                   <Text
                     style={{

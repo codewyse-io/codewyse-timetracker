@@ -15,6 +15,7 @@ import { KpiPeriod } from './entities/kpi-entry.entity';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentOrg } from '../../common/decorators/current-org.decorator';
 
 @ApiTags('KPIs')
 @ApiBearerAuth()
@@ -26,22 +27,25 @@ export class KpisController {
   @Get('definitions')
   @ApiOperation({ summary: 'Get KPI definitions by designation' })
   @ApiQuery({ name: 'designation', required: false })
-  async getDefinitions(@Query('designation') designation?: string) {
-    return this.kpisService.getDefinitions(designation);
+  async getDefinitions(
+    @CurrentOrg() orgId: string,
+    @Query('designation') designation?: string,
+  ) {
+    return this.kpisService.getDefinitions(orgId, designation);
   }
 
   @Post('entry')
   @Roles('admin')
   @ApiOperation({ summary: 'Create a KPI entry (admin)' })
-  async createEntry(@Body() dto: CreateKpiEntryDto) {
-    return this.kpisService.createEntry(dto);
+  async createEntry(@Body() dto: CreateKpiEntryDto, @CurrentOrg() orgId: string) {
+    return this.kpisService.createEntry(dto, orgId);
   }
 
   @Post('entries/bulk')
   @Roles('admin')
   @ApiOperation({ summary: 'Bulk create KPI entries (admin)' })
-  async bulkCreateEntries(@Body() dto: BulkKpiEntryDto) {
-    return this.kpisService.bulkCreateEntries(dto.entries);
+  async bulkCreateEntries(@Body() dto: BulkKpiEntryDto, @CurrentOrg() orgId: string) {
+    return this.kpisService.bulkCreateEntries(dto.entries, orgId);
   }
 
   @Get('employee/:id')
@@ -65,11 +69,12 @@ export class KpisController {
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
   async getTeamKpis(
+    @CurrentOrg() orgId: string,
     @Query('period') period: KpiPeriod,
     @Query('periodStart') periodStart: string,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
   ) {
-    return this.kpisService.getTeamKpis(period, periodStart, +page, +limit);
+    return this.kpisService.getTeamKpis(orgId, period, periodStart, +page, +limit);
   }
 }

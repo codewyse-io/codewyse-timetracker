@@ -17,7 +17,7 @@ import { SignalingService } from '../call/signaling.service';
 import { MediasoupService } from '../call/mediasoup.service';
 
 export interface AuthenticatedSocket extends Socket {
-  user: { id: string; email: string; role: string };
+  user: { id: string; email: string; role: string; organizationId: string };
 }
 
 /** Registry for socket event handlers added by other modules */
@@ -146,7 +146,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
         secret: jwtSecret,
       });
 
-      client.user = { id: payload.sub, email: payload.email, role: payload.role };
+      client.user = { id: payload.sub, email: payload.email, role: payload.role, organizationId: payload.organizationId };
 
       // Join personal room for targeted messages
       await client.join(`user:${client.user.id}`);

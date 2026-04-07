@@ -1,16 +1,29 @@
+// Organization types
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl: string | null;
+  primaryColor: string;
+  emailFromName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // User types
 export interface User {
   id: string;
   email: string;
   firstName: string;
   lastName: string;
-  role: 'admin' | 'employee';
+  role: 'super_admin' | 'admin' | 'employee';
   designation: string | null;
   hourlyRate: number;
   shiftId: string | null;
   allowedLeavesPerYear: number;
   consumedLeaves: number;
   status: 'invited' | 'active' | 'deactivated';
+  organizationId?: string;
   bankName?: string | null;
   accountHolderName?: string | null;
   accountNumber?: string | null;

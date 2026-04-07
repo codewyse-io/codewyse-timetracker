@@ -3,7 +3,10 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { Organization } from '../../organizations/entities/organization.entity';
 import { AppCategory } from '../../time-tracking/enums/app-category.enum';
 
 export enum MatchType {
@@ -34,6 +37,13 @@ export class AppCategoryRule {
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   designation: string | null; // null = all roles, e.g. "Sales" = only for sales designation
+
+  @Column({ name: 'organization_id', type: 'varchar', length: 36 })
+  organizationId: string;
+
+  @ManyToOne(() => Organization)
+  @JoinColumn({ name: 'organization_id' })
+  organization: Organization;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

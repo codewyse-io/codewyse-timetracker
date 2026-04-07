@@ -19,6 +19,7 @@ import { Shift } from './entities/shift.entity';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentOrg } from '../../common/decorators/current-org.decorator';
 
 @ApiTags('Shifts')
 @ApiBearerAuth()
@@ -31,14 +32,14 @@ export class ShiftsController {
   @Roles('admin')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new shift (admin only)' })
-  async create(@Body() dto: CreateShiftDto): Promise<Shift> {
-    return this.shiftsService.create(dto);
+  async create(@Body() dto: CreateShiftDto, @CurrentOrg() orgId: string): Promise<Shift> {
+    return this.shiftsService.create(dto, orgId);
   }
 
   @Get()
   @ApiOperation({ summary: 'Get all active shifts' })
-  async findAll(): Promise<Shift[]> {
-    return this.shiftsService.findAll();
+  async findAll(@CurrentOrg() orgId: string): Promise<Shift[]> {
+    return this.shiftsService.findAll(orgId);
   }
 
   @Get(':id')

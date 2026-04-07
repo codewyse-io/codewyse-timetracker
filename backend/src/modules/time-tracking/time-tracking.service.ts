@@ -49,7 +49,7 @@ export class TimeTrackingService {
    * Start a new work session for the user.
    * Validates no active session exists and optionally checks shift schedule.
    */
-  async startSession(userId: string, shiftId?: string, mode: string = 'regular'): Promise<WorkSession> {
+  async startSession(userId: string, shiftId?: string, mode: string = 'regular', organizationId?: string): Promise<WorkSession> {
     // Check for existing active session
     const activeSession = await this.sessionRepository.findOne({
       where: { userId, status: SessionStatus.ACTIVE },
@@ -78,6 +78,7 @@ export class TimeTrackingService {
       lastHeartbeat: now,
       status: SessionStatus.ACTIVE,
       mode,
+      ...(organizationId && { organizationId }),
     });
 
     const savedSession = await this.sessionRepository.save(session);
@@ -242,9 +243,9 @@ export class TimeTrackingService {
   /**
    * Get all currently active sessions (admin view).
    */
-  async getActiveSessions(): Promise<WorkSession[]> {
+  async getActiveSessions(organizationId?: string): Promise<WorkSession[]> {
     const sessions = await this.sessionRepository.find({
-      where: { status: SessionStatus.ACTIVE },
+      where: { status: SessionStatus.ACTIVE, ...(organizationId && { organizationId }) },
       relations: ['user'],
       order: { startTime: 'DESC' },
     });
@@ -484,6 +485,7 @@ export class TimeTrackingService {
     query: SessionQueryDto,
     requestingUserId?: string,
     isAdmin: boolean = false,
+    organizationId?: string,
   ): Promise<PaginatedResponseDto<WorkSession>> {
     const { page, limit, startDate, endDate, userId } = query;
 
@@ -498,6 +500,10 @@ export class TimeTrackingService {
       qb.andWhere('session.userId = :userId', { userId: requestingUserId });
     } else if (userId) {
       qb.andWhere('session.userId = :userId', { userId });
+    }
+
+    if (organizationId) {
+      qb.andWhere('session.organizationId = :organizationId', { organizationId });
     }
 
     if (startDate) {

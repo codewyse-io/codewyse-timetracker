@@ -8,6 +8,7 @@ import {
   Unique,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
+import { Organization } from '../../organizations/entities/organization.entity';
 import { FocusCategory } from '../enums/focus-category.enum';
 
 @Entity('daily_focus_scores')
@@ -48,6 +49,13 @@ export class DailyFocusScore {
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  @Column({ name: 'organization_id', type: 'varchar', length: 36 })
+  organizationId: string;
+
+  @ManyToOne(() => Organization)
+  @JoinColumn({ name: 'organization_id' })
+  organization: Organization;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })

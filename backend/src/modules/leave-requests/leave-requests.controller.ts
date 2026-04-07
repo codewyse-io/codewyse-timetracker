@@ -24,6 +24,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../../common/enums/role.enum';
 import { S3Service } from '../s3/s3.service';
+import { CurrentOrg } from '../../common/decorators/current-org.decorator';
 
 @ApiTags('Leave Requests')
 @ApiBearerAuth()
@@ -48,6 +49,7 @@ export class LeaveRequestsController {
     @Req() req: any,
     @Body() dto: CreateLeaveRequestDto,
     @UploadedFiles() files: Express.Multer.File[],
+    @CurrentOrg() orgId: string,
   ) {
     const attachments: string[] = [];
     if (files?.length) {
@@ -56,14 +58,14 @@ export class LeaveRequestsController {
         attachments.push(key);
       }
     }
-    return this.leaveRequestsService.create(req.user.id, dto, attachments);
+    return this.leaveRequestsService.create(req.user.id, dto, attachments, orgId);
   }
 
   @Get()
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'List all leave requests (admin)' })
-  findAll(@Query() paginationDto: PaginationDto) {
-    return this.leaveRequestsService.findAll(paginationDto);
+  findAll(@Query() paginationDto: PaginationDto, @CurrentOrg() orgId: string) {
+    return this.leaveRequestsService.findAll(paginationDto, orgId);
   }
 
   @Get('my')

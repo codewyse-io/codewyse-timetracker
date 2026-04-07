@@ -19,6 +19,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { CurrentOrg } from '../../common/decorators/current-org.decorator';
 import { Role } from '../../common/enums/role.enum';
 import { User } from './entities/user.entity';
 
@@ -37,16 +38,25 @@ export class UsersController {
 
   @Post()
   @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Create a new user (admin only)' })
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.create(createUserDto);
+  @ApiOperation({ summary: 'Create a new user (admin or super_admin)' })
+  create(
+    @Body() createUserDto: CreateUserDto,
+    @CurrentOrg() orgId: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    // Super admin can specify organizationId in the body
+    const effectiveOrgId =
+      currentUser.role === Role.SUPER_ADMIN && createUserDto.organizationId
+        ? createUserDto.organizationId
+        : orgId;
+    return this.usersService.create(createUserDto, effectiveOrgId);
   }
 
   @Get()
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'List all users with pagination (admin only)' })
-  findAll(@Query() paginationDto: PaginationDto) {
-    return this.usersService.list(paginationDto);
+  findAll(@Query() paginationDto: PaginationDto, @CurrentOrg() orgId: string) {
+    return this.usersService.list(paginationDto, orgId);
   }
 
   @Get(':id')
@@ -62,6 +72,7 @@ export class UsersController {
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateUserDto: UpdateUserDto,
+    @CurrentOrg() orgId: string,
   ) {
     return this.usersService.update(id, updateUserDto);
   }

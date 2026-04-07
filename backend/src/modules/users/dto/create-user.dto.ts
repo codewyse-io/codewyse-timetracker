@@ -56,6 +56,11 @@ export class CreateUserDto {
   @Max(365)
   allowedLeavesPerYear?: number;
 
+  @ApiPropertyOptional({ description: 'Organization ID (super_admin only)' })
+  @IsOptional()
+  @IsString()
+  organizationId?: string;
+
   // Bank Account Information
   @ApiPropertyOptional({ example: 'Meezan Bank' })
   @IsOptional()

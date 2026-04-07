@@ -3,7 +3,10 @@ import {
   PrimaryGeneratedColumn,
   Column,
   UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { Organization } from '../../organizations/entities/organization.entity';
 
 @Entity('settings')
 export class Setting {
@@ -18,6 +21,13 @@ export class Setting {
 
   @Column({ type: 'varchar', length: 500, default: '' })
   description: string;
+
+  @Column({ name: 'organization_id', type: 'varchar', length: 36 })
+  organizationId: string;
+
+  @ManyToOne(() => Organization)
+  @JoinColumn({ name: 'organization_id' })
+  organization: Organization;
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;

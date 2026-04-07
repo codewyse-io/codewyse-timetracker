@@ -17,6 +17,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../../common/enums/role.enum';
+import { CurrentOrg } from '../../common/decorators/current-org.decorator';
 
 @ApiTags('Announcements')
 @ApiBearerAuth()
@@ -28,21 +29,21 @@ export class AnnouncementsController {
   @Post()
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Create a new announcement (admin only)' })
-  create(@Req() req: any, @Body() dto: CreateAnnouncementDto) {
-    return this.announcementsService.create(dto, req.user.id);
+  create(@Req() req: any, @Body() dto: CreateAnnouncementDto, @CurrentOrg() orgId: string) {
+    return this.announcementsService.create(dto, req.user.id, orgId);
   }
 
   @Get()
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'List all announcements (admin)' })
-  findAll() {
-    return this.announcementsService.findAll();
+  findAll(@CurrentOrg() orgId: string) {
+    return this.announcementsService.findAll(orgId);
   }
 
   @Get('active')
   @ApiOperation({ summary: 'Get active announcements (all users)' })
-  findActive() {
-    return this.announcementsService.findActive();
+  findActive(@CurrentOrg() orgId: string) {
+    return this.announcementsService.findActive(orgId);
   }
 
   @Patch(':id/deactivate')

@@ -10,13 +10,21 @@ export class SettingsService {
     private readonly settingRepo: Repository<Setting>,
   ) {}
 
-  async get(key: string): Promise<string | null> {
-    const setting = await this.settingRepo.findOne({ where: { key } });
+  async get(key: string, organizationId?: string): Promise<string | null> {
+    const where: any = { key };
+    if (organizationId) {
+      where.organizationId = organizationId;
+    }
+    const setting = await this.settingRepo.findOne({ where });
     return setting?.value ?? null;
   }
 
-  async set(key: string, value: string, description?: string): Promise<Setting> {
-    let setting = await this.settingRepo.findOne({ where: { key } });
+  async set(key: string, value: string, description?: string, organizationId?: string): Promise<Setting> {
+    const where: any = { key };
+    if (organizationId) {
+      where.organizationId = organizationId;
+    }
+    let setting = await this.settingRepo.findOne({ where });
 
     if (setting) {
       setting.value = value;
@@ -28,13 +36,18 @@ export class SettingsService {
         key,
         value,
         description: description ?? '',
+        ...(organizationId ? { organizationId } : {}),
       });
     }
 
     return this.settingRepo.save(setting);
   }
 
-  async getAll(): Promise<Setting[]> {
-    return this.settingRepo.find({ order: { key: 'ASC' } });
+  async getAll(organizationId?: string): Promise<Setting[]> {
+    const where: any = {};
+    if (organizationId) {
+      where.organizationId = organizationId;
+    }
+    return this.settingRepo.find({ where, order: { key: 'ASC' } });
   }
 }

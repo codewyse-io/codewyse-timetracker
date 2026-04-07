@@ -16,14 +16,14 @@ export class ShiftsService {
     private readonly shiftRepository: Repository<Shift>,
   ) {}
 
-  async create(dto: CreateShiftDto): Promise<Shift> {
-    const shift = this.shiftRepository.create(dto);
+  async create(dto: CreateShiftDto, organizationId: string): Promise<Shift> {
+    const shift = this.shiftRepository.create({ ...dto, organizationId });
     return this.shiftRepository.save(shift);
   }
 
-  async findAll(): Promise<Shift[]> {
+  async findAll(organizationId: string): Promise<Shift[]> {
     return this.shiftRepository.find({
-      where: { isActive: true },
+      where: { isActive: true, organizationId },
       order: { createdAt: 'DESC' },
     });
   }

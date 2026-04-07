@@ -16,6 +16,7 @@ import { UserStatus } from '../../common/enums/user-status.enum';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { PaginatedResponseDto } from '../../common/dto/paginated-response.dto';
 import { EmailService } from '../email/email.service';
+import { OrganizationsService } from '../organizations/organizations.service';
 
 @Injectable()
 export class UsersService {
@@ -26,13 +27,14 @@ export class UsersService {
     private readonly usersRepository: Repository<User>,
     private readonly configService: ConfigService,
     private readonly emailService: EmailService,
+    private readonly organizationsService: OrganizationsService,
   ) {}
 
   private generateTempPassword(): string {
     return crypto.randomBytes(6).toString('base64url'); // ~8 char readable password
   }
 
-  async create(createUserDto: CreateUserDto): Promise<User> {
+  async create(createUserDto: CreateUserDto, organizationId: string): Promise<User> {
     const existing = await this.usersRepository.findOne({
       where: { email: createUserDto.email },
     });
@@ -52,6 +54,7 @@ export class UsersService {
       ...createUserDto,
       password: hashedPassword,
       status: UserStatus.INVITED,
+      organizationId,
     });
 
     const savedUser = await this.usersRepository.save(user);
@@ -62,10 +65,12 @@ export class UsersService {
     this.logger.log(`User saved: ${savedUser.email} | DB readback verify: ${dbVerify} | DB hash length: ${dbUser?.password?.length}`);
 
     try {
+      const rawBranding = await this.organizationsService.getBranding(organizationId);
       await this.emailService.sendCredentialsEmail(
         savedUser.email,
         savedUser.firstName,
         tempPassword,
+        { ...rawBranding, logoUrl: rawBranding.logoUrl ?? undefined },
       );
     } catch (error) {
       console.error(`Failed to send credentials email to ${savedUser.email}:`, error);
@@ -83,10 +88,12 @@ export class UsersService {
     user.password = hashedPassword;
     await this.usersRepository.save(user);
 
+    const rawBranding2 = await this.organizationsService.getBranding(user.organizationId);
     await this.emailService.sendCredentialsEmail(
       user.email,
       user.firstName,
       tempPassword,
+      { ...rawBranding2, logoUrl: rawBranding2.logoUrl ?? undefined },
     );
   }
 
@@ -134,11 +141,12 @@ export class UsersService {
     await this.usersRepository.remove(user);
   }
 
-  async list(paginationDto: PaginationDto): Promise<PaginatedResponseDto<User>> {
+  async list(paginationDto: PaginationDto, organizationId: string): Promise<PaginatedResponseDto<User>> {
     const { page, limit } = paginationDto;
     const skip = (page - 1) * limit;
 
     const [data, total] = await this.usersRepository.findAndCount({
+      where: { organizationId },
       skip,
       take: limit,
       order: { createdAt: 'DESC' },

@@ -11,26 +11,29 @@ export class AnnouncementsService {
     private readonly repo: Repository<Announcement>,
   ) {}
 
-  async create(dto: CreateAnnouncementDto, userId: string): Promise<Announcement> {
+  async create(dto: CreateAnnouncementDto, userId: string, organizationId: string): Promise<Announcement> {
     const announcement = this.repo.create({
       ...dto,
       expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
       createdBy: userId,
+      organizationId,
     });
     return this.repo.save(announcement);
   }
 
-  async findAll(): Promise<Announcement[]> {
+  async findAll(organizationId: string): Promise<Announcement[]> {
     return this.repo.find({
+      where: { organizationId },
       order: { createdAt: 'DESC' },
     });
   }
 
-  async findActive(): Promise<Announcement[]> {
+  async findActive(organizationId: string): Promise<Announcement[]> {
     const now = new Date();
     return this.repo.find({
       where: {
         isActive: true,
+        organizationId,
         expiresAt: Or(IsNull(), MoreThanOrEqual(now)),
       },
       order: { createdAt: 'DESC' },

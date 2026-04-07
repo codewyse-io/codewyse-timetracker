@@ -30,6 +30,7 @@ export class ReportsService {
     userId: string,
     weekStart: string,
     weekEnd: string,
+    organizationId?: string,
   ): Promise<WeeklyReport> {
     // Aggregate work sessions for the week
     const sessions = await this.workSessionRepo.find({
@@ -112,6 +113,7 @@ export class ReportsService {
         focusScore,
         kpiSummary: JSON.stringify(kpiSummary),
         payableAmount,
+        ...(organizationId ? { organizationId } : {}),
       });
     }
 
@@ -121,16 +123,22 @@ export class ReportsService {
   async generateAllWeeklyReports(
     weekStart: string,
     weekEnd: string,
+    organizationId?: string,
   ): Promise<void> {
     this.logger.log(`Generating weekly reports for ${weekStart} to ${weekEnd}`);
 
+    const whereClause: any = { status: 'active' as any };
+    if (organizationId) {
+      whereClause.organizationId = organizationId;
+    }
+
     const users = await this.userRepo.find({
-      where: { status: 'active' as any },
+      where: whereClause,
     });
 
     for (const user of users) {
       try {
-        await this.generateWeeklyReport(user.id, weekStart, weekEnd);
+        await this.generateWeeklyReport(user.id, weekStart, weekEnd, organizationId);
       } catch (error) {
         this.logger.error(
           `Failed to generate report for user ${user.id}: ${error.message}`,
@@ -143,6 +151,7 @@ export class ReportsService {
 
   async getWeeklyReports(
     query: ReportQueryDto,
+    organizationId?: string,
   ): Promise<PaginatedResponseDto<WeeklyReport>> {
     const { weekStart, userId, page, limit } = query;
     const skip = (page - 1) * limit;
@@ -150,6 +159,10 @@ export class ReportsService {
     const qb = this.reportRepo.createQueryBuilder('r')
       .leftJoinAndSelect('r.user', 'user')
       .where('r.weekStart = :weekStart', { weekStart });
+
+    if (organizationId) {
+      qb.andWhere('r.organizationId = :organizationId', { organizationId });
+    }
 
     if (userId) {
       qb.andWhere('r.userId = :userId', { userId });
@@ -177,9 +190,13 @@ export class ReportsService {
     return report;
   }
 
-  async exportCsv(weekStart: string): Promise<string> {
+  async exportCsv(weekStart: string, organizationId?: string): Promise<string> {
+    const where: any = { weekStart };
+    if (organizationId) {
+      where.organizationId = organizationId;
+    }
     const reports = await this.reportRepo.find({
-      where: { weekStart },
+      where,
       relations: ['user'],
       order: { userId: 'ASC' },
     });
@@ -215,11 +232,15 @@ export class ReportsService {
     return [headers, ...rows].join('\n');
   }
 
-  async exportPdf(weekStart: string): Promise<Buffer> {
+  async exportPdf(weekStart: string, organizationId?: string): Promise<Buffer> {
     // Basic PDF generation — plain text approach
     // Can be enhanced with pdfkit or puppeteer later
+    const where: any = { weekStart };
+    if (organizationId) {
+      where.organizationId = organizationId;
+    }
     const reports = await this.reportRepo.find({
-      where: { weekStart },
+      where,
       relations: ['user'],
       order: { userId: 'ASC' },
     });

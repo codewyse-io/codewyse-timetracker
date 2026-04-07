@@ -14,6 +14,7 @@ import { ReportQueryDto } from './dto/report-query.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentOrg } from '../../common/decorators/current-org.decorator';
 
 @ApiTags('Reports')
 @ApiBearerAuth()
@@ -27,12 +28,13 @@ export class ReportsController {
   async getWeeklyReports(
     @Query() query: ReportQueryDto,
     @Req() req: any,
+    @CurrentOrg() orgId: string,
   ) {
     // If not admin, force userId to own
     if (req.user.role !== 'admin') {
       query.userId = req.user.id;
     }
-    return this.reportsService.getWeeklyReports(query);
+    return this.reportsService.getWeeklyReports(query, orgId);
   }
 
   @Get('weekly/export/csv')
@@ -42,8 +44,9 @@ export class ReportsController {
   async exportCsv(
     @Query('weekStart') weekStart: string,
     @Res() res: Response,
+    @CurrentOrg() orgId: string,
   ) {
-    const csv = await this.reportsService.exportCsv(weekStart);
+    const csv = await this.reportsService.exportCsv(weekStart, orgId);
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename=report-${weekStart}.csv`);
     res.send(csv);
@@ -56,8 +59,9 @@ export class ReportsController {
   async exportPdf(
     @Query('weekStart') weekStart: string,
     @Res() res: Response,
+    @CurrentOrg() orgId: string,
   ) {
-    const pdf = await this.reportsService.exportPdf(weekStart);
+    const pdf = await this.reportsService.exportPdf(weekStart, orgId);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=report-${weekStart}.pdf`);
     res.send(pdf);

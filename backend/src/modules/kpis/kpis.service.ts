@@ -15,9 +15,10 @@ export class KpisService {
     private readonly kpiEntryRepo: Repository<KpiEntry>,
   ) {}
 
-  async getDefinitions(designation?: string): Promise<KpiDefinition[]> {
+  async getDefinitions(organizationId: string, designation?: string): Promise<KpiDefinition[]> {
     const query = this.kpiDefRepo.createQueryBuilder('kd')
-      .where('kd.isActive = :active', { active: true });
+      .where('kd.isActive = :active', { active: true })
+      .andWhere('kd.organizationId = :organizationId', { organizationId });
 
     if (designation) {
       query.andWhere('kd.designation = :designation', { designation });
@@ -26,7 +27,7 @@ export class KpisService {
     return query.orderBy('kd.designation', 'ASC').addOrderBy('kd.metricName', 'ASC').getMany();
   }
 
-  async createEntry(dto: CreateKpiEntryDto): Promise<KpiEntry> {
+  async createEntry(dto: CreateKpiEntryDto, organizationId?: string): Promise<KpiEntry> {
     const definition = await this.kpiDefRepo.findOne({
       where: { id: dto.kpiDefinitionId },
     });
@@ -35,12 +36,15 @@ export class KpisService {
       throw new NotFoundException('KPI definition not found');
     }
 
-    const entry = this.kpiEntryRepo.create(dto);
+    const entry = this.kpiEntryRepo.create({ ...dto, ...(organizationId ? { organizationId } : {}) });
     return this.kpiEntryRepo.save(entry);
   }
 
-  async bulkCreateEntries(entries: CreateKpiEntryDto[]): Promise<KpiEntry[]> {
-    const created = this.kpiEntryRepo.create(entries);
+  async bulkCreateEntries(entries: CreateKpiEntryDto[], organizationId?: string): Promise<KpiEntry[]> {
+    const data = organizationId
+      ? entries.map((e) => ({ ...e, organizationId }))
+      : entries;
+    const created = this.kpiEntryRepo.create(data);
     return this.kpiEntryRepo.save(created);
   }
 
@@ -65,6 +69,7 @@ export class KpisService {
   }
 
   async getTeamKpis(
+    organizationId: string,
     period: KpiPeriod,
     periodStart: string,
     page: number = 1,
@@ -75,7 +80,8 @@ export class KpisService {
     const [data, total] = await this.kpiEntryRepo.createQueryBuilder('ke')
       .leftJoinAndSelect('ke.kpiDefinition', 'kd')
       .leftJoinAndSelect('ke.user', 'user')
-      .where('ke.period = :period', { period })
+      .where('ke.organizationId = :organizationId', { organizationId })
+      .andWhere('ke.period = :period', { period })
       .andWhere('ke.periodStart = :periodStart', { periodStart })
       .orderBy('user.firstName', 'ASC')
       .addOrderBy('kd.metricName', 'ASC')

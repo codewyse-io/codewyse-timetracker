@@ -26,7 +26,9 @@ import type { TableColumnsType } from 'antd';
 import { usersApi } from '../api/users.api';
 import type { CreateUserData, UpdateUserData } from '../api/users.api';
 import { shiftsApi } from '../api/shifts.api';
-import type { User, Shift } from '../types';
+import { superAdminApi } from '../api/super-admin.api';
+import { useAuth } from '../contexts/AuthContext';
+import type { User, Shift, Organization } from '../types';
 
 
 function getAvatarColor(name: string): string {
@@ -171,8 +173,10 @@ const DEFAULT_DESIGNATIONS = [
 ];
 
 export default function UsersPage() {
+  const { user: authUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -237,6 +241,14 @@ export default function UsersPage() {
     fetchShifts();
   }, [fetchShifts]);
 
+  useEffect(() => {
+    if (authUser?.role === 'super_admin') {
+      superAdminApi.getOrganizations().then((res) => {
+        const orgs = Array.isArray(res.data) ? res.data : (res as any).data?.data || [];
+        setOrganizations(orgs);
+      }).catch(() => {});
+    }
+  }, [authUser?.role]);
 
   const handleAddUser = async (values: CreateUserData) => {
     setSubmitting(true);
@@ -318,6 +330,7 @@ export default function UsersPage() {
       accountHolderName: user.accountHolderName || '',
       accountNumber: user.accountNumber || '',
       iban: user.iban || '',
+      organizationId: user.organizationId,
     });
     setEditModalOpen(true);
   };
@@ -492,16 +505,22 @@ export default function UsersPage() {
     .filter((s) => s.isActive)
     .map((s) => ({ label: s.name, value: s.id }));
 
+  const isSuperAdmin = authUser?.role === 'super_admin';
+
   const ModalForm = ({
     form,
     onFinish,
     onCancel,
     isEdit,
+    isSuperAdmin: isSA,
+    organizations: orgs,
   }: {
     form: any;
     onFinish: (v: any) => void;
     onCancel: () => void;
     isEdit: boolean;
+    isSuperAdmin?: boolean;
+    organizations?: Organization[];
   }) => (
     <Form form={form} layout="vertical" onFinish={onFinish} style={{ marginTop: 8 }}>
       <Tabs
@@ -512,6 +531,20 @@ export default function UsersPage() {
             label: 'Personal Information',
             children: (
               <>
+                {isSA && (
+                  <Form.Item
+                    name="organizationId"
+                    label={<span style={labelStyle}>Organization</span>}
+                    rules={[{ required: true, message: 'Organization is required' }]}
+                  >
+                    <Select
+                      placeholder="Select organization"
+                      showSearch
+                      optionFilterProp="label"
+                      options={(orgs || []).map((o) => ({ value: o.id, label: o.name }))}
+                    />
+                  </Form.Item>
+                )}
                 {!isEdit && (
                   <Form.Item
                     name="email"
@@ -784,6 +817,8 @@ export default function UsersPage() {
           onFinish={handleAddUser}
           onCancel={() => { setAddModalOpen(false); addForm.resetFields(); }}
           isEdit={false}
+          isSuperAdmin={isSuperAdmin}
+          organizations={organizations}
         />
       </Modal>
 
@@ -813,6 +848,8 @@ export default function UsersPage() {
           onFinish={handleEditUser}
           onCancel={() => { setEditModalOpen(false); setEditingUser(null); editForm.resetFields(); }}
           isEdit={true}
+          isSuperAdmin={isSuperAdmin}
+          organizations={organizations}
         />
       </Modal>
     </div>

@@ -1,5 +1,5 @@
 import { OmitType, PartialType } from '@nestjs/swagger';
-import { IsOptional, IsUUID, ValidateIf } from 'class-validator';
+import { IsOptional, IsString, IsUUID, ValidateIf } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { CreateUserDto } from './create-user.dto';
 
@@ -9,4 +9,9 @@ export class UpdateUserDto extends PartialType(OmitType(CreateUserDto, ['shiftId
   @ValidateIf((o) => o.shiftId !== null)
   @IsUUID()
   shiftId?: string | null;
+
+  @ApiPropertyOptional({ description: 'Organization ID (super_admin only)' })
+  @IsOptional()
+  @IsString()
+  organizationId?: string;
 }

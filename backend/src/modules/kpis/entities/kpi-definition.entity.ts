@@ -2,7 +2,10 @@ import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { Organization } from '../../organizations/entities/organization.entity';
 
 @Entity('kpi_definitions')
 export class KpiDefinition {
@@ -23,4 +26,11 @@ export class KpiDefinition {
 
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean;
+
+  @Column({ name: 'organization_id', type: 'varchar', length: 36 })
+  organizationId: string;
+
+  @ManyToOne(() => Organization)
+  @JoinColumn({ name: 'organization_id' })
+  organization: Organization;
 }

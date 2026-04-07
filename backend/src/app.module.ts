@@ -22,6 +22,7 @@ import { AppCategoriesModule } from './modules/app-categories/app-categories.mod
 import { AnnouncementsModule } from './modules/announcements/announcements.module';
 import { DownloadsModule } from './modules/downloads/downloads.module';
 import { S3Module } from './modules/s3/s3.module';
+import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { CallModule } from './modules/call/call.module';
@@ -76,6 +77,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     ReportsModule,
     AiModule,
     S3Module,
+    OrganizationsModule,
     LeaveRequestsModule,
     AnnouncementsModule,
     DownloadsModule,
