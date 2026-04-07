@@ -146,7 +146,7 @@ export class UsersService {
   }
 
   async list(paginationDto: PaginationDto, organizationId: string): Promise<PaginatedResponseDto<User>> {
-    const { page, limit } = paginationDto;
+    const { page, limit, search, role, status } = paginationDto;
     const skip = (page - 1) * limit;
 
     const qb = this.usersRepository.createQueryBuilder('user')
@@ -157,6 +157,21 @@ export class UsersService {
 
     if (organizationId) {
       qb.andWhere('user.organization_id = :organizationId', { organizationId });
+    }
+
+    if (search) {
+      qb.andWhere(
+        '(user.firstName LIKE :search OR user.lastName LIKE :search OR user.email LIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    if (role) {
+      qb.andWhere('user.role = :role', { role });
+    }
+
+    if (status) {
+      qb.andWhere('user.status = :status', { status });
     }
 
     const [data, total] = await qb.getManyAndCount();
