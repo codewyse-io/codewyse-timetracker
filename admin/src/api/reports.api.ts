@@ -29,4 +29,10 @@ export const reportsApi = {
       responseType: 'blob',
     });
   },
+
+  generateReports(weekStart: string): Promise<any> {
+    return apiClient.post('/reports/weekly/generate', null, {
+      params: { weekStart },
+    });
+  },
 };

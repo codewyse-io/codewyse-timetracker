@@ -199,7 +199,7 @@ export default function DashboardPage() {
         timeTrackingApi.getActiveSessions(),
         focusScoreApi.getTeamFocusScores({ startDate: today, endDate: today }),
         payrollApi.getWeeklyPayroll(weekStart),
-        timeTrackingApi.getSessions({ startDate: weekStart, endDate: weekEnd, limit: 500 }),
+        timeTrackingApi.getSessions({ startDate: weekStart, endDate: weekEnd, limit: 200 }),
       ]);
 
       const activeRaw = activeRes.status === 'fulfilled' ? activeRes.value.data : [];

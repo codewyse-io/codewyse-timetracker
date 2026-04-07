@@ -106,6 +106,7 @@ export default function ReportsPage() {
   const [selectedReport, setSelectedReport] = useState<WeeklyReport | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   const weekStart = weekDate.startOf('week').format('YYYY-MM-DD');
 
@@ -129,6 +130,19 @@ export default function ReportsPage() {
   useEffect(() => {
     fetchReports();
   }, [fetchReports]);
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    try {
+      await reportsApi.generateReports(weekStart);
+      message.success('Reports generated successfully');
+      fetchReports();
+    } catch {
+      message.error('Failed to generate reports');
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const handleExportCsv = async () => {
     setExporting(true);
@@ -297,9 +311,23 @@ export default function ReportsPage() {
         <Col flex="auto" style={{ textAlign: 'right' }}>
           <Space>
             <Button
+              type="primary"
+              loading={generating}
+              onClick={handleGenerate}
+              style={{
+                borderRadius: 10,
+                fontWeight: 600,
+                background: 'var(--primary)',
+                border: 'none',
+              }}
+            >
+              {generating ? 'Generating...' : 'Generate Reports'}
+            </Button>
+            <Button
               icon={<DownloadOutlined />}
               loading={exporting}
               onClick={handleExportCsv}
+              disabled={reports.length === 0}
               style={{
                 borderRadius: 10,
                 borderColor: 'var(--primary)',
@@ -313,6 +341,7 @@ export default function ReportsPage() {
               icon={<FilePdfOutlined />}
               loading={exporting}
               onClick={handleExportPdf}
+              disabled={reports.length === 0}
               style={{
                 borderRadius: 10,
                 borderColor: '#ef4444',

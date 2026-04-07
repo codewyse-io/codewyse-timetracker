@@ -1,14 +1,18 @@
 import {
   Controller,
   Get,
+  Post,
   Param,
   Query,
   Req,
   Res,
   UseGuards,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { Response } from 'express';
+import * as dayjs from 'dayjs';
 import { ReportsService } from './reports.service';
 import { ReportQueryDto } from './dto/report-query.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -65,6 +69,19 @@ export class ReportsController {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=report-${weekStart}.pdf`);
     res.send(pdf);
+  }
+
+  @Post('weekly/generate')
+  @Roles('admin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Generate weekly reports for all employees (admin)' })
+  async generateReports(
+    @Query('weekStart') weekStart: string,
+    @CurrentOrg() orgId: string,
+  ) {
+    const weekEnd = dayjs(weekStart).endOf('week').format('YYYY-MM-DD');
+    await this.reportsService.generateAllWeeklyReports(weekStart, weekEnd, orgId || undefined);
+    return { message: 'Reports generated successfully' };
   }
 
   @Get('weekly/:id')
