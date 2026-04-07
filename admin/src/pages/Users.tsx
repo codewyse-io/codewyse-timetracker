@@ -598,49 +598,54 @@ export default function UsersPage() {
                             showSearch
                             style={{ borderRadius: 8 }}
                             optionFilterProp="label"
-                            optionRender={(option) => (
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                                <span>{option.label}</span>
-                                {!DEFAULT_DESIGNATIONS.includes(option.value as string) && (
-                                  <DeleteOutlined
-                                    style={{ fontSize: 11, color: '#ef4444', cursor: 'pointer', padding: '2px 4px' }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setCustomDesignations((prev) => prev.filter((d) => d !== option.value));
-                                    }}
-                                  />
-                                )}
-                              </div>
-                            )}
-                            options={designationOptions}
+                            options={designationOptions.map((opt) => ({
+                              ...opt,
+                              label: (
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                  <span>{opt.value}</span>
+                                  {!DEFAULT_DESIGNATIONS.includes(opt.value) && (
+                                    <DeleteOutlined
+                                      style={{ fontSize: 11, color: '#ef4444', cursor: 'pointer', padding: '2px 6px' }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                        setCustomDesignations((prev) => prev.filter((d) => d !== opt.value));
+                                      }}
+                                    />
+                                  )}
+                                </div>
+                              ),
+                            }))}
+                            filterOption={(input, option) =>
+                              (option?.value as string ?? '').toLowerCase().includes(input.toLowerCase())
+                            }
                             dropdownRender={(menu) => (
-                              <>
+                              <div>
                                 {menu}
                                 <Divider style={{ margin: '8px 0 4px' }} />
-                                <div
-                                  style={{ display: 'flex', gap: 8, padding: '4px 8px 8px' }}
-                                  onMouseDown={(e) => e.preventDefault()}
-                                >
+                                <div style={{ display: 'flex', gap: 8, padding: '4px 8px 8px' }}>
                                   <Input
                                     placeholder="New designation..."
                                     ref={newDesignationInputRef}
                                     value={newDesignation}
                                     onChange={(e) => setNewDesignation(e.target.value)}
                                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddDesignation(); } }}
+                                    onMouseDown={(e) => e.stopPropagation()}
                                     style={{ borderRadius: 6, fontSize: 13 }}
                                     size="small"
                                   />
                                   <Button
                                     type="text"
                                     icon={<PlusOutlined />}
-                                    onClick={handleAddDesignation}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    onClick={(e) => { e.stopPropagation(); handleAddDesignation(); }}
                                     size="small"
                                     style={{ color: 'var(--primary)', fontWeight: 600, fontSize: 13 }}
                                   >
                                     Add
                                   </Button>
                                 </div>
-                              </>
+                              </div>
                             )}
                           />
                         </Form.Item>
