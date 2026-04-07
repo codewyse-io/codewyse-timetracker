@@ -191,6 +191,7 @@ export default function UsersPage() {
   const [editForm] = Form.useForm();
   const [customDesignations, setCustomDesignations] = useState<string[]>([]);
   const [newDesignation, setNewDesignation] = useState('');
+  const [showDesignationModal, setShowDesignationModal] = useState(false);
   const newDesignationInputRef = useRef<any>(null);
 
   const fetchUsers = useCallback(async () => {
@@ -587,65 +588,43 @@ export default function UsersPage() {
                     if (role === 'admin') return null;
                     return (
                       <>
-                        <Form.Item
-                          name="designation"
-                          label={<span style={labelStyle}>Designation</span>}
-                        >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <span style={labelStyle}>Designation</span>
+                          <Button
+                            type="link"
+                            size="small"
+                            icon={<PlusOutlined />}
+                            onClick={() => setShowDesignationModal(true)}
+                            style={{ fontSize: 12, fontWeight: 600, padding: 0, height: 'auto' }}
+                          >
+                            Add New
+                          </Button>
+                        </div>
+                        <Form.Item name="designation" style={{ marginBottom: 16 }}>
                           <Select
-                            placeholder="Select or create designation"
+                            placeholder="Select designation"
                             allowClear
                             showSearch
                             style={{ borderRadius: 8 }}
                             optionFilterProp="label"
                             options={designationOptions}
+                            optionRender={(option) => {
+                              const val = option.data.value as string;
+                              return (
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                  <span>{val}</span>
+                                  <DeleteOutlined
+                                    style={{ fontSize: 11, color: '#ef4444', cursor: 'pointer', padding: '4px 2px' }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setCustomDesignations((prev) => prev.filter((d) => d !== val));
+                                    }}
+                                  />
+                                </div>
+                              );
+                            }}
                           />
                         </Form.Item>
-                        <div style={{ display: 'flex', gap: 8, marginTop: -16, marginBottom: 16 }}>
-                          <Input
-                            placeholder="Add new designation..."
-                            ref={newDesignationInputRef}
-                            value={newDesignation}
-                            onChange={(e) => setNewDesignation(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddDesignation(); } }}
-                            style={{ borderRadius: 6, fontSize: 13 }}
-                            size="small"
-                          />
-                          <Button
-                            type="text"
-                            icon={<PlusOutlined />}
-                            onClick={handleAddDesignation}
-                            size="small"
-                            style={{ color: 'var(--primary)', fontWeight: 600, fontSize: 13 }}
-                          >
-                            Add
-                          </Button>
-                        </div>
-                        {customDesignations.length > 0 && (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: -8, marginBottom: 16 }}>
-                            {customDesignations.map((d) => (
-                              <span
-                                key={d}
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 4,
-                                  background: 'var(--surface-sunken)',
-                                  border: '1px solid var(--border-light)',
-                                  borderRadius: 6,
-                                  padding: '2px 8px',
-                                  fontSize: 12,
-                                  color: 'var(--text-secondary)',
-                                }}
-                              >
-                                {d}
-                                <DeleteOutlined
-                                  style={{ fontSize: 10, color: '#ef4444', cursor: 'pointer' }}
-                                  onClick={() => setCustomDesignations((prev) => prev.filter((x) => x !== d))}
-                                />
-                              </span>
-                            ))}
-                          </div>
-                        )}
                         <Form.Item
                           name="hourlyRate"
                           label={<span style={labelStyle}>Hourly Rate ($)</span>}
@@ -883,6 +862,51 @@ export default function UsersPage() {
           isSuperAdmin={isSuperAdmin}
           organizations={organizations}
         />
+      </Modal>
+
+      {/* Add New Designation Modal */}
+      <Modal
+        open={showDesignationModal}
+        title="Add New Designation"
+        onCancel={() => { setShowDesignationModal(false); setNewDesignation(''); }}
+        footer={null}
+        destroyOnClose
+        width={380}
+        styles={{ header: { borderBottom: 'none', paddingBottom: 0 } }}
+      >
+        <div style={{ paddingTop: 12 }}>
+          <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--text-muted)' }}>
+            Enter the name for the new designation. It will be available in the dropdown for all users.
+          </p>
+          <Input
+            placeholder="e.g. Sales Representative"
+            ref={newDesignationInputRef}
+            value={newDesignation}
+            onChange={(e) => setNewDesignation(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleAddDesignation();
+                setShowDesignationModal(false);
+              }
+            }}
+            style={{ borderRadius: 8, fontSize: 14, marginBottom: 16 }}
+            autoFocus
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Button onClick={() => { setShowDesignationModal(false); setNewDesignation(''); }}>
+              Cancel
+            </Button>
+            <Button
+              type="primary"
+              onClick={() => { handleAddDesignation(); setShowDesignationModal(false); }}
+              disabled={!newDesignation.trim()}
+              style={{ background: 'var(--primary)', border: 'none' }}
+            >
+              Add Designation
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );
