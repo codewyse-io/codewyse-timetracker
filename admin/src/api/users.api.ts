@@ -7,6 +7,7 @@ export interface GetUsersParams {
   search?: string;
   role?: string;
   status?: string;
+  organizationId?: string;
 }
 
 export interface CreateUserData {

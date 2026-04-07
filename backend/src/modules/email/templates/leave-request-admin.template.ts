@@ -6,7 +6,10 @@ export function leaveRequestAdminTemplate(
   totalDays: number,
   message: string,
   adminPanelUrl: string,
+  branding: { appName: string; primaryColor: string } = { appName: 'PulseTrack', primaryColor: '#6366f1' },
 ): string {
+  const { appName, primaryColor } = branding;
+
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -15,78 +18,93 @@ export function leaveRequestAdminTemplate(
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>New Leave Request</title>
 </head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f0f2f5; -webkit-font-smoothing: antialiased;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding: 40px 20px;">
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f4f6fb; -webkit-font-smoothing: antialiased;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding: 48px 20px;">
     <tr>
       <td align="center">
-        <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 520px;">
-
-          <!-- Accent Bar -->
-          <tr>
-            <td style="height: 4px; background: linear-gradient(90deg, #f59e0b, #ef4444); border-radius: 12px 12px 0 0;"></td>
-          </tr>
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 540px;">
 
           <!-- Card -->
           <tr>
-            <td style="background: #ffffff; padding: 36px 32px 28px; border-radius: 0 0 12px 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.06);">
+            <td style="background: #ffffff; border-radius: 20px; box-shadow: 0 8px 40px rgba(0,0,0,0.06); overflow: hidden;">
 
-              <!-- Icon -->
-              <div style="text-align: center; margin-bottom: 20px;">
-                <div style="display: inline-block; width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(135deg, #fef3c7, #fde68a); line-height: 56px; font-size: 28px;">
-                  📋
-                </div>
+              <!-- Header banner -->
+              <div style="height: 100px; background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%); text-align: center; padding-top: 28px;">
+                <div style="font-size: 32px; line-height: 1;">📋</div>
+                <div style="font-size: 16px; font-weight: 700; color: rgba(255,255,255,0.95); margin-top: 6px;">Leave Request</div>
               </div>
 
-              <h1 style="margin: 0 0 8px; font-size: 20px; font-weight: 700; color: #1a1a2e; text-align: center;">
-                New Leave Request
-              </h1>
+              <!-- Content -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="padding: 32px 40px 28px;">
+                <tr>
+                  <td>
+                    <h2 style="margin: 0 0 6px; font-size: 18px; font-weight: 700; color: #1e293b; text-align: center;">
+                      New Request from ${employeeName}
+                    </h2>
+                    <p style="margin: 0 0 24px; font-size: 14px; color: #64748b; text-align: center; line-height: 1.6;">
+                      A team member has submitted a leave request for your review.
+                    </p>
 
-              <p style="margin: 0 0 20px; font-size: 14px; color: #6b7280; text-align: center;">
-                <strong style="color: #1a1a2e;">${employeeName}</strong> has submitted a leave request.
-              </p>
+                    <!-- Details -->
+                    <table width="100%" cellpadding="0" cellspacing="0" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; margin-bottom: 20px;">
+                      <tr>
+                        <td style="padding: 16px 20px; border-bottom: 1px solid #e2e8f0;">
+                          <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8;">Subject</span>
+                          <div style="font-size: 14px; font-weight: 600; color: #1e293b; margin-top: 4px;">${subject}</div>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 16px 20px; border-bottom: 1px solid #e2e8f0;">
+                          <table width="100%" cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td width="50%">
+                                <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8;">From</span>
+                                <div style="font-size: 14px; font-weight: 600; color: #1e293b; margin-top: 4px;">${startDate}</div>
+                              </td>
+                              <td width="50%">
+                                <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8;">To</span>
+                                <div style="font-size: 14px; font-weight: 600; color: #1e293b; margin-top: 4px;">${endDate}</div>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 16px 20px;">
+                          <span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8;">Duration</span>
+                          <div style="font-size: 20px; font-weight: 800; color: #f59e0b; margin-top: 4px;">${totalDays} day${totalDays !== 1 ? 's' : ''}</div>
+                        </td>
+                      </tr>
+                    </table>
 
-              <!-- Details Card -->
-              <table width="100%" cellpadding="0" cellspacing="0" style="background: #f9fafb; border-radius: 8px; padding: 16px; margin-bottom: 20px; border: 1px solid #f3f4f6;">
-                <tr>
-                  <td style="padding: 6px 12px; font-size: 12px; color: #9ca3af; font-weight: 500;">Subject</td>
-                  <td style="padding: 6px 12px; font-size: 13px; color: #374151; font-weight: 600; text-align: right;">${subject}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 12px; font-size: 12px; color: #9ca3af; font-weight: 500;">Duration</td>
-                  <td style="padding: 6px 12px; font-size: 13px; color: #374151; font-weight: 600; text-align: right;">${totalDays} day${totalDays !== 1 ? 's' : ''}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 12px; font-size: 12px; color: #9ca3af; font-weight: 500;">Start Date</td>
-                  <td style="padding: 6px 12px; font-size: 13px; color: #374151; font-weight: 600; text-align: right;">${startDate}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 12px; font-size: 12px; color: #9ca3af; font-weight: 500;">End Date</td>
-                  <td style="padding: 6px 12px; font-size: 13px; color: #374151; font-weight: 600; text-align: right;">${endDate}</td>
+                    ${message ? `
+                    <table width="100%" cellpadding="0" cellspacing="0" style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 12px; margin-bottom: 24px;">
+                      <tr>
+                        <td style="padding: 14px 18px;">
+                          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: #0369a1; margin-bottom: 6px;">💬 Message</div>
+                          <p style="margin: 0; font-size: 13px; color: #334155; line-height: 1.6;">${message}</p>
+                        </td>
+                      </tr>
+                    </table>
+                    ` : ''}
+
+                    <!-- Review Button -->
+                    <div style="text-align: center; margin-bottom: 8px;">
+                      <a href="${adminPanelUrl}" style="display: inline-block; padding: 14px 40px; background: linear-gradient(135deg, ${primaryColor}, #818cf8); color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; border-radius: 12px; box-shadow: 0 6px 20px ${primaryColor}40; letter-spacing: 0.3px;">
+                        Review Request &rarr;
+                      </a>
+                    </div>
+                  </td>
                 </tr>
               </table>
-
-              ${message ? `
-              <div style="background: #f9fafb; border-radius: 8px; padding: 14px 16px; margin-bottom: 20px; border: 1px solid #f3f4f6;">
-                <p style="margin: 0 0 4px; font-size: 11px; color: #9ca3af; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px;">Message</p>
-                <p style="margin: 0; font-size: 13px; color: #374151; line-height: 1.6;">${message}</p>
-              </div>
-              ` : ''}
-
-              <!-- Review Button -->
-              <div style="text-align: center; margin-bottom: 16px;">
-                <a href="${adminPanelUrl}" style="display: inline-block; padding: 12px 32px; background: linear-gradient(135deg, #6c63ff, #5b8def); color: #ffffff; text-decoration: none; font-weight: 600; font-size: 14px; border-radius: 8px; box-shadow: 0 4px 12px rgba(108,99,255,0.3);">
-                  Review Request
-                </a>
-              </div>
-
             </td>
           </tr>
 
           <!-- Footer -->
           <tr>
-            <td style="padding: 20px 0; text-align: center;">
-              <p style="margin: 0; font-size: 11px; color: #9ca3af;">
-                Powered by <span style="color: #6c63ff; font-weight: 600;">CodeWyse</span>
+            <td align="center" style="padding: 28px 0 0;">
+              <p style="margin: 0; font-size: 11px; color: #94a3b8;">
+                &copy; ${new Date().getFullYear()} ${appName} &middot; Powered by <span style="color: ${primaryColor}; font-weight: 600;">CodeWyse</span>
               </p>
             </td>
           </tr>

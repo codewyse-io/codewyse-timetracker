@@ -183,6 +183,7 @@ export default function UsersPage() {
   const [limit] = useState(10);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string | undefined>(undefined);
+  const [orgFilter, setOrgFilter] = useState<string | undefined>(undefined);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -196,7 +197,7 @@ export default function UsersPage() {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await usersApi.getUsers({ page, limit, search: search || undefined, role: roleFilter });
+      const response = await usersApi.getUsers({ page, limit, search: search || undefined, role: roleFilter, organizationId: orgFilter });
       setUsers(response.data.data);
       setTotal(response.data.total);
     } catch {
@@ -204,7 +205,7 @@ export default function UsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, search, roleFilter]);
+  }, [page, limit, search, roleFilter, orgFilter]);
 
   const fetchShifts = useCallback(async () => {
     try {
@@ -759,6 +760,18 @@ export default function UsersPage() {
             { label: 'Employee', value: 'employee' },
           ]}
         />
+        {isSuperAdmin && organizations.length > 0 && (
+          <Select
+            placeholder="All Organizations"
+            value={orgFilter}
+            onChange={(val) => { setOrgFilter(val); setPage(1); }}
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            style={{ width: 200, height: 42 }}
+            options={organizations.map((o) => ({ value: o.id, label: o.name }))}
+          />
+        )}
       </div>
 
       {/* Table */}

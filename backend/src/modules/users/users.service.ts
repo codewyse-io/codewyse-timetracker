@@ -149,17 +149,18 @@ export class UsersService {
     const { page, limit, search, role, status } = paginationDto;
     const skip = (page - 1) * limit;
 
+    // Use query param organizationId if provided (super admin filtering), otherwise use @CurrentOrg
+    const effectiveOrgId = paginationDto.organizationId || organizationId;
+
     const qb = this.usersRepository.createQueryBuilder('user')
       .where('user.role != :superRole', { superRole: 'super_admin' })
       .orderBy('user.createdAt', 'DESC')
       .skip(skip)
       .take(limit);
 
-    // Empty string = super admin (sees all users), non-empty = scoped to org
-    if (organizationId) {
-      qb.andWhere('user.organization_id = :organizationId', { organizationId });
+    if (effectiveOrgId) {
+      qb.andWhere('user.organization_id = :organizationId', { organizationId: effectiveOrgId });
     }
-    // If organizationId is empty (super admin), no org filter — show all users
 
     if (search) {
       qb.andWhere(

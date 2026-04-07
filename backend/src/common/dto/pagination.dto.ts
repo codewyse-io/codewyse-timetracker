@@ -32,4 +32,9 @@ export class PaginationDto {
   @IsOptional()
   @IsString()
   status?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by organization ID (super_admin only)' })
+  @IsOptional()
+  @IsString()
+  organizationId?: string;
 }
