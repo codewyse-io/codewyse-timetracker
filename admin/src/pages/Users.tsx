@@ -597,13 +597,30 @@ export default function UsersPage() {
                             allowClear
                             showSearch
                             style={{ borderRadius: 8 }}
-                            options={designationOptions}
                             optionFilterProp="label"
+                            optionRender={(option) => (
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                <span>{option.label}</span>
+                                {!DEFAULT_DESIGNATIONS.includes(option.value as string) && (
+                                  <DeleteOutlined
+                                    style={{ fontSize: 11, color: '#ef4444', cursor: 'pointer', padding: '2px 4px' }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setCustomDesignations((prev) => prev.filter((d) => d !== option.value));
+                                    }}
+                                  />
+                                )}
+                              </div>
+                            )}
+                            options={designationOptions}
                             dropdownRender={(menu) => (
                               <>
                                 {menu}
                                 <Divider style={{ margin: '8px 0 4px' }} />
-                                <div style={{ display: 'flex', gap: 8, padding: '4px 8px 8px' }}>
+                                <div
+                                  style={{ display: 'flex', gap: 8, padding: '4px 8px 8px' }}
+                                  onMouseDown={(e) => e.preventDefault()}
+                                >
                                   <Input
                                     placeholder="New designation..."
                                     ref={newDesignationInputRef}
