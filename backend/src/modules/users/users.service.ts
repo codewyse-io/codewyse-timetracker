@@ -155,9 +155,11 @@ export class UsersService {
       .skip(skip)
       .take(limit);
 
+    // Empty string = super admin (sees all users), non-empty = scoped to org
     if (organizationId) {
       qb.andWhere('user.organization_id = :organizationId', { organizationId });
     }
+    // If organizationId is empty (super admin), no org filter — show all users
 
     if (search) {
       qb.andWhere(
