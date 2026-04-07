@@ -26,14 +26,14 @@ export class OrganizationsController {
 
   @Get('current')
   async getCurrent(@CurrentOrg() orgId: string) {
-    return this.service.findById(orgId);
+    return this.service.getWithResolvedLogo(orgId);
   }
 
   @Patch('current')
   @Roles('admin')
   async updateCurrent(@CurrentOrg() orgId: string, @Body() body: any) {
-    const { name, primaryColor, emailFromName } = body;
-    return this.service.update(orgId, { name, primaryColor, emailFromName });
+    const { name, primaryColor, emailFromName, currency, currencySymbol } = body;
+    return this.service.update(orgId, { name, primaryColor, emailFromName, currency, currencySymbol });
   }
 
   @Post('current/logo')

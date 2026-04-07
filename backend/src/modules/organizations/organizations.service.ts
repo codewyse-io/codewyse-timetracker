@@ -29,11 +29,23 @@ export class OrganizationsService {
     return this.findById(id);
   }
 
+  /** Return org with logoUrl resolved to a presigned S3 URL */
+  async getWithResolvedLogo(id: string): Promise<Organization & { logoUrl: string | null }> {
+    const org = await this.findById(id);
+    if (org.logoUrl) {
+      try {
+        (org as any).logoUrl = await this.s3Service.getPresignedUrl(org.logoUrl);
+      } catch {
+        // keep raw key as fallback
+      }
+    }
+    return org;
+  }
+
   async uploadLogo(id: string, file: Express.Multer.File): Promise<Organization> {
     const key = await this.s3Service.uploadFile(file, `organizations/${id}`);
-    const logoUrl = await this.s3Service.getPresignedUrl(key);
     await this.orgRepo.update(id, { logoUrl: key }); // store key, resolve URL on read
-    return this.findById(id);
+    return this.getWithResolvedLogo(id);
   }
 
   // ── Super admin methods ──
