@@ -11,7 +11,6 @@ import {
   Popconfirm,
   message,
   Tooltip,
-  Divider,
   Tabs,
 } from 'antd';
 import {
@@ -598,57 +597,55 @@ export default function UsersPage() {
                             showSearch
                             style={{ borderRadius: 8 }}
                             optionFilterProp="label"
-                            options={designationOptions.map((opt) => ({
-                              ...opt,
-                              label: (
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                                  <span>{opt.value}</span>
-                                  {!DEFAULT_DESIGNATIONS.includes(opt.value) && (
-                                    <DeleteOutlined
-                                      style={{ fontSize: 11, color: '#ef4444', cursor: 'pointer', padding: '2px 6px' }}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        e.preventDefault();
-                                        setCustomDesignations((prev) => prev.filter((d) => d !== opt.value));
-                                      }}
-                                    />
-                                  )}
-                                </div>
-                              ),
-                            }))}
-                            filterOption={(input, option) =>
-                              (option?.value as string ?? '').toLowerCase().includes(input.toLowerCase())
-                            }
-                            dropdownRender={(menu) => (
-                              <div>
-                                {menu}
-                                <Divider style={{ margin: '8px 0 4px' }} />
-                                <div style={{ display: 'flex', gap: 8, padding: '4px 8px 8px' }}>
-                                  <Input
-                                    placeholder="New designation..."
-                                    ref={newDesignationInputRef}
-                                    value={newDesignation}
-                                    onChange={(e) => setNewDesignation(e.target.value)}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddDesignation(); } }}
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    style={{ borderRadius: 6, fontSize: 13 }}
-                                    size="small"
-                                  />
-                                  <Button
-                                    type="text"
-                                    icon={<PlusOutlined />}
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    onClick={(e) => { e.stopPropagation(); handleAddDesignation(); }}
-                                    size="small"
-                                    style={{ color: 'var(--primary)', fontWeight: 600, fontSize: 13 }}
-                                  >
-                                    Add
-                                  </Button>
-                                </div>
-                              </div>
-                            )}
+                            options={designationOptions}
                           />
                         </Form.Item>
+                        <div style={{ display: 'flex', gap: 8, marginTop: -16, marginBottom: 16 }}>
+                          <Input
+                            placeholder="Add new designation..."
+                            ref={newDesignationInputRef}
+                            value={newDesignation}
+                            onChange={(e) => setNewDesignation(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddDesignation(); } }}
+                            style={{ borderRadius: 6, fontSize: 13 }}
+                            size="small"
+                          />
+                          <Button
+                            type="text"
+                            icon={<PlusOutlined />}
+                            onClick={handleAddDesignation}
+                            size="small"
+                            style={{ color: 'var(--primary)', fontWeight: 600, fontSize: 13 }}
+                          >
+                            Add
+                          </Button>
+                        </div>
+                        {customDesignations.length > 0 && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: -8, marginBottom: 16 }}>
+                            {customDesignations.map((d) => (
+                              <span
+                                key={d}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  background: 'var(--surface-sunken)',
+                                  border: '1px solid var(--border-light)',
+                                  borderRadius: 6,
+                                  padding: '2px 8px',
+                                  fontSize: 12,
+                                  color: 'var(--text-secondary)',
+                                }}
+                              >
+                                {d}
+                                <DeleteOutlined
+                                  style={{ fontSize: 10, color: '#ef4444', cursor: 'pointer' }}
+                                  onClick={() => setCustomDesignations((prev) => prev.filter((x) => x !== d))}
+                                />
+                              </span>
+                            ))}
+                          </div>
+                        )}
                         <Form.Item
                           name="hourlyRate"
                           label={<span style={labelStyle}>Hourly Rate ($)</span>}
