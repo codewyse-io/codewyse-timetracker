@@ -1,17 +1,28 @@
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from '../entities/user.entity';
+import { Organization } from '../../organizations/entities/organization.entity';
 
 export async function seedSuperAdmin(dataSource: DataSource): Promise<void> {
-  const repo = dataSource.getRepository(User);
+  const userRepo = dataSource.getRepository(User);
+  const orgRepo = dataSource.getRepository(Organization);
   const email = 'admin@pulsetrack.com';
 
-  const exists = await repo.findOne({ where: { email } });
+  // Get or create a default organization for the super admin
+  let defaultOrg = await orgRepo.findOne({ where: { slug: 'default' } });
+  if (!defaultOrg) {
+    defaultOrg = await orgRepo.save(orgRepo.create({
+      name: 'Default Organization',
+      slug: 'default',
+    }));
+    console.log('Created default organization');
+  }
+
+  const exists = await userRepo.findOne({ where: { email } });
   if (exists) {
-    // Update to super_admin if not already
     if (exists.role !== 'super_admin') {
       exists.role = 'super_admin' as any;
-      await repo.save(exists);
+      await userRepo.save(exists);
       console.log(`Updated ${email} to super_admin`);
     } else {
       console.log(`Super admin ${email} already exists`);
@@ -20,7 +31,7 @@ export async function seedSuperAdmin(dataSource: DataSource): Promise<void> {
   }
 
   const password = await bcrypt.hash('Code-wyse@2025', 12);
-  await repo.save(repo.create({
+  await userRepo.save(userRepo.create({
     email,
     firstName: 'Code',
     lastName: 'Wyse',
@@ -28,6 +39,7 @@ export async function seedSuperAdmin(dataSource: DataSource): Promise<void> {
     role: 'super_admin' as any,
     status: 'active' as any,
     hourlyRate: 0,
+    organizationId: defaultOrg.id,
   }));
   console.log(`Created super admin: ${email}`);
 }
