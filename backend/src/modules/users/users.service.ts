@@ -186,7 +186,9 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
 
-  async findByRole(role: string): Promise<User[]> {
-    return this.usersRepository.find({ where: { role: role as any } });
+  async findByRole(role: string, organizationId?: string): Promise<User[]> {
+    const where: any = { role: role as any };
+    if (organizationId) where.organizationId = organizationId;
+    return this.usersRepository.find({ where });
   }
 }

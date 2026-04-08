@@ -74,10 +74,9 @@ export class LeaveRequestsService {
     dto: CreateLeaveRequestDto,
     totalDays: number,
   ): Promise<void> {
-    const [employee, admins] = await Promise.all([
-      this.usersService.findById(userId),
-      this.usersService.findByRole('admin'),
-    ]);
+    const employee = await this.usersService.findById(userId);
+    // Only notify admins from the same organization
+    const admins = await this.usersService.findByRole('admin', employee.organizationId || undefined);
 
     const employeeName = `${employee.firstName} ${employee.lastName}`;
     const leaveRequestsUrl = `${this.adminPanelUrl}/leave-requests`;
