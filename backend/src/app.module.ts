@@ -26,6 +26,9 @@ import { OrganizationsModule } from './modules/organizations/organizations.modul
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { CallModule } from './modules/call/call.module';
+import { BotModule } from './modules/bot/bot.module';
+import { MeetingsModule } from './modules/meetings/meetings.module';
+import { GoogleCalendarModule } from './modules/google-calendar/google-calendar.module';
 import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
@@ -84,6 +87,9 @@ import { ScheduleModule } from '@nestjs/schedule';
     RealtimeModule,
     ChatModule,
     CallModule,
+    BotModule,
+    MeetingsModule,
+    GoogleCalendarModule,
     AppCategoriesModule,
   ],
 })

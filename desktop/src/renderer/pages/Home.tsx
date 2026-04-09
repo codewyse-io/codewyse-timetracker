@@ -9,6 +9,7 @@ import {
   CalendarOutlined,
   SoundOutlined,
   MessageOutlined,
+  VideoCameraOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
 } from '@ant-design/icons';
@@ -27,17 +28,19 @@ import OnboardingTutorial from '../components/OnboardingTutorial';
 import UpdateBanner from '../components/UpdateBanner';
 import AnnouncementsPanel from '../components/AnnouncementsPanel';
 import ChatPanel from '../components/chat/ChatPanel';
+import MeetingsPanel from '../components/MeetingsPanel';
 import { useChat } from '../contexts/ChatContext';
 
 const { Content } = Layout;
 
-type TabKey = 'dashboard' | 'timeline' | 'leaves' | 'announcements' | 'chat' | 'profile';
+type TabKey = 'dashboard' | 'timeline' | 'leaves' | 'announcements' | 'chat' | 'meetings' | 'profile';
 
 const NAV_ITEMS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: 'dashboard', label: 'Dashboard', icon: <DashboardOutlined /> },
   { key: 'timeline', label: 'Timeline', icon: <FieldTimeOutlined /> },
   { key: 'chat', label: 'Chat', icon: <MessageOutlined /> },
   { key: 'leaves', label: 'Leaves', icon: <CalendarOutlined /> },
+  { key: 'meetings', label: 'Meetings', icon: <VideoCameraOutlined /> },
   { key: 'announcements', label: 'Notices', icon: <SoundOutlined /> },
 ];
 
@@ -103,7 +106,7 @@ const LiveClock = memo(function LiveClock({ timezone }: { timezone?: string }) {
 const SIDEBAR_EXPANDED = 180;
 const SIDEBAR_COLLAPSED = 54;
 
-const TAB_KEYS: TabKey[] = ['dashboard', 'timeline', 'chat', 'leaves', 'announcements'];
+const TAB_KEYS: TabKey[] = ['dashboard', 'timeline', 'chat', 'meetings', 'leaves', 'announcements'];
 
 export default function Home() {
   const { user: authUser, logout } = useAuth();
@@ -491,6 +494,9 @@ export default function Home() {
             </div>
             <div style={{ display: activeTab === 'leaves' ? 'block' : 'none' }}>
               <LeaveRequestPanel />
+            </div>
+            <div style={{ display: activeTab === 'meetings' ? 'block' : 'none' }}>
+              <MeetingsPanel />
             </div>
             <div style={{ display: activeTab === 'announcements' ? 'block' : 'none' }}>
               <AnnouncementsPanel />

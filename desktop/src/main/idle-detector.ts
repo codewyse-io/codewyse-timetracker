@@ -54,6 +54,49 @@ const CHAT_APPS: Record<string, string[]> = {
   ],
 };
 
+// Remote desktop / VPS apps — if one of these has the foreground window,
+// the user is actively working on a remote machine, not idle
+const REMOTE_DESKTOP_APPS: Record<string, string[]> = {
+  win32: [
+    'mstsc.exe',          // Windows Remote Desktop
+    'msrdc.exe',          // Microsoft Remote Desktop (modern)
+    'vmconnect.exe',      // Hyper-V connection
+    'vmware.exe',         // VMware Workstation
+    'vmware-vmx.exe',     // VMware VM process
+    'vmplayer.exe',       // VMware Player
+    'virtualbox.exe',     // VirtualBox
+    'VBoxSDL.exe',        // VirtualBox SDL
+    'putty.exe',          // PuTTY SSH
+    'kitty.exe',          // KiTTY SSH
+    'mobaxterm.exe',      // MobaXterm
+    'securecrt.exe',      // SecureCRT
+    'winscp.exe',         // WinSCP
+    'anydesk.exe',        // AnyDesk
+    'TeamViewer.exe',     // TeamViewer
+    'vncviewer.exe',      // VNC Viewer
+    'Parsec.exe',         // Parsec
+    'rustdesk.exe',       // RustDesk
+    'x2goclient.exe',    // X2Go
+    'tabby.exe',          // Tabby terminal (SSH)
+    'termius.exe',        // Termius SSH
+  ],
+  darwin: [
+    'Microsoft Remote Desktop',
+    'VMware Fusion',
+    'VirtualBox VM',
+    'Parallels Desktop',
+    'Terminal',           // often used for SSH
+    'iTerm2',             // SSH terminal
+    'AnyDesk',
+    'TeamViewer',
+    'Screens',            // macOS VNC client
+    'Royal TSX',          // Remote management
+    'Termius',
+    'Tabby',
+    'Warp',               // terminal for SSH
+  ],
+};
+
 export class IdleDetector {
   private checkInterval: number = 30_000; // 30 seconds
   private idleThreshold: number = 30; // 30 seconds
@@ -105,12 +148,14 @@ export class IdleDetector {
       // Check if a communication app has the foreground window
       // (user is reading/composing messages — not truly idle)
       const chatActive = await this.isChatAppInForeground();
-      if (chatActive) {
+      const remoteActive = !chatActive ? await this.isRemoteDesktopInForeground() : false;
+      if (chatActive || remoteActive) {
         if (this.isIdle) {
           const endTime = new Date();
           const startTime = this.idleStartTime || new Date(Date.now() - this.idleThreshold * 1000);
           const duration = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
-          console.log(`[IdleDetector] Chat app in foreground — cancelling idle (duration was ${duration}s)`);
+          const reason = chatActive ? 'Chat app' : 'Remote desktop/VPS';
+          console.log(`[IdleDetector] ${reason} in foreground — cancelling idle (duration was ${duration}s)`);
           this.isIdle = false;
           this.sendToWindow('idle-resumed', {
             startTime: startTime.toISOString(),
@@ -203,6 +248,43 @@ export class IdleDetector {
       }
     } catch {
       // If foreground check fails, don't suppress idle
+    }
+    return false;
+  }
+
+  /**
+   * Checks if a remote desktop / VPS / SSH client has the foreground window.
+   * If so, the user is working on a remote machine — not truly idle locally.
+   */
+  private async isRemoteDesktopInForeground(): Promise<boolean> {
+    try {
+      const apps = REMOTE_DESKTOP_APPS[process.platform] || [];
+      if (apps.length === 0) return false;
+
+      if (process.platform === 'win32') {
+        const { stdout } = await execFileAsync('powershell', [
+          '-NoProfile', '-NonInteractive', '-Command',
+          `Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class FG{[DllImport("user32.dll")]public static extern IntPtr GetForegroundWindow();[DllImport("user32.dll")]public static extern uint GetWindowThreadProcessId(IntPtr hWnd,out uint pid);}';$h=[FG]::GetForegroundWindow();$pid=0;[FG]::GetWindowThreadProcessId($h,[ref]$pid)|Out-Null;(Get-Process -Id $pid -ErrorAction SilentlyContinue).ProcessName`,
+        ], { timeout: 3000 });
+
+        const fgProcess = stdout.trim().toLowerCase();
+        if (fgProcess && apps.some((app) => app.toLowerCase().replace('.exe', '') === fgProcess)) {
+          console.log(`[IdleDetector] Remote desktop app in foreground: ${fgProcess} — suppressing idle`);
+          return true;
+        }
+      } else if (process.platform === 'darwin') {
+        const { stdout } = await execFileAsync('osascript', [
+          '-e', 'tell application "System Events" to get name of first application process whose frontmost is true',
+        ], { timeout: 3000 });
+
+        const fgApp = stdout.trim();
+        if (fgApp && apps.some((app) => fgApp.includes(app))) {
+          console.log(`[IdleDetector] Remote desktop app in foreground: ${fgApp} — suppressing idle`);
+          return true;
+        }
+      }
+    } catch {
+      // If check fails, don't suppress idle
     }
     return false;
   }

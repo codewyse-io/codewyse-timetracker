@@ -73,6 +73,30 @@ export interface IdleEvent {
   duration: number;
 }
 
+export interface Meeting {
+  id: string;
+  title: string;
+  meetingUrl: string | null;
+  platform: 'google_meet' | 'zoom' | 'teams' | 'other';
+  scheduledStart: string | null;
+  scheduledEnd: string | null;
+  status: 'scheduled' | 'bot_joining' | 'recording' | 'processing' | 'completed' | 'failed';
+  recordingS3Key: string | null;
+  transcriptText: string | null;
+  summary: string | null;
+  actionItems: { task: string; assignee?: string }[] | null;
+  durationSeconds: number | null;
+  participants: string[] | null;
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GoogleCalendarStatus {
+  connected: boolean;
+  email?: string;
+}
+
 declare global {
   interface Window {
     electronAPI: {

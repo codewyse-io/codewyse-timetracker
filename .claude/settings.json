@@ -8,7 +8,12 @@
       "Bash(find /c/Users/usama/Downloads/codewyse-timetracker/admin/src -type f -name *.ts*)",
       "Bash(find /c/Users/usama/Downloads/codewyse-timetracker/desktop/src -type f -name *.tsx)",
       "WebFetch(domain:www.electron.build)",
-      "Bash(ls dist/database/migrations/*Multi* dist/database/migrations/*SuperAdmin* dist/modules/users/seeds/*super*)"
+      "Bash(ls dist/database/migrations/*Multi* dist/database/migrations/*SuperAdmin* dist/modules/users/seeds/*super*)",
+      "Bash(node -e \"const dg = require\\('@deepgram/sdk'\\); console.log\\(Object.keys\\(dg\\).join\\(', '\\)\\)\")",
+      "Bash(node -e \"const { DeepgramClient } = require\\('@deepgram/sdk'\\); const c = new DeepgramClient; console.log\\(typeof c\\)\")"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\usama\\Downloads\\codewyse-timetracker\\backend\\src\\modules\\bot"
     ]
   }
 }

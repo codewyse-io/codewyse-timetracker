@@ -30,6 +30,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
       { name: 'reports' },
       { name: 'ai-insights' },
       { name: 'email' },
+      { name: 'meeting-transcription' },
     ),
   ],
   exports: [BullModule],

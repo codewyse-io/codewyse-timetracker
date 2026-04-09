@@ -122,4 +122,27 @@ export class S3Service {
       lastModified: obj.LastModified || new Date(),
     }));
   }
+
+  async uploadBuffer(buffer: Buffer, folder: string, extension: string): Promise<string> {
+    const key = `${folder}/${uuidv4()}${extension}`;
+
+    if (this.useLocal) {
+      const filePath = join(this.localDir, ...key.split('/'));
+      mkdirSync(join(this.localDir, ...key.split('/').slice(0, -1)), { recursive: true });
+      writeFileSync(filePath, buffer);
+      this.logger.log(`Uploaded ${key} to local storage`);
+      return key;
+    }
+
+    await this.s3!.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: buffer,
+      }),
+    );
+
+    this.logger.log(`Uploaded ${key} to S3`);
+    return key;
+  }
 }

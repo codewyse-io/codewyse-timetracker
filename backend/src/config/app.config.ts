@@ -6,4 +6,8 @@ export default registerAs('app', () => ({
   adminUrl: process.env.ADMIN_URL ?? 'http://localhost:5173',
   desktopUrl: process.env.DESKTOP_URL ?? 'http://localhost:5174',
   invitationExpiryHours: parseInt(process.env.INVITATION_EXPIRY_HOURS ?? '72', 10),
+  recallApiKey: process.env.RECALL_API_KEY,
+  googleClientId: process.env.GOOGLE_CLIENT_ID,
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  googleRedirectUri: process.env.GOOGLE_REDIRECT_URI ?? 'http://localhost:3000/google-calendar/callback',
 }));

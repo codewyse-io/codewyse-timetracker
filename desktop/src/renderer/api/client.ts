@@ -114,4 +114,52 @@ export async function getActiveAnnouncements() {
   return response.data;
 }
 
+// Google Calendar
+export async function getGoogleCalendarAuthUrl() {
+  const res = await apiClient.get('/google-calendar/auth-url');
+  return res.data;
+}
+export async function getGoogleCalendarStatus() {
+  const res = await apiClient.get('/google-calendar/status');
+  return res.data;
+}
+export async function disconnectGoogleCalendar() {
+  const res = await apiClient.post('/google-calendar/disconnect');
+  return res.data;
+}
+export async function syncGoogleCalendar() {
+  const res = await apiClient.post('/google-calendar/sync');
+  return res.data;
+}
+
+// Meetings
+export async function getMeetings(params?: { page?: number; limit?: number; startDate?: string; endDate?: string }) {
+  const res = await apiClient.get('/meetings', { params });
+  return res.data;
+}
+export async function createMeeting(data: { title: string; meetingUrl: string; scheduledStart?: string; scheduledEnd?: string }) {
+  const res = await apiClient.post('/meetings', data);
+  return res.data;
+}
+export async function startMeetingRecording(meetingId: string) {
+  const res = await apiClient.post(`/meetings/${meetingId}/record`);
+  return res.data;
+}
+export async function stopMeetingRecording(meetingId: string) {
+  const res = await apiClient.post(`/meetings/${meetingId}/stop`);
+  return res.data;
+}
+export async function getMeetingDetail(meetingId: string) {
+  const res = await apiClient.get(`/meetings/${meetingId}`);
+  return res.data;
+}
+export async function getMeetingRecordingUrl(meetingId: string) {
+  const res = await apiClient.get(`/meetings/${meetingId}/recording-url`);
+  return res.data;
+}
+export async function deleteMeeting(meetingId: string) {
+  const res = await apiClient.delete(`/meetings/${meetingId}`);
+  return res.data;
+}
+
 export default apiClient;
