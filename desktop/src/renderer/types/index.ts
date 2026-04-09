@@ -100,6 +100,7 @@ export interface GoogleCalendarStatus {
 declare global {
   interface Window {
     electronAPI: {
+      openExternal: (url: string) => Promise<void>;
       getIdleTime: () => Promise<number>;
       getAuthToken: () => Promise<string | null>;
       setAuthToken: (token: string) => Promise<void>;

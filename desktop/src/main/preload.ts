@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  openExternal: (url: string): Promise<void> => ipcRenderer.invoke('open-external', url),
   getIdleTime: (): Promise<number> => ipcRenderer.invoke('get-idle-time'),
   getAuthToken: (): Promise<string | null> => ipcRenderer.invoke('get-auth-token'),
   setAuthToken: (token: string): Promise<void> => ipcRenderer.invoke('set-auth-token', token),

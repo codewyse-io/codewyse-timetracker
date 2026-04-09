@@ -173,10 +173,33 @@ export default function MeetingsPanel() {
     try {
       const res = await getGoogleCalendarAuthUrl();
       const url = res.url || res.data?.url;
-      if (url) window.open(url, '_blank');
+      if (url) {
+        // Use Electron shell to open in system browser (window.open is blocked by security policy)
+        if (window.electronAPI?.openExternal) {
+          window.electronAPI.openExternal(url);
+        } else {
+          // Fallback for dev mode
+          window.open(url, '_blank');
+        }
+        // Poll for connection status after user completes OAuth
+        const pollInterval = setInterval(async () => {
+          try {
+            const status = await getGoogleCalendarStatus();
+            const s = status.data || status;
+            if (s.connected) {
+              clearInterval(pollInterval);
+              setCalStatus(s);
+              setCalLoading(false);
+              message.success('Google Calendar connected!');
+              fetchMeetings();
+            }
+          } catch {}
+        }, 3000);
+        // Stop polling after 2 minutes
+        setTimeout(() => { clearInterval(pollInterval); setCalLoading(false); }, 120000);
+      }
     } catch {
       message.error('Failed to get auth URL');
-    } finally {
       setCalLoading(false);
     }
   };

@@ -42,7 +42,10 @@ export class GoogleCalendarService {
     const url = oauth2Client.generateAuthUrl({
       access_type: 'offline',
       prompt: 'consent',
-      scope: ['https://www.googleapis.com/auth/calendar.readonly'],
+      scope: [
+        'https://www.googleapis.com/auth/calendar.readonly',
+        'https://www.googleapis.com/auth/userinfo.email',
+      ],
       state,
     });
 
@@ -50,22 +53,42 @@ export class GoogleCalendarService {
   }
 
   async handleCallback(code: string, state: string): Promise<void> {
+    this.logger.log(`[Callback] Processing OAuth callback`);
+
     let payload: { userId: string; orgId: string };
     try {
       payload = this.jwtService.verify(state);
-    } catch {
+      this.logger.log(`[Callback] State decoded: userId=${payload.userId}`);
+    } catch (err: any) {
+      this.logger.error(`[Callback] Invalid state token: ${err.message}`);
       throw new UnauthorizedException('Invalid or expired state token');
     }
 
     const oauth2Client = this.createOAuth2Client();
-    const { tokens } = await oauth2Client.getToken(code);
+
+    let tokens: any;
+    try {
+      const tokenResponse = await oauth2Client.getToken(code);
+      tokens = tokenResponse.tokens;
+      this.logger.log(`[Callback] Got tokens, access_token: ${tokens.access_token ? 'yes' : 'no'}, refresh_token: ${tokens.refresh_token ? 'yes' : 'no'}`);
+    } catch (err: any) {
+      this.logger.error(`[Callback] Failed to exchange code for tokens: ${err.message}`);
+      throw err;
+    }
 
     oauth2Client.setCredentials(tokens);
 
     // Get user email from Google
-    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
-    const userInfo = await oauth2.userinfo.get();
-    const googleEmail = userInfo.data.email || '';
+    let googleEmail = '';
+    try {
+      const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+      const userInfo = await oauth2.userinfo.get();
+      googleEmail = userInfo.data.email || '';
+      this.logger.log(`[Callback] Got Google email: ${googleEmail}`);
+    } catch (err: any) {
+      this.logger.warn(`[Callback] Could not fetch user email: ${err.message}`);
+      googleEmail = 'unknown';
+    }
 
     // Upsert connection
     let connection = await this.connectionRepo.findOne({
@@ -91,9 +114,12 @@ export class GoogleCalendarService {
     }
 
     await this.connectionRepo.save(connection);
+    this.logger.log(`[Callback] Connection saved for user ${payload.userId}`);
 
-    // Trigger initial sync
-    await this.syncCalendarEvents(payload.userId);
+    // Trigger initial sync (non-blocking)
+    this.syncCalendarEvents(payload.userId).catch((err) => {
+      this.logger.warn(`[Callback] Initial calendar sync failed: ${err.message}`);
+    });
   }
 
   async getConnectionStatus(userId: string): Promise<{ connected: boolean; email: string | null }> {

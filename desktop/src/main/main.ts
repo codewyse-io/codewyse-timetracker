@@ -240,6 +240,14 @@ function createWindow(): void {
 }
 
 function setupIpcHandlers(): void {
+  ipcMain.handle('open-external', async (_event, url: string) => {
+    // Only allow http/https URLs for security
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      const { shell } = require('electron');
+      await shell.openExternal(url);
+    }
+  });
+
   ipcMain.handle('get-idle-time', () => {
     return powerMonitor.getSystemIdleTime();
   });
