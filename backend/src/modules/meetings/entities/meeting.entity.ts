@@ -49,22 +49,22 @@ export class Meeting {
   @Column({ name: 'recall_bot_id', nullable: true })
   recallBotId: string;
 
-  @Column({ name: 'recording_key', nullable: true })
+  @Column({ name: 'recording_s3_key', nullable: true })
   recordingKey: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'transcript_text', type: 'longtext', nullable: true })
   transcript: string;
 
   @Column({ type: 'text', nullable: true })
   summary: string;
 
-  @Column({ type: 'json', nullable: true })
+  @Column({ name: 'action_items', type: 'json', nullable: true })
   actionItems: { task: string; assignee?: string }[];
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ name: 'scheduled_start', type: 'datetime', nullable: true })
   scheduledStart: Date;
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ name: 'scheduled_end', type: 'datetime', nullable: true })
   scheduledEnd: Date;
 
   @Column({ name: 'google_event_id', nullable: true })
@@ -78,12 +78,6 @@ export class Meeting {
 
   @Column({ name: 'error_message', type: 'text', nullable: true })
   errorMessage: string;
-
-  @Column({ type: 'datetime', nullable: true })
-  actualStart: Date;
-
-  @Column({ type: 'datetime', nullable: true })
-  actualEnd: Date;
 
   @Column({ name: 'user_id' })
   userId: string;

@@ -96,7 +96,6 @@ export class MeetingsService {
     const bot = await this.meetingBotService.createBot(meeting.meetingUrl, 'Pulse Notetaker', meeting.id);
     meeting.recallBotId = bot.id;
     meeting.status = MeetingStatus.RECORDING;
-    meeting.actualStart = new Date();
     await this.meetingRepo.save(meeting);
 
     if (this.realtimeGateway) {
@@ -121,7 +120,6 @@ export class MeetingsService {
 
     await this.meetingBotService.stopBot(meeting.recallBotId);
     meeting.status = MeetingStatus.PROCESSING;
-    meeting.actualEnd = new Date();
     await this.meetingRepo.save(meeting);
 
     // Enqueue transcription job immediately after stopping
