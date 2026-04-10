@@ -25,7 +25,9 @@ HAS_PACTL=$(command -v pactl 2>/dev/null || echo "")
 HAS_FFMPEG=$(command -v ffmpeg 2>/dev/null || echo "")
 
 if [ -n "$HAS_PACTL" ] && [ -n "$HAS_FFMPEG" ]; then
-  echo "PulseAudio + ffmpeg already installed (pactl=$HAS_PACTL, ffmpeg=$HAS_FFMPEG) — skipping install"
+  echo "PulseAudio + ffmpeg already installed (pactl=$HAS_PACTL, ffmpeg=$HAS_FFMPEG) — skipping package install"
+  # Still ensure the runtime env var is set in .env on every deploy
+  set_env_var "PULSE_SERVER" "unix:/var/run/pulse/native"
   echo '========================================='
   exit 0
 fi
@@ -102,8 +104,8 @@ which pactl || echo "pactl NOT found"
 which pulseaudio || echo "pulseaudio NOT found"
 which ffmpeg || echo "ffmpeg NOT found"
 
-# Tell the runtime app where the PulseAudio socket lives
-set_env_var "XDG_RUNTIME_DIR" "/run/user/webapp"
+# Tell the runtime app where the PulseAudio system socket lives
+set_env_var "PULSE_SERVER" "unix:/var/run/pulse/native"
 
 echo '========================================='
 echo 'Bot dependencies install completed'
