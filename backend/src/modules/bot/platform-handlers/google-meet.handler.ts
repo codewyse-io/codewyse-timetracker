@@ -31,7 +31,27 @@ export async function joinGoogleMeet(page: Page, meetingUrl: string, botName: st
   log(`Page title: ${await page.title()}`);
   await snapshot(page, 'after-load');
 
-  // Try to dismiss any popups
+  // Dismiss the "Do you want people to see and hear you?" modal that Meet
+  // shows on the very first guest visit. The bot is a notetaker — no mic/cam needed.
+  log('Looking for "Continue without microphone and camera" link...');
+  const continueWithoutMediaSelectors = [
+    'text=/continue without microphone and camera/i',
+    'a:has-text("Continue without microphone and camera")',
+    'button:has-text("Continue without microphone and camera")',
+    'div[role="button"]:has-text("Continue without microphone and camera")',
+  ];
+  for (const sel of continueWithoutMediaSelectors) {
+    try {
+      const el = page.locator(sel).first();
+      await el.waitFor({ state: 'visible', timeout: 4000 });
+      await el.click();
+      log(`Dismissed media modal via: ${sel}`);
+      await page.waitForTimeout(2000);
+      break;
+    } catch {}
+  }
+
+  // Try to dismiss any other popups
   try {
     await page.click('button[aria-label="Dismiss"]', { timeout: 1500 });
     log('Dismissed a popup');
