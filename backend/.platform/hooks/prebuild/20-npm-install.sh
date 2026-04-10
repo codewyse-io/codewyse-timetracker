@@ -22,9 +22,20 @@ fi
 # Install production dependencies
 npm install --omit=dev --no-audit --no-fund
 
-# Ensure Puppeteer Chromium is downloaded (in case PUPPETEER_SKIP_DOWNLOAD was set)
-echo 'Ensuring Puppeteer Chromium is installed...'
-PUPPETEER_SKIP_DOWNLOAD=false npx puppeteer browsers install chrome 2>&1 || echo 'Puppeteer browser install failed (may already be installed)'
+# Ensure Puppeteer Chromium is downloaded (only on first deploy — idempotent)
+PUPPETEER_MARKER=/var/cache/pulsetrack-puppeteer-chrome-installed
+if [ ! -f "$PUPPETEER_MARKER" ]; then
+  echo 'Installing Puppeteer Chromium (first-time only)...'
+  if PUPPETEER_SKIP_DOWNLOAD=false npx puppeteer browsers install chrome 2>&1; then
+    sudo mkdir -p /var/cache 2>/dev/null || true
+    sudo touch "$PUPPETEER_MARKER"
+    echo "Created marker: $PUPPETEER_MARKER"
+  else
+    echo 'Puppeteer browser install failed'
+  fi
+else
+  echo 'Puppeteer Chromium already installed, skipping'
+fi
 
 echo ''
 echo '========================================='
