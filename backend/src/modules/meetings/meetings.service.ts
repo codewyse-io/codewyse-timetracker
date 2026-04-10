@@ -13,6 +13,7 @@ import { Repository, Between, Not, IsNull, LessThanOrEqual, MoreThanOrEqual } fr
 import { Queue } from 'bull';
 import { Cron } from '@nestjs/schedule';
 import { Meeting, MeetingStatus, MeetingPlatform } from './entities/meeting.entity';
+import { User } from '../users/entities/user.entity';
 import { MeetingBotService } from '../bot/meeting-bot.service';
 import { S3Service } from '../s3/s3.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
@@ -25,6 +26,7 @@ export class MeetingsService {
 
   constructor(
     @InjectRepository(Meeting) private meetingRepo: Repository<Meeting>,
+    @InjectRepository(User) private userRepo: Repository<User>,
     private meetingBotService: MeetingBotService,
     private s3Service: S3Service,
     @Optional() @Inject(forwardRef(() => RealtimeGateway))
@@ -88,12 +90,28 @@ export class MeetingsService {
   }
 
   async startRecording(meetingId: string, userId: string) {
+    this.logger.log(`[startRecording] meetingId=${meetingId}, userId=${userId}`);
     const meeting = await this.findByIdOrFail(meetingId);
     if (meeting.userId !== userId) {
       throw new ForbiddenException('You do not own this meeting');
     }
 
-    const bot = await this.meetingBotService.createBot(meeting.meetingUrl, 'Pulse Notetaker', meeting.id);
+    // Build bot name from user's first name
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    const botName = user?.firstName ? `${user.firstName}'s Notetaker` : 'Pulse Notetaker';
+
+    let bot;
+    try {
+      bot = await this.meetingBotService.createBot(meeting.meetingUrl, botName, meeting.id);
+    } catch (err: any) {
+      this.logger.error(`[startRecording] Bot creation failed: ${err.message}`);
+      this.logger.error(`[startRecording] Stack: ${err.stack}`);
+      meeting.status = MeetingStatus.FAILED;
+      meeting.errorMessage = err.message;
+      await this.meetingRepo.save(meeting);
+      throw err;
+    }
+
     meeting.recallBotId = bot.id;
     meeting.status = MeetingStatus.RECORDING;
     await this.meetingRepo.save(meeting);
@@ -181,7 +199,9 @@ export class MeetingsService {
     for (const meeting of meetings) {
       if (!meeting.meetingUrl) continue;
       try {
-        const bot = await this.meetingBotService.createBot(meeting.meetingUrl, 'Pulse Notetaker', meeting.id);
+        const user = await this.userRepo.findOne({ where: { id: meeting.userId } });
+        const botName = user?.firstName ? `${user.firstName}'s Notetaker` : 'Pulse Notetaker';
+        const bot = await this.meetingBotService.createBot(meeting.meetingUrl, botName, meeting.id);
         meeting.recallBotId = bot.id;
         meeting.status = MeetingStatus.RECORDING;
         await this.meetingRepo.save(meeting);

@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bull';
 import { Meeting } from './entities/meeting.entity';
+import { User } from '../users/entities/user.entity';
 import { MeetingsController } from './meetings.controller';
 import { MeetingsService } from './meetings.service';
 import { MeetingTranscriptionProcessor } from './processors/meeting-transcription.processor';
@@ -11,7 +12,7 @@ import { RealtimeModule } from '../realtime/realtime.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Meeting]),
+    TypeOrmModule.forFeature([Meeting, User]),
     BotModule,
     S3Module,
     BullModule.registerQueue({ name: 'meeting-transcription' }),

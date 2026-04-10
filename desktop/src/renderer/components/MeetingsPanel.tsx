@@ -74,7 +74,7 @@ export default function MeetingsPanel() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const [dateFilter, setDateFilter] = useState<dayjs.Dayjs | null>(null);
+  const [dateFilter, setDateFilter] = useState<dayjs.Dayjs | null>(dayjs());
   const limit = 10;
 
   // Join meeting modal

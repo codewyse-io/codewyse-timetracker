@@ -26,27 +26,33 @@ export class MeetingBotService {
   ) {}
 
   async createBot(meetingUrl: string, botName = 'Pulse Notetaker', meetingId?: string): Promise<{ id: string }> {
+    this.logger.log(`[createBot] Starting — url=${meetingUrl}, botName=${botName}, meetingId=${meetingId}`);
+
     if (!this.pool.canLaunch()) {
       throw new BadRequestException(`Maximum concurrent bots reached (${this.pool.getActiveCount()}). Try again later.`);
     }
 
     const botId = uuidv4();
     const audioFilePath = join(tmpdir(), `meeting_${botId}.wav`);
+    this.logger.log(`[createBot] botId=${botId}, audioPath=${audioFilePath}`);
 
     try {
       // 1. Setup PulseAudio virtual sink (Linux only)
       let sinkModuleId: string | null = null;
       const isLinux = process.platform === 'linux';
+      this.logger.log(`[createBot] Step 1: PulseAudio setup (isLinux=${isLinux})`);
       if (isLinux) {
         try {
           const result = execSync(`pactl load-module module-null-sink sink_name=bot_${botId} sink_properties=device.description="Bot_${botId}"`, { encoding: 'utf-8' });
           sinkModuleId = result.trim();
-        } catch (err) {
-          this.logger.warn(`PulseAudio setup failed (may not be available): ${err}`);
+          this.logger.log(`[createBot] PulseAudio sink created: ${sinkModuleId}`);
+        } catch (err: any) {
+          this.logger.warn(`[createBot] PulseAudio setup failed (continuing): ${err.message}`);
         }
       }
 
       // 2. Launch Puppeteer
+      this.logger.log(`[createBot] Step 2: Launching Puppeteer (PUPPETEER_EXECUTABLE_PATH=${process.env.PUPPETEER_EXECUTABLE_PATH || 'unset'})`);
       const puppeteer = require('puppeteer');
       const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || undefined;
       const browser = await puppeteer.launch({
@@ -141,7 +147,8 @@ export class MeetingBotService {
       this.logger.log(`Bot ${botId} successfully joined and recording`);
       return { id: botId };
     } catch (err: any) {
-      this.logger.error(`Failed to create bot: ${err.message}`);
+      this.logger.error(`[createBot] FAILED at step ${err.step || 'unknown'}: ${err.message}`);
+      this.logger.error(`[createBot] Stack: ${err.stack}`);
       throw err;
     }
   }
