@@ -169,37 +169,55 @@ export default function MeetingsPanel() {
 
   // Google Calendar actions
   const handleConnect = async () => {
+    console.log('[MeetingsPanel] handleConnect clicked');
     setCalLoading(true);
     try {
       const res = await getGoogleCalendarAuthUrl();
-      const url = res.url || res.data?.url;
-      if (url) {
-        // Use Electron shell to open in system browser (window.open is blocked by security policy)
-        if (window.electronAPI?.openExternal) {
-          window.electronAPI.openExternal(url);
-        } else {
-          // Fallback for dev mode
-          window.open(url, '_blank');
-        }
-        // Poll for connection status after user completes OAuth
-        const pollInterval = setInterval(async () => {
-          try {
-            const status = await getGoogleCalendarStatus();
-            const s = status.data || status;
-            if (s.connected) {
-              clearInterval(pollInterval);
-              setCalStatus(s);
-              setCalLoading(false);
-              message.success('Google Calendar connected!');
-              fetchMeetings();
-            }
-          } catch {}
-        }, 3000);
-        // Stop polling after 2 minutes
-        setTimeout(() => { clearInterval(pollInterval); setCalLoading(false); }, 120000);
+      console.log('[MeetingsPanel] getAuthUrl response:', res);
+
+      // Try every possible shape: { url }, { data: { url } }, { success, data: { url } }
+      const url = res?.url || res?.data?.url || res?.data?.data?.url;
+      console.log('[MeetingsPanel] Extracted URL:', url);
+
+      if (!url) {
+        message.error('No auth URL returned from server');
+        setCalLoading(false);
+        return;
       }
-    } catch {
-      message.error('Failed to get auth URL');
+
+      // Open in system browser
+      if (window.electronAPI?.openExternal) {
+        console.log('[MeetingsPanel] Opening via electronAPI.openExternal');
+        await window.electronAPI.openExternal(url);
+      } else {
+        console.log('[MeetingsPanel] Falling back to window.open');
+        window.open(url, '_blank');
+      }
+
+      message.info('Complete the Google sign-in in your browser. This will auto-detect when you return.');
+
+      // Poll for connection status after user completes OAuth
+      const pollInterval = setInterval(async () => {
+        try {
+          const status = await getGoogleCalendarStatus();
+          const s = status?.data || status;
+          if (s?.connected) {
+            clearInterval(pollInterval);
+            setCalStatus(s);
+            setCalLoading(false);
+            message.success('Google Calendar connected!');
+            fetchMeetings();
+          }
+        } catch (err) {
+          console.error('[MeetingsPanel] Status poll failed:', err);
+        }
+      }, 3000);
+
+      // Stop polling after 2 minutes
+      setTimeout(() => { clearInterval(pollInterval); setCalLoading(false); }, 120000);
+    } catch (err: any) {
+      console.error('[MeetingsPanel] handleConnect error:', err);
+      message.error(`Failed to get auth URL: ${err?.message || 'unknown error'}`);
       setCalLoading(false);
     }
   };
