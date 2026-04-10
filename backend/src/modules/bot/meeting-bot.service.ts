@@ -48,8 +48,10 @@ export class MeetingBotService {
 
       // 2. Launch Puppeteer
       const puppeteer = require('puppeteer');
+      const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || undefined;
       const browser = await puppeteer.launch({
         headless: 'new',
+        executablePath,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
