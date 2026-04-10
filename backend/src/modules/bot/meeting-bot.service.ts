@@ -7,7 +7,45 @@ import { spawn, ChildProcess, execSync } from 'child_process';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { EventEmitter } from 'events';
+import * as fs from 'fs';
 import { chromium, Browser } from 'playwright';
+
+/**
+ * Find the Playwright Chromium binary on disk.
+ * Checks shared cache locations first (for production deploys where browsers
+ * are installed to a system-wide path), then falls back to Playwright's default.
+ */
+function findChromiumExecutable(): string | undefined {
+  const cacheRoots = [
+    process.env.PLAYWRIGHT_BROWSERS_PATH,
+    '/var/cache/playwright',
+    join(process.env.HOME || '', '.cache', 'ms-playwright'),
+  ].filter((p): p is string => Boolean(p));
+
+  for (const root of cacheRoots) {
+    if (!fs.existsSync(root)) continue;
+    let entries: string[];
+    try {
+      entries = fs.readdirSync(root);
+    } catch {
+      continue;
+    }
+    // Look for any chromium* dir (chromium_headless_shell-XXXX, chromium-XXXX, etc)
+    for (const entry of entries) {
+      if (!entry.startsWith('chromium')) continue;
+      const candidates = [
+        join(root, entry, 'chrome-linux', 'headless_shell'),
+        join(root, entry, 'chrome-linux', 'chrome'),
+      ];
+      for (const c of candidates) {
+        try {
+          if (fs.existsSync(c) && fs.statSync(c).isFile()) return c;
+        } catch {}
+      }
+    }
+  }
+  return undefined;
+}
 
 // Platform handlers
 import { joinGoogleMeet } from './platform-handlers/google-meet.handler';
@@ -53,9 +91,11 @@ export class MeetingBotService {
       }
 
       // 2. Launch Playwright Chromium
-      this.logger.log(`[createBot] Step 2: Launching Playwright Chromium`);
+      const chromiumPath = findChromiumExecutable();
+      this.logger.log(`[createBot] Step 2: Launching Playwright Chromium (executablePath=${chromiumPath || 'default'})`);
       browser = await chromium.launch({
         headless: true,
+        executablePath: chromiumPath,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
