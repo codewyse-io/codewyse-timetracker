@@ -22,6 +22,10 @@ fi
 # Install production dependencies
 npm install --omit=dev --no-audit --no-fund
 
+# Ensure Puppeteer Chromium is downloaded (in case PUPPETEER_SKIP_DOWNLOAD was set)
+echo 'Ensuring Puppeteer Chromium is installed...'
+PUPPETEER_SKIP_DOWNLOAD=false npx puppeteer browsers install chrome 2>&1 || echo 'Puppeteer browser install failed (may already be installed)'
+
 echo ''
 echo '========================================='
 echo 'Dependencies installed successfully'
