@@ -60,8 +60,23 @@ export async function joinGoogleMeet(page: Page, meetingUrl: string, botName: st
   }
 
   if (!nameInputFound) {
-    log('WARNING: name input not found — may already be on the join screen');
+    log('WARNING: name input not found — dumping page state');
     await snapshot(page, 'no-name-input');
+    try {
+      const bodyText = await page.locator('body').innerText({ timeout: 2000 });
+      log(`Page body text (first 500 chars): ${bodyText.substring(0, 500).replace(/\n/g, ' | ')}`);
+    } catch {}
+    try {
+      const allInputs = await page.locator('input').count();
+      log(`Total <input> elements on page: ${allInputs}`);
+      for (let i = 0; i < Math.min(allInputs, 5); i++) {
+        const inp = page.locator('input').nth(i);
+        const aria = await inp.getAttribute('aria-label').catch(() => null);
+        const placeholder = await inp.getAttribute('placeholder').catch(() => null);
+        const type = await inp.getAttribute('type').catch(() => null);
+        log(`  input[${i}] type=${type} aria-label=${aria} placeholder=${placeholder}`);
+      }
+    } catch {}
   }
 
   await page.waitForTimeout(1000);
@@ -91,12 +106,19 @@ export async function joinGoogleMeet(page: Page, meetingUrl: string, botName: st
   }
 
   if (!joined) {
-    log('ERROR: could not find join button');
+    log('ERROR: could not find join button — dumping page state');
     await snapshot(page, 'no-join-button');
-    // Dump button text for debugging
     try {
       const buttons = await page.locator('button').allTextContents();
       log(`Visible buttons: ${JSON.stringify(buttons.slice(0, 20))}`);
+    } catch {}
+    try {
+      const bodyText = await page.locator('body').innerText({ timeout: 2000 });
+      log(`Page body text (first 500 chars): ${bodyText.substring(0, 500).replace(/\n/g, ' | ')}`);
+    } catch {}
+    try {
+      const links = await page.locator('a').allTextContents();
+      log(`Visible links: ${JSON.stringify(links.slice(0, 20))}`);
     } catch {}
     throw new Error('Could not find join button on Google Meet page');
   }
