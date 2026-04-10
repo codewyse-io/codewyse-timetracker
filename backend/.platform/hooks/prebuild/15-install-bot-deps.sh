@@ -102,6 +102,9 @@ which pactl || echo "pactl NOT found"
 which pulseaudio || echo "pulseaudio NOT found"
 which ffmpeg || echo "ffmpeg NOT found"
 
+# Tell the runtime app where the PulseAudio socket lives
+set_env_var "XDG_RUNTIME_DIR" "/run/user/webapp"
+
 echo '========================================='
 echo 'Bot dependencies install completed'
 echo '========================================='

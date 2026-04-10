@@ -7,7 +7,7 @@ import { spawn, ChildProcess, execSync } from 'child_process';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { EventEmitter } from 'events';
-import * as fs from 'fs';
+import { chromium, Browser } from 'playwright';
 
 // Platform handlers
 import { joinGoogleMeet } from './platform-handlers/google-meet.handler';
@@ -36,6 +36,7 @@ export class MeetingBotService {
     const audioFilePath = join(tmpdir(), `meeting_${botId}.wav`);
     this.logger.log(`[createBot] botId=${botId}, audioPath=${audioFilePath}`);
 
+    let browser: Browser | null = null;
     try {
       // 1. Setup PulseAudio virtual sink (Linux only)
       let sinkModuleId: string | null = null;
@@ -51,13 +52,10 @@ export class MeetingBotService {
         }
       }
 
-      // 2. Launch Puppeteer
-      this.logger.log(`[createBot] Step 2: Launching Puppeteer (PUPPETEER_EXECUTABLE_PATH=${process.env.PUPPETEER_EXECUTABLE_PATH || 'unset'})`);
-      const puppeteer = require('puppeteer');
-      const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || undefined;
-      const browser = await puppeteer.launch({
-        headless: 'new',
-        executablePath,
+      // 2. Launch Playwright Chromium
+      this.logger.log(`[createBot] Step 2: Launching Playwright Chromium`);
+      browser = await chromium.launch({
+        headless: true,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
@@ -73,8 +71,11 @@ export class MeetingBotService {
         },
       });
 
-      const page = await browser.newPage();
-      await page.setUserAgent('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+      const context = await browser.newContext({
+        userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        permissions: ['microphone', 'camera'],
+      });
+      const page = await context.newPage();
 
       // 3. Join meeting based on platform
       const platform = this.detectPlatform(meetingUrl);
@@ -84,7 +85,7 @@ export class MeetingBotService {
         if (platform === 'google_meet') await joinGoogleMeet(page, meetingUrl, botName);
         else if (platform === 'zoom') await joinZoom(page, meetingUrl, botName);
         else if (platform === 'teams') await joinTeams(page, meetingUrl, botName);
-        else await page.goto(meetingUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+        else await page.goto(meetingUrl, { waitUntil: 'networkidle', timeout: 30000 });
       } catch (joinErr: any) {
         this.logger.error(`Bot ${botId} failed to join meeting: ${joinErr.message}`);
         await browser.close();
@@ -106,10 +107,8 @@ export class MeetingBotService {
       }
 
       // 5. Start Deepgram live transcription
-      let deepgramConnection: any = null;
       try {
         const { connection, emitter } = this.deepgramService.startLiveTranscription();
-        deepgramConnection = connection;
 
         emitter.on('transcript', (data) => {
           this.pool.appendTranscript(botId, `${data.speaker}: ${data.text}`);
@@ -149,6 +148,9 @@ export class MeetingBotService {
     } catch (err: any) {
       this.logger.error(`[createBot] FAILED at step ${err.step || 'unknown'}: ${err.message}`);
       this.logger.error(`[createBot] Stack: ${err.stack}`);
+      if (browser) {
+        try { await browser.close(); } catch {}
+      }
       throw err;
     }
   }

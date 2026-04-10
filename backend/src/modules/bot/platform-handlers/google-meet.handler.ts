@@ -1,54 +1,43 @@
-import type { Page } from 'puppeteer';
+import type { Page } from 'playwright';
 
 export async function joinGoogleMeet(page: Page, meetingUrl: string, botName: string): Promise<void> {
-  await page.goto(meetingUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-  await new Promise(r => setTimeout(r, 3000));
+  await page.goto(meetingUrl, { waitUntil: 'networkidle', timeout: 30000 });
+  await page.waitForTimeout(3000);
 
   // Try to dismiss any initial dialogs/popups
   try {
-    const dismissBtn = await page.$('button[aria-label="Dismiss"]');
-    if (dismissBtn) await dismissBtn.click();
+    await page.click('button[aria-label="Dismiss"]', { timeout: 2000 });
   } catch {}
 
   // Enter name (anonymous join)
   try {
-    await page.waitForSelector('input[aria-label="Your name"], input[placeholder*="name" i]', { timeout: 10000 });
-    const nameInput = await page.$('input[aria-label="Your name"]') || await page.$('input[placeholder*="name" i]');
-    if (nameInput) {
-      await nameInput.click({ clickCount: 3 });
-      await nameInput.type(botName, { delay: 50 });
-    }
+    const nameInput = page.locator('input[aria-label="Your name"], input[placeholder*="name" i]').first();
+    await nameInput.waitFor({ timeout: 10000 });
+    await nameInput.click({ clickCount: 3 });
+    await nameInput.fill(botName);
   } catch {
     // May already have a name set
   }
 
   // Turn off microphone
   try {
-    const micBtn = await page.$('[data-is-muted="false"][aria-label*="microphone" i]') || await page.$('button[aria-label*="Turn off microphone" i]');
-    if (micBtn) await micBtn.click();
+    await page.click('[data-is-muted="false"][aria-label*="microphone" i], button[aria-label*="Turn off microphone" i]', { timeout: 2000 });
   } catch {}
 
   // Turn off camera
   try {
-    const camBtn = await page.$('[data-is-muted="false"][aria-label*="camera" i]') || await page.$('button[aria-label*="Turn off camera" i]');
-    if (camBtn) await camBtn.click();
+    await page.click('[data-is-muted="false"][aria-label*="camera" i], button[aria-label*="Turn off camera" i]', { timeout: 2000 });
   } catch {}
 
-  await new Promise(r => setTimeout(r, 1000));
+  await page.waitForTimeout(1000);
 
   // Click "Ask to join" or "Join now"
   try {
-    const joinBtn = await page.$('button[data-mdc-dialog-action="join"]')
-      || await page.evaluateHandle(() => {
-        const buttons = [...document.querySelectorAll('button')];
-        return buttons.find(b => /ask to join|join now/i.test(b.textContent || ''));
-      });
-    if (joinBtn && typeof (joinBtn as any).click === 'function') {
-      await (joinBtn as any).click();
-    }
+    const joinBtn = page.locator('button[data-mdc-dialog-action="join"], button:has-text("Ask to join"), button:has-text("Join now")').first();
+    await joinBtn.click({ timeout: 5000 });
   } catch {}
 
   // Wait for meeting to load (admitted)
-  await new Promise(r => setTimeout(r, 5000));
+  await page.waitForTimeout(5000);
   console.log('[GoogleMeet] Bot attempted to join meeting');
 }

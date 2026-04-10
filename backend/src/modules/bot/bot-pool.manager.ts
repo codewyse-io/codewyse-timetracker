@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Browser } from 'puppeteer';
+import type { Browser } from 'playwright';
 import type { ChildProcess } from 'child_process';
 
 interface ActiveBot {
