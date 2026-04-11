@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotPoolManager } from './bot-pool.manager';
 import { DeepgramService } from './deepgram.service';
+import { S3Service } from '../s3/s3.service';
 import { v4 as uuidv4 } from 'uuid';
 import { spawn, ChildProcess, execSync } from 'child_process';
 import { tmpdir } from 'os';
@@ -61,7 +62,24 @@ export class MeetingBotService {
     private readonly pool: BotPoolManager,
     private readonly deepgramService: DeepgramService,
     private readonly configService: ConfigService,
+    private readonly s3Service: S3Service,
   ) {}
+
+  /** Build an uploader closure for a specific bot session. Screenshots land
+   *  in S3 under meeting-debug/{botId}/{label}-{ts}.png and the returned
+   *  presigned URL is suitable for pasting into a browser to view. */
+  private makeScreenshotUploader(botId: string): (buffer: Buffer, label: string) => Promise<string | null> {
+    return async (buffer: Buffer, label: string): Promise<string | null> => {
+      try {
+        const key = await this.s3Service.uploadBuffer(buffer, `meeting-debug/${botId}`, `-${label}.png`);
+        const url = await this.s3Service.getPresignedUrl(key, 86400); // 24h
+        return url;
+      } catch (err: any) {
+        this.logger.warn(`Screenshot upload failed: ${err.message}`);
+        return null;
+      }
+    };
+  }
 
   async createBot(meetingUrl: string, botName = 'Pulse Notetaker', meetingId?: string): Promise<{ id: string }> {
     this.logger.log(`[createBot] Starting — url=${meetingUrl}, botName=${botName}, meetingId=${meetingId}`);
@@ -121,8 +139,10 @@ export class MeetingBotService {
       const platform = this.detectPlatform(meetingUrl);
       this.logger.log(`Bot ${botId} joining ${platform} meeting: ${meetingUrl}`);
 
+      const uploader = this.makeScreenshotUploader(botId);
+
       try {
-        if (platform === 'google_meet') await joinGoogleMeet(page, meetingUrl, botName);
+        if (platform === 'google_meet') await joinGoogleMeet(page, meetingUrl, botName, uploader);
         else if (platform === 'zoom') await joinZoom(page, meetingUrl, botName);
         else if (platform === 'teams') await joinTeams(page, meetingUrl, botName);
         else await page.goto(meetingUrl, { waitUntil: 'networkidle', timeout: 30000 });

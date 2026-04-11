@@ -2,75 +2,148 @@ import type { Page } from 'playwright';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
+/** Optional screenshot uploader. If provided, the handler uploads each
+ *  screenshot buffer and logs the returned URL. */
+export type ScreenshotUploader = (buffer: Buffer, label: string) => Promise<string | null>;
+
 const log = (msg: string) => console.log(`[GoogleMeet] ${msg}`);
 
-async function snapshot(page: Page, label: string): Promise<void> {
+async function snapshot(page: Page, label: string, uploader?: ScreenshotUploader): Promise<void> {
   try {
-    const path = join(tmpdir(), `meet-${label}-${Date.now()}.png`);
-    await page.screenshot({ path, fullPage: true });
-    log(`Screenshot saved: ${path}`);
+    const buffer = await page.screenshot({ fullPage: true });
+    // Always also dump to /tmp as a fallback
+    const localPath = join(tmpdir(), `meet-${label}-${Date.now()}.png`);
+    try {
+      const fs = require('fs');
+      fs.writeFileSync(localPath, buffer);
+    } catch {}
+
+    if (uploader) {
+      const url = await uploader(buffer, label).catch(() => null);
+      if (url) {
+        log(`Screenshot [${label}]: ${url}`);
+        return;
+      }
+    }
+    log(`Screenshot [${label}] saved locally: ${localPath}`);
   } catch (err: any) {
     log(`Screenshot failed: ${err.message}`);
   }
 }
 
-export async function joinGoogleMeet(page: Page, meetingUrl: string, botName: string): Promise<void> {
+/**
+ * Wait until either the name input or the media-permission modal appears.
+ * Whichever appears first wins; we then handle that state.
+ */
+async function waitForPrejoinReady(page: Page, timeoutMs = 20000): Promise<'name' | 'modal' | 'unknown'> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    // Check for the name input (means we're already on the prejoin screen)
+    const nameVisible = await page.locator('input[type="text"]').first().isVisible().catch(() => false);
+    if (nameVisible) return 'name';
+
+    // Check for the media-permission modal
+    const modalVisible = await page
+      .locator('text=/continue without microphone and camera/i')
+      .first()
+      .isVisible()
+      .catch(() => false);
+    if (modalVisible) return 'modal';
+
+    await page.waitForTimeout(500);
+  }
+  return 'unknown';
+}
+
+export async function joinGoogleMeet(
+  page: Page,
+  meetingUrl: string,
+  botName: string,
+  uploader?: ScreenshotUploader,
+): Promise<void> {
   log(`Navigating to ${meetingUrl}`);
   try {
     await page.goto(meetingUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
     log('Page loaded (domcontentloaded)');
   } catch (err: any) {
     log(`Navigation error: ${err.message}`);
-    await snapshot(page, 'nav-error');
+    await snapshot(page, 'nav-error', uploader);
     throw err;
   }
 
-  // Let the JS bundle finish initializing
-  await page.waitForTimeout(5000);
-  log(`Current URL after wait: ${page.url()}`);
+  // Initial settle
+  await page.waitForTimeout(2000);
+  log(`Current URL: ${page.url()}`);
   log(`Page title: ${await page.title()}`);
-  await snapshot(page, 'after-load');
+  await snapshot(page, 'after-load', uploader);
 
-  // Dismiss the "Do you want people to see and hear you?" modal that Meet
-  // shows on the very first guest visit. The bot is a notetaker — no mic/cam needed.
-  log('Looking for "Continue without microphone and camera" link...');
-  const continueWithoutMediaSelectors = [
-    'text=/continue without microphone and camera/i',
-    'a:has-text("Continue without microphone and camera")',
-    'button:has-text("Continue without microphone and camera")',
-    'div[role="button"]:has-text("Continue without microphone and camera")',
-  ];
-  for (const sel of continueWithoutMediaSelectors) {
+  // Detect "You can't join this video call" — host hasn't started the meeting yet.
+  // Retry every 20s for up to 5 minutes.
+  const totalRetryMs = 5 * 60 * 1000;
+  const retryDeadline = Date.now() + totalRetryMs;
+  while (Date.now() < retryDeadline) {
+    const cantJoin = await page
+      .locator("text=/can't join this video call/i")
+      .first()
+      .isVisible({ timeout: 1000 })
+      .catch(() => false);
+    if (!cantJoin) break;
+    log("Meet says \"can't join this video call\" — host not in meeting yet, will retry in 20s");
+    await page.waitForTimeout(20000);
     try {
-      const el = page.locator(sel).first();
-      await el.waitFor({ state: 'visible', timeout: 4000 });
-      await el.click();
-      log(`Dismissed media modal via: ${sel}`);
+      await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 });
       await page.waitForTimeout(2000);
-      break;
+    } catch (err: any) {
+      log(`Reload failed: ${err.message}`);
+    }
+  }
+  if (Date.now() >= retryDeadline) {
+    await snapshot(page, 'host-never-started', uploader);
+    throw new Error('Host did not start the meeting within 5 minutes — giving up');
+  }
+
+  // Wait for either the prejoin screen or the media-permission modal
+  log('Waiting for prejoin screen or media modal...');
+  const state = await waitForPrejoinReady(page, 20000);
+  log(`Detected state: ${state}`);
+
+  if (state === 'modal') {
+    log('Dismissing "Continue without microphone and camera" modal...');
+    try {
+      await page.locator('text=/continue without microphone and camera/i').first().click({ timeout: 3000 });
+      log('Modal dismissed');
+      await page.waitForTimeout(2500);
+    } catch (err: any) {
+      log(`Failed to click modal dismiss: ${err.message}`);
+      await snapshot(page, 'modal-click-failed', uploader);
+    }
+  } else if (state === 'unknown') {
+    log('WARNING: Neither prejoin screen nor modal detected within 20s');
+    await snapshot(page, 'unknown-state', uploader);
+    try {
+      const bodyText = await page.locator('body').innerText({ timeout: 2000 });
+      log(`Body text (first 500 chars): ${bodyText.substring(0, 500).replace(/\n/g, ' | ')}`);
     } catch {}
   }
 
   // Try to dismiss any other popups
   try {
-    await page.click('button[aria-label="Dismiss"]', { timeout: 1500 });
-    log('Dismissed a popup');
+    await page.click('button[aria-label="Dismiss"]', { timeout: 1000 });
+    log('Dismissed an extra popup');
   } catch {}
 
-  // Find the name input. Google Meet uses several variants.
+  // Find the name input
   log('Looking for name input...');
   let nameInputFound = false;
   const nameSelectors = [
     'input[aria-label="Your name"]',
     'input[placeholder="Your name"]',
-    'input[jsname][type="text"]',
     'input[type="text"]',
   ];
-
   for (const sel of nameSelectors) {
     try {
       const input = page.locator(sel).first();
-      await input.waitFor({ state: 'visible', timeout: 3000 });
+      await input.waitFor({ state: 'visible', timeout: 5000 });
       await input.click({ clickCount: 3 });
       await input.fill(botName);
       log(`Entered name "${botName}" via selector: ${sel}`);
@@ -80,15 +153,11 @@ export async function joinGoogleMeet(page: Page, meetingUrl: string, botName: st
   }
 
   if (!nameInputFound) {
-    log('WARNING: name input not found — dumping page state');
-    await snapshot(page, 'no-name-input');
-    try {
-      const bodyText = await page.locator('body').innerText({ timeout: 2000 });
-      log(`Page body text (first 500 chars): ${bodyText.substring(0, 500).replace(/\n/g, ' | ')}`);
-    } catch {}
+    log('WARNING: name input not found');
+    await snapshot(page, 'no-name-input', uploader);
     try {
       const allInputs = await page.locator('input').count();
-      log(`Total <input> elements on page: ${allInputs}`);
+      log(`Total <input> elements: ${allInputs}`);
       for (let i = 0; i < Math.min(allInputs, 5); i++) {
         const inp = page.locator('input').nth(i);
         const aria = await inp.getAttribute('aria-label').catch(() => null);
@@ -101,10 +170,10 @@ export async function joinGoogleMeet(page: Page, meetingUrl: string, botName: st
 
   await page.waitForTimeout(1000);
 
-  // Find and click the join button. Try multiple variants.
+  // Click join button
   log('Looking for join button...');
   const joinSelectors = [
-    'button[jsname="Qx7uuf"]',                       // current Meet "Ask to join"
+    'button[jsname="Qx7uuf"]',
     'button:has-text("Ask to join")',
     'button:has-text("Join now")',
     'button[aria-label*="Ask to join" i]',
@@ -119,32 +188,23 @@ export async function joinGoogleMeet(page: Page, meetingUrl: string, botName: st
       const btn = page.locator(sel).first();
       await btn.waitFor({ state: 'visible', timeout: 3000 });
       await btn.click();
-      log(`Clicked join button via selector: ${sel}`);
+      log(`Clicked join button via: ${sel}`);
       joined = true;
       break;
     } catch {}
   }
 
   if (!joined) {
-    log('ERROR: could not find join button — dumping page state');
-    await snapshot(page, 'no-join-button');
+    log('ERROR: could not find join button');
+    await snapshot(page, 'no-join-button', uploader);
     try {
       const buttons = await page.locator('button').allTextContents();
       log(`Visible buttons: ${JSON.stringify(buttons.slice(0, 20))}`);
     } catch {}
-    try {
-      const bodyText = await page.locator('body').innerText({ timeout: 2000 });
-      log(`Page body text (first 500 chars): ${bodyText.substring(0, 500).replace(/\n/g, ' | ')}`);
-    } catch {}
-    try {
-      const links = await page.locator('a').allTextContents();
-      log(`Visible links: ${JSON.stringify(links.slice(0, 20))}`);
-    } catch {}
     throw new Error('Could not find join button on Google Meet page');
   }
 
-  // Wait briefly for the join request to register
   await page.waitForTimeout(3000);
-  await snapshot(page, 'after-join-click');
-  log('Join button clicked, waiting for admission...');
+  await snapshot(page, 'after-join-click', uploader);
+  log('Join clicked, waiting for admission...');
 }
