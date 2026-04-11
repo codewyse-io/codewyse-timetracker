@@ -11,7 +11,9 @@
       "Bash(ls dist/database/migrations/*Multi* dist/database/migrations/*SuperAdmin* dist/modules/users/seeds/*super*)",
       "Bash(node -e \"const dg = require\\('@deepgram/sdk'\\); console.log\\(Object.keys\\(dg\\).join\\(', '\\)\\)\")",
       "Bash(node -e \"const { DeepgramClient } = require\\('@deepgram/sdk'\\); const c = new DeepgramClient; console.log\\(typeof c\\)\")",
-      "Bash(npm view:*)"
+      "Bash(npm view:*)",
+      "Bash(node -e \"const dg = require\\('@deepgram/sdk'\\); console.log\\(Object.keys\\(dg\\).slice\\(0, 30\\)\\);\")",
+      "Bash(node -e ':*)"
     ],
     "additionalDirectories": [
       "C:\\Users\\usama\\Downloads\\codewyse-timetracker\\backend\\src\\modules\\bot"
