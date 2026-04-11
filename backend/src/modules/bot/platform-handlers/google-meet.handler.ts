@@ -77,35 +77,53 @@ export async function joinGoogleMeet(
   log(`Page title: ${await page.title()}`);
   await snapshot(page, 'after-load', uploader);
 
-  // Detect "You can't join this video call" — host hasn't started the meeting yet.
-  // Retry every 20s for up to 5 minutes.
+  // Wait for the page to settle into a definitive state. The "Getting ready..."
+  // spinner can show for several seconds before either the prejoin screen
+  // appears (good) or "You can't join this video call" appears (host not in meeting).
+  log('Waiting for Meet to settle into prejoin or error state...');
+  let state = await waitForPrejoinReady(page, 30000);
+  log(`Initial detected state: ${state}`);
+
+  // If we're in 'unknown' state, check if it's because Meet shows "can't join" — retry with reload
   const totalRetryMs = 5 * 60 * 1000;
   const retryDeadline = Date.now() + totalRetryMs;
-  while (Date.now() < retryDeadline) {
+  while (state === 'unknown' && Date.now() < retryDeadline) {
     const cantJoin = await page
       .locator("text=/can't join this video call/i")
       .first()
       .isVisible({ timeout: 1000 })
       .catch(() => false);
-    if (!cantJoin) break;
+    if (!cantJoin) {
+      log("Page is in unknown state but not on \"can't join\" screen — checking again");
+      state = await waitForPrejoinReady(page, 10000);
+      log(`Re-detected state: ${state}`);
+      if (state !== 'unknown') break;
+      // Still unknown — capture and bail
+      await snapshot(page, 'unknown-state', uploader);
+      try {
+        const bodyText = await page.locator('body').innerText({ timeout: 2000 });
+        log(`Body text (first 500 chars): ${bodyText.substring(0, 500).replace(/\n/g, ' | ')}`);
+      } catch {}
+      throw new Error('Meet page in unknown state');
+    }
     log("Meet says \"can't join this video call\" — host not in meeting yet, will retry in 20s");
     await page.waitForTimeout(20000);
     try {
       await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 });
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(3000);
+      state = await waitForPrejoinReady(page, 15000);
+      log(`After reload, detected state: ${state}`);
     } catch (err: any) {
       log(`Reload failed: ${err.message}`);
     }
   }
+
   if (Date.now() >= retryDeadline) {
     await snapshot(page, 'host-never-started', uploader);
     throw new Error('Host did not start the meeting within 5 minutes — giving up');
   }
 
-  // Wait for either the prejoin screen or the media-permission modal
-  log('Waiting for prejoin screen or media modal...');
-  const state = await waitForPrejoinReady(page, 20000);
-  log(`Detected state: ${state}`);
+  log(`Final detected state: ${state}`);
 
   if (state === 'modal') {
     log('Dismissing "Continue without microphone and camera" modal...');
@@ -126,27 +144,36 @@ export async function joinGoogleMeet(
     } catch {}
   }
 
+  // Dismiss the "Sign in with your Google account" coachmark if present
+  try {
+    await page.locator('button:has-text("Got it")').first().click({ timeout: 2000 });
+    log('Dismissed "Got it" coachmark');
+    await page.waitForTimeout(500);
+  } catch {}
+
   // Try to dismiss any other popups
   try {
     await page.click('button[aria-label="Dismiss"]', { timeout: 1000 });
     log('Dismissed an extra popup');
   } catch {}
 
-  // Find the name input
+  // Find the name input. Real Meet uses placeholder="Your name" and no aria-label.
   log('Looking for name input...');
   let nameInputFound = false;
   const nameSelectors = [
-    'input[aria-label="Your name"]',
     'input[placeholder="Your name"]',
+    'input[aria-label="Your name"]',
     'input[type="text"]',
   ];
   for (const sel of nameSelectors) {
     try {
       const input = page.locator(sel).first();
       await input.waitFor({ state: 'visible', timeout: 5000 });
-      await input.click({ clickCount: 3 });
-      await input.fill(botName);
-      log(`Entered name "${botName}" via selector: ${sel}`);
+      await input.click();
+      await input.fill('');
+      await input.type(botName, { delay: 30 });
+      const value = await input.inputValue().catch(() => '');
+      log(`Entered name via selector: ${sel} (input value now: "${value}")`);
       nameInputFound = true;
       break;
     } catch {}
@@ -168,14 +195,15 @@ export async function joinGoogleMeet(
     } catch {}
   }
 
-  await page.waitForTimeout(1000);
+  // Brief pause to let the join button transition from disabled→enabled after name entry
+  await page.waitForTimeout(1500);
 
-  // Click join button
+  // Click the join button. It only becomes clickable after a name is entered.
   log('Looking for join button...');
   const joinSelectors = [
-    'button[jsname="Qx7uuf"]',
     'button:has-text("Ask to join")',
     'button:has-text("Join now")',
+    'button[jsname="Qx7uuf"]',
     'button[aria-label*="Ask to join" i]',
     'button[aria-label*="Join now" i]',
     'div[role="button"]:has-text("Ask to join")',
@@ -186,7 +214,15 @@ export async function joinGoogleMeet(
   for (const sel of joinSelectors) {
     try {
       const btn = page.locator(sel).first();
-      await btn.waitFor({ state: 'visible', timeout: 3000 });
+      // Wait for it to be both visible AND enabled
+      await btn.waitFor({ state: 'visible', timeout: 5000 });
+      // Wait up to 5s for the button to become enabled (no longer aria-disabled)
+      const enabledDeadline = Date.now() + 5000;
+      while (Date.now() < enabledDeadline) {
+        const disabled = await btn.getAttribute('aria-disabled').catch(() => null);
+        if (disabled !== 'true') break;
+        await page.waitForTimeout(300);
+      }
       await btn.click();
       log(`Clicked join button via: ${sel}`);
       joined = true;
