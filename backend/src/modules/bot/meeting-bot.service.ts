@@ -108,32 +108,44 @@ export class MeetingBotService {
         }
       }
 
-      // 2. Launch Playwright Chromium
+      // 2. Launch Playwright Chromium in HEADED mode via Xvfb.
+      // Headless Chromium is detected and blocked by Google Meet, so we run
+      // a real headed browser on a virtual X display (DISPLAY=:99 from Xvfb).
       const chromiumPath = findChromiumExecutable();
-      this.logger.log(`[createBot] Step 2: Launching Playwright Chromium (executablePath=${chromiumPath || 'default'})`);
+      this.logger.log(`[createBot] Step 2: Launching Playwright Chromium (executablePath=${chromiumPath || 'default'}, DISPLAY=${process.env.DISPLAY || 'unset'})`);
       browser = await chromium.launch({
-        headless: true,
+        headless: false,
         executablePath: chromiumPath,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
           '--disable-dev-shm-usage',
           '--disable-gpu',
+          '--disable-blink-features=AutomationControlled',
           '--autoplay-policy=no-user-gesture-required',
           '--use-fake-ui-for-media-stream',
           '--use-fake-device-for-media-stream',
+          '--window-size=1280,720',
+          '--start-maximized',
         ],
         env: {
           ...process.env,
+          DISPLAY: process.env.DISPLAY || ':99',
           ...(isLinux && sinkModuleId ? { PULSE_SINK: `bot_${botId}` } : {}),
         },
       });
 
       const context = await browser.newContext({
-        userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        viewport: { width: 1280, height: 720 },
         permissions: ['microphone', 'camera'],
       });
       const page = await context.newPage();
+
+      // Mask the navigator.webdriver flag to reduce automation detection
+      await page.addInitScript(() => {
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+      });
 
       // 3. Join meeting based on platform
       const platform = this.detectPlatform(meetingUrl);

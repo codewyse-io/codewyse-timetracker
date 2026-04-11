@@ -23,16 +23,17 @@ set_env_var() {
 # Real idempotency check: verify the binaries actually exist
 HAS_PACTL=$(command -v pactl 2>/dev/null || echo "")
 HAS_FFMPEG=$(command -v ffmpeg 2>/dev/null || echo "")
+HAS_XVFB=$(command -v Xvfb 2>/dev/null || echo "")
 
-if [ -n "$HAS_PACTL" ] && [ -n "$HAS_FFMPEG" ]; then
-  echo "PulseAudio + ffmpeg already installed (pactl=$HAS_PACTL, ffmpeg=$HAS_FFMPEG) — skipping package install"
-  # Still ensure the runtime env var is set in .env on every deploy
+if [ -n "$HAS_PACTL" ] && [ -n "$HAS_FFMPEG" ] && [ -n "$HAS_XVFB" ]; then
+  echo "All deps already installed — skipping package install"
   set_env_var "PULSE_SERVER" "unix:/var/run/pulse/native"
+  set_env_var "DISPLAY" ":99"
   echo '========================================='
   exit 0
 fi
 
-echo "Missing deps detected (pactl=${HAS_PACTL:-MISSING}, ffmpeg=${HAS_FFMPEG:-MISSING}) — installing"
+echo "Missing deps detected (pactl=${HAS_PACTL:-MISSING}, ffmpeg=${HAS_FFMPEG:-MISSING}, Xvfb=${HAS_XVFB:-MISSING}) — installing"
 
 # Detect package manager
 if command -v dnf >/dev/null 2>&1; then
@@ -48,10 +49,11 @@ echo "Using package manager: $PKG_MGR"
 echo "OS info:"
 cat /etc/os-release || true
 
-# Install required runtime libraries for Chromium + audio
+# Install required runtime libraries for Chromium + audio + Xvfb
 sudo $PKG_MGR install -y \
   pulseaudio \
   pulseaudio-utils \
+  xorg-x11-server-Xvfb \
   dbus \
   dbus-x11 \
   nss \
@@ -106,6 +108,9 @@ which ffmpeg || echo "ffmpeg NOT found"
 
 # Tell the runtime app where the PulseAudio system socket lives
 set_env_var "PULSE_SERVER" "unix:/var/run/pulse/native"
+
+# Tell the runtime app to use the Xvfb virtual display
+set_env_var "DISPLAY" ":99"
 
 echo '========================================='
 echo 'Bot dependencies install completed'
