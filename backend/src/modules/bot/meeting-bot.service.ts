@@ -371,6 +371,16 @@ export class MeetingBotService {
         liveTranscript: [],
       });
 
+      // 7. Start meeting-end watcher — polls the page periodically and emits
+      //    'meeting-ended' when the host ends the call (or the bot gets kicked,
+      //    or the browser disconnects). MeetingsService subscribes to this
+      //    event to stop the bot and queue transcription.
+      if (meetingId) {
+        this.startMeetingEndWatcher(botId, page, meetingId).catch((err) => {
+          this.logger.warn(`Meeting-end watcher for ${botId} crashed: ${err.message}`);
+        });
+      }
+
       this.logger.log(`Bot ${botId} successfully joined and recording`);
       return { id: botId };
     } catch (err: any) {
@@ -380,6 +390,68 @@ export class MeetingBotService {
         try { await browser.close(); } catch {}
       }
       throw err;
+    }
+  }
+
+  /**
+   * Poll the Meet page periodically to detect when the meeting has ended.
+   * Meet signals meeting end in several ways; we check all of them:
+   *   - URL changes away from /meet.google.com/<code>
+   *   - "You left the meeting" / "This call has ended" / "Meeting ended" text
+   *   - Page/context is closed (bot was kicked or browser crashed)
+   *
+   * On detection, emits 'meeting-ended' with { botId, meetingId }. The
+   * MeetingsService listens and handles the full stop + transcription pipeline.
+   */
+  private async startMeetingEndWatcher(botId: string, page: any, meetingId: string): Promise<void> {
+    this.logger.log(`[endWatcher] Started for bot ${botId} (meeting ${meetingId})`);
+    const pollInterval = 10_000; // 10s
+    let endedEmitted = false;
+
+    const emitEnd = (reason: string) => {
+      if (endedEmitted) return;
+      endedEmitted = true;
+      this.logger.log(`[endWatcher] Meeting ended for bot ${botId}: ${reason}`);
+      this.events.emit('meeting-ended', { botId, meetingId, reason });
+    };
+
+    // If the page/context closes (bot kicked, browser crashed), emit immediately
+    page.on('close', () => emitEnd('page closed'));
+
+    while (!endedEmitted) {
+      await new Promise((r) => setTimeout(r, pollInterval));
+
+      // Stop polling if this bot was already unregistered (user manually stopped)
+      if (!this.pool.get(botId)) {
+        this.logger.log(`[endWatcher] Bot ${botId} already unregistered — stopping watcher`);
+        return;
+      }
+
+      try {
+        // 1. URL check — Meet redirects away from /meet.google.com/<code> on end
+        const url: string = await page.url();
+        if (!url.includes('meet.google.com/') || url.endsWith('meet.google.com/')) {
+          emitEnd(`URL changed to ${url}`);
+          break;
+        }
+
+        // 2. Text signals
+        const endedVisible = await page
+          .locator(
+            'text=/you left the meeting|this call has ended|meeting ended|you\'ve been removed/i',
+          )
+          .first()
+          .isVisible({ timeout: 1000 })
+          .catch(() => false);
+        if (endedVisible) {
+          emitEnd('end-of-meeting text visible');
+          break;
+        }
+      } catch (err: any) {
+        // Page has been closed or crashed — treat as end
+        emitEnd(`page poll failed: ${err.message}`);
+        break;
+      }
     }
   }
 

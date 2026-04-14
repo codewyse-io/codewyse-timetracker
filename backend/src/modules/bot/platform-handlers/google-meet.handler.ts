@@ -219,6 +219,36 @@ export async function joinGoogleMeet(
   // Brief pause to let the join button transition from disabled→enabled after name entry
   await page.waitForTimeout(1500);
 
+  // Turn off the bot's microphone and camera BEFORE joining — otherwise Chromium's
+  // fake devices broadcast a 1 kHz tone + green test pattern into the meeting.
+  // The bot is a listener; it never needs to emit media.
+  log('Muting microphone and turning off camera on prejoin...');
+  const micOffSelectors = [
+    'button[aria-label*="Turn off microphone" i]',
+    'div[role="button"][aria-label*="Turn off microphone" i]',
+    '[data-is-muted="false"][aria-label*="microphone" i]',
+  ];
+  for (const sel of micOffSelectors) {
+    try {
+      await page.locator(sel).first().click({ timeout: 2000 });
+      log(`Muted mic via: ${sel}`);
+      break;
+    } catch {}
+  }
+  const camOffSelectors = [
+    'button[aria-label*="Turn off camera" i]',
+    'div[role="button"][aria-label*="Turn off camera" i]',
+    '[data-is-muted="false"][aria-label*="camera" i]',
+  ];
+  for (const sel of camOffSelectors) {
+    try {
+      await page.locator(sel).first().click({ timeout: 2000 });
+      log(`Turned off camera via: ${sel}`);
+      break;
+    } catch {}
+  }
+  await page.waitForTimeout(800);
+
   // Click the join button. It only becomes clickable after a name is entered.
   log('Looking for join button...');
   const joinSelectors = [
@@ -285,4 +315,37 @@ export async function joinGoogleMeet(
     );
   }
   log('Join result: bot is either admitted or waiting in lobby');
+
+  // After admission, double-check mic/camera are OFF (in case they weren't on prejoin,
+  // or Meet turned them back on automatically). Waiting ~15s to let the host admit first.
+  setTimeout(async () => {
+    try {
+      // In-call mute toggle. Meet uses keyboard shortcut Ctrl+D (camera) and Ctrl+E (mic).
+      // We also click the mic/camera buttons if visible as a fallback.
+      const postJoinMicSelectors = [
+        'button[aria-label*="Turn off microphone" i]',
+        'button[data-tooltip*="Turn off microphone" i]',
+      ];
+      for (const sel of postJoinMicSelectors) {
+        try {
+          await page.locator(sel).first().click({ timeout: 1500 });
+          log('Post-join: muted mic');
+          break;
+        } catch {}
+      }
+      const postJoinCamSelectors = [
+        'button[aria-label*="Turn off camera" i]',
+        'button[data-tooltip*="Turn off camera" i]',
+      ];
+      for (const sel of postJoinCamSelectors) {
+        try {
+          await page.locator(sel).first().click({ timeout: 1500 });
+          log('Post-join: turned off camera');
+          break;
+        } catch {}
+      }
+    } catch (err: any) {
+      log(`Post-join mute/camera-off failed (non-fatal): ${err.message}`);
+    }
+  }, 15000);
 }

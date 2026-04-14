@@ -48,6 +48,52 @@ export class MeetingsService {
         });
       }
     });
+
+    // Auto-stop the bot + queue transcription when the meeting ends
+    this.meetingBotService.events.on('meeting-ended', (data: { botId: string; meetingId: string; reason: string }) => {
+      this.handleMeetingEndedAutomatically(data.meetingId, data.botId, data.reason).catch((err) => {
+        this.logger.error(`[meeting-ended] Cleanup for meeting ${data.meetingId} failed: ${err.message}`);
+      });
+    });
+  }
+
+  /**
+   * Called when the bot's end-watcher detects that the meeting has ended
+   * (host ended the call, bot was kicked, browser closed, etc.). Mirrors
+   * the stopRecording flow but without the user-auth check, since this is
+   * triggered by the system not the user.
+   */
+  private async handleMeetingEndedAutomatically(meetingId: string, botId: string, reason: string): Promise<void> {
+    this.logger.log(`[meeting-ended] Auto-stopping meeting ${meetingId} — reason: ${reason}`);
+    const meeting = await this.meetingRepo.findOne({ where: { id: meetingId } });
+    if (!meeting) {
+      this.logger.warn(`[meeting-ended] Meeting ${meetingId} not found — skipping`);
+      return;
+    }
+    if (meeting.status !== MeetingStatus.RECORDING) {
+      this.logger.log(`[meeting-ended] Meeting ${meetingId} is already in status ${meeting.status} — skipping`);
+      return;
+    }
+
+    // Stop the bot (closes browser, kills ffmpeg, cleans up PulseAudio)
+    try {
+      await this.meetingBotService.stopBot(botId);
+    } catch (err: any) {
+      this.logger.warn(`[meeting-ended] stopBot failed (continuing): ${err.message}`);
+    }
+
+    meeting.status = MeetingStatus.PROCESSING;
+    await this.meetingRepo.save(meeting);
+
+    await this.transcriptionQueue.add({ meetingId: meeting.id });
+    this.logger.log(`[meeting-ended] Enqueued transcription for meeting ${meeting.id}`);
+
+    if (this.realtimeGateway) {
+      this.realtimeGateway.emitToUser(meeting.userId, 'meeting:status', {
+        meetingId: meeting.id,
+        status: 'processing',
+      });
+    }
   }
 
   async listMeetings(userId: string, orgId: string, query: MeetingQueryDto) {
