@@ -43,39 +43,26 @@ fi
 # download to the default cache is wasted time + disk.
 export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
-# Install ALL dependencies (including devDependencies) so we can build the TS
-echo '--- npm install (with devDeps for build) ---'
-npm install --no-audit --no-fund 2>&1
+# Install ONLY runtime dependencies.
+# The CI pipeline (.github/workflows/deploy-eb.yml) pre-builds dist/ on the
+# GitHub runner and bundles it into the deploy zip — so source + devDeps are
+# NOT present on the server. We only need runtime deps here.
+echo '--- npm install --omit=dev ---' >&2
+npm install --omit=dev --no-audit --no-fund 2>&1 1>&2
 INSTALL_EXIT=$?
 if [ $INSTALL_EXIT -ne 0 ]; then
   echo "ERROR: npm install failed with exit code $INSTALL_EXIT" >&2
   exit $INSTALL_EXIT
 fi
 
-# Compile TypeScript → dist/
-# Redirect stdout→stderr so EB surfaces any build errors in the deploy log
-echo '--- Building backend (nest build) ---'
-npm run build 2>&1 1>&2
-BUILD_EXIT=$?
-
-echo "--- Post-build state ---" >&2
-ls -la dist/ 2>&1 >&2 || echo 'dist/ does not exist' >&2
-
-if [ $BUILD_EXIT -ne 0 ]; then
-  echo "ERROR: nest build failed with exit code $BUILD_EXIT" >&2
-  exit $BUILD_EXIT
-fi
-
+# Sanity check: dist/main.js should already exist from the CI build
 if [ ! -f dist/main.js ]; then
-  echo 'ERROR: dist/main.js was not produced by nest build' >&2
+  echo 'ERROR: dist/main.js is missing from the deploy bundle.' >&2
+  echo '       The CI build step likely failed. Check the latest GitHub Actions run.' >&2
+  ls -la dist/ 2>&1 >&2 || echo 'dist/ does not exist' >&2
   exit 1
 fi
-
-echo "Build complete: $(ls -la dist/main.js)" >&2
-
-# Prune devDependencies to save disk space
-echo '--- Pruning devDependencies ---' >&2
-npm prune --omit=dev --no-audit --no-fund 2>&1 1>&2 || echo 'Prune failed (non-fatal)' >&2
+echo "Pre-built dist/main.js found: $(ls -la dist/main.js)" >&2
 
 # Install Playwright Chromium to a shared cache directory so webapp user can read it
 sudo mkdir -p "$PLAYWRIGHT_CACHE"
