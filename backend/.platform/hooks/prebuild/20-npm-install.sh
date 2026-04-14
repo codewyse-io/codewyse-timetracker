@@ -1,6 +1,7 @@
 #!/bin/sh
 
-set -e
+# Do NOT use `set -e` — we want to check exit codes manually so we can log
+# useful errors to stderr (which is what EB captures in the deploy log).
 
 echo '========================================='
 echo 'Installing Node.js dependencies'
@@ -23,10 +24,11 @@ set_env_var() {
   fi
 }
 
-# Create swap if not already present (small instances have limited RAM)
+# Create swap if not already present (builds can be memory-hungry).
+# 2GB swap so the TS compiler doesn't OOM on a 4GB instance.
 if [ ! -f /var/swapfile ]; then
-  echo 'Creating 512MB swap file...'
-  dd if=/dev/zero of=/var/swapfile bs=1M count=512
+  echo 'Creating 2GB swap file...'
+  dd if=/dev/zero of=/var/swapfile bs=1M count=2048
   chmod 600 /var/swapfile
   mkswap /var/swapfile
   swapon /var/swapfile
@@ -36,24 +38,44 @@ elif ! swapon --show | grep -q /var/swapfile; then
   echo 'Swap re-enabled'
 fi
 
+# Skip Playwright's automatic browser download during npm install — we install
+# Chromium to a shared cache path separately below, so letting npm's postinstall
+# download to the default cache is wasted time + disk.
+export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
 # Install ALL dependencies (including devDependencies) so we can build the TS
-npm install --no-audit --no-fund
+echo '--- npm install (with devDeps for build) ---'
+npm install --no-audit --no-fund 2>&1
+INSTALL_EXIT=$?
+if [ $INSTALL_EXIT -ne 0 ]; then
+  echo "ERROR: npm install failed with exit code $INSTALL_EXIT" >&2
+  exit $INSTALL_EXIT
+fi
 
 # Compile TypeScript → dist/
-echo 'Building backend (nest build)...'
-npm run build
+# Redirect stdout→stderr so EB surfaces any build errors in the deploy log
+echo '--- Building backend (nest build) ---'
+npm run build 2>&1 1>&2
+BUILD_EXIT=$?
 
-# Verify dist/main.js exists
+echo "--- Post-build state ---" >&2
+ls -la dist/ 2>&1 >&2 || echo 'dist/ does not exist' >&2
+
+if [ $BUILD_EXIT -ne 0 ]; then
+  echo "ERROR: nest build failed with exit code $BUILD_EXIT" >&2
+  exit $BUILD_EXIT
+fi
+
 if [ ! -f dist/main.js ]; then
-  echo 'ERROR: dist/main.js was not produced by nest build'
-  ls -la dist/ 2>&1 || echo 'dist/ does not exist'
+  echo 'ERROR: dist/main.js was not produced by nest build' >&2
   exit 1
 fi
-echo "Build complete: $(ls -la dist/main.js)"
+
+echo "Build complete: $(ls -la dist/main.js)" >&2
 
 # Prune devDependencies to save disk space
-echo 'Pruning devDependencies...'
-npm prune --omit=dev --no-audit --no-fund
+echo '--- Pruning devDependencies ---' >&2
+npm prune --omit=dev --no-audit --no-fund 2>&1 1>&2 || echo 'Prune failed (non-fatal)' >&2
 
 # Install Playwright Chromium to a shared cache directory so webapp user can read it
 sudo mkdir -p "$PLAYWRIGHT_CACHE"
