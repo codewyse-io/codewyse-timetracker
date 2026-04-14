@@ -32,23 +32,38 @@ async function snapshot(page: Page, label: string, uploader?: ScreenshotUploader
 }
 
 /**
- * Wait until either the name input or the media-permission modal appears.
- * Whichever appears first wins; we then handle that state.
+ * Wait until the prejoin screen is ready. Detects three possible states:
+ *   - 'name'      : anonymous flow, a name input is visible
+ *   - 'signed_in' : signed-in flow, no name input but "Ask to join" / "Join now" is visible
+ *   - 'modal'     : media-permission modal blocking the prejoin
+ *   - 'unknown'   : none of the above within the timeout
  */
-async function waitForPrejoinReady(page: Page, timeoutMs = 20000): Promise<'name' | 'modal' | 'unknown'> {
+async function waitForPrejoinReady(
+  page: Page,
+  timeoutMs = 20000,
+): Promise<'name' | 'signed_in' | 'modal' | 'unknown'> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    // Check for the name input (means we're already on the prejoin screen)
-    const nameVisible = await page.locator('input[type="text"]').first().isVisible().catch(() => false);
-    if (nameVisible) return 'name';
-
-    // Check for the media-permission modal
+    // Check for the media-permission modal FIRST (it overlays everything else)
     const modalVisible = await page
       .locator('text=/continue without microphone and camera/i')
       .first()
       .isVisible()
       .catch(() => false);
     if (modalVisible) return 'modal';
+
+    // Check for the name input (anonymous flow)
+    const nameVisible = await page.locator('input[type="text"]').first().isVisible().catch(() => false);
+    if (nameVisible) return 'name';
+
+    // Check for a signed-in prejoin screen — "Ask to join" / "Join now" button visible
+    // without a name input. Happens when storageState has a Google session.
+    const joinBtnVisible = await page
+      .locator('button:has-text("Ask to join"), button:has-text("Join now")')
+      .first()
+      .isVisible()
+      .catch(() => false);
+    if (joinBtnVisible) return 'signed_in';
 
     await page.waitForTimeout(500);
   }
@@ -157,10 +172,16 @@ export async function joinGoogleMeet(
     log('Dismissed an extra popup');
   } catch {}
 
+  // Skip name entry if signed in — Google uses the account's display name automatically
+  if (state === 'signed_in') {
+    log('Signed-in state: skipping name entry (Google uses account display name)');
+  }
+
   // Find the name input. Real Meet uses placeholder="Your name" and no aria-label.
+  // For signed-in users, this input is not present at all; we silently skip below.
   log('Looking for name input...');
   let nameInputFound = false;
-  const nameSelectors = [
+  const nameSelectors = state === 'signed_in' ? [] : [
     'input[placeholder="Your name"]',
     'input[aria-label="Your name"]',
     'input[type="text"]',
@@ -179,7 +200,7 @@ export async function joinGoogleMeet(
     } catch {}
   }
 
-  if (!nameInputFound) {
+  if (!nameInputFound && state !== 'signed_in') {
     log('WARNING: name input not found');
     await snapshot(page, 'no-name-input', uploader);
     try {
