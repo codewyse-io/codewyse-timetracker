@@ -177,6 +177,13 @@ export class GoogleCalendarService {
         const meetingUrl = this.extractMeetingUrl(event);
         const platform = this.detectPlatform(meetingUrl);
 
+        // Only import events that are actually video meetings — skip flights,
+        // birthdays, tasks, and other non-meeting calendar items that don't
+        // have a Meet/Zoom/Teams URL attached.
+        if (!meetingUrl || platform === MeetingPlatform.UNKNOWN) {
+          continue;
+        }
+
         const scheduledStart = event.start?.dateTime
           ? new Date(event.start.dateTime)
           : null;

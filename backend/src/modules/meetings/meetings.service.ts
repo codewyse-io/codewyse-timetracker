@@ -257,6 +257,59 @@ export class MeetingsService {
   }
 
   /**
+   * Reconcile stuck "recording" meetings. Runs every 5 minutes.
+   * A meeting that shows "recording" but whose bot is no longer in the pool
+   * is stale — usually because the server restarted mid-recording, the bot
+   * crashed, or the end watcher missed the end signal. Mark such meetings
+   * as failed so they don't linger forever in the UI.
+   */
+  @Cron('0 */5 * * * *')
+  async reconcileStuckRecordings(): Promise<void> {
+    const meetings = await this.meetingRepo.find({
+      where: { status: MeetingStatus.RECORDING },
+    });
+    if (meetings.length === 0) return;
+
+    let cleaned = 0;
+    for (const meeting of meetings) {
+      const botStillActive = meeting.recallBotId
+        ? this.meetingBotService.getBotStatus(meeting.recallBotId) === 'active'
+        : false;
+      if (botStillActive) continue; // Bot is genuinely running, leave alone
+
+      // Bot isn't in pool — treat this as a stale "recording" state. If we have
+      // an audio file already saved, queue transcription; otherwise mark failed.
+      const audioPath = meeting.recallBotId
+        ? this.meetingBotService.getAudioFilePath(meeting.recallBotId)
+        : null;
+
+      if (audioPath) {
+        this.logger.log(`[reconcile] Meeting ${meeting.id} has orphaned audio, queueing transcription`);
+        meeting.status = MeetingStatus.PROCESSING;
+        await this.meetingRepo.save(meeting);
+        await this.transcriptionQueue.add({ meetingId: meeting.id });
+      } else {
+        this.logger.log(`[reconcile] Meeting ${meeting.id} stuck in recording with no active bot — marking failed`);
+        meeting.status = MeetingStatus.FAILED;
+        meeting.errorMessage = 'Bot stopped unexpectedly before transcription could complete';
+        await this.meetingRepo.save(meeting);
+      }
+
+      if (this.realtimeGateway) {
+        this.realtimeGateway.emitToUser(meeting.userId, 'meeting:status', {
+          meetingId: meeting.id,
+          status: meeting.status === MeetingStatus.PROCESSING ? 'processing' : 'failed',
+        });
+      }
+      cleaned++;
+    }
+
+    if (cleaned > 0) {
+      this.logger.log(`[reconcile] Cleaned up ${cleaned} stuck recording meeting(s)`);
+    }
+  }
+
+  /**
    * Auto-join cron — runs every 30 seconds.
    * Finds SCHEDULED meetings whose start time is within a window from
    * 1 minute in the future to 2 minutes in the past, then launches a bot

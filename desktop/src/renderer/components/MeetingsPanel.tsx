@@ -682,7 +682,10 @@ export default function MeetingsPanel() {
             }}
           >
             {visible.map((meeting) => (
-          <React.Fragment key={meeting.id}>
+          <div
+            key={meeting.id}
+            style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+          >
             <div
               style={{
                 ...glassCard,
@@ -841,7 +844,7 @@ export default function MeetingsPanel() {
                 )}
               </div>
             )}
-          </React.Fragment>
+          </div>
           ))}
           </div>
         );
