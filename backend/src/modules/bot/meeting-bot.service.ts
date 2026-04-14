@@ -12,6 +12,107 @@ import * as fs from 'fs';
 import { chromium, Browser } from 'playwright';
 
 /**
+ * Rename the signed-in bot's Google account display name so the bot appears
+ * in the meeting as e.g. "Usama's Notetaker" rather than the bot account's
+ * default name. Runs before navigating to the Meet URL.
+ *
+ * Expects `page` to already have a signed-in Google session (storageState loaded).
+ * Splits the new name into firstName + lastName because Google requires both.
+ *
+ * Returns true on success, false on failure — the caller decides whether to
+ * proceed anyway (we do: even if the rename fails, the bot still joins with
+ * whatever the current name is).
+ */
+async function renameBotDisplayName(page: any, fullName: string, logger: Logger): Promise<boolean> {
+  // Split "Usama's Notetaker" → firstName="Usama's", lastName="Notetaker"
+  // If the name is a single word, use it as firstName and leave lastName empty.
+  const trimmed = fullName.trim();
+  const spaceIdx = trimmed.lastIndexOf(' ');
+  const firstName = spaceIdx > 0 ? trimmed.substring(0, spaceIdx) : trimmed;
+  const lastName = spaceIdx > 0 ? trimmed.substring(spaceIdx + 1) : '';
+
+  logger.log(`[renameBot] Setting Google display name: firstName="${firstName}" lastName="${lastName}"`);
+
+  try {
+    await page.goto('https://myaccount.google.com/name', { waitUntil: 'domcontentloaded', timeout: 20000 });
+    await page.waitForTimeout(3000);
+
+    // Click the pencil/edit button next to the name. Google's UI uses various selectors.
+    const editSelectors = [
+      'button[aria-label*="Edit name" i]',
+      'button[aria-label*="Name" i]',
+      'a[aria-label*="Edit name" i]',
+      'div[role="button"][aria-label*="Edit" i]',
+    ];
+    let opened = false;
+    for (const sel of editSelectors) {
+      try {
+        await page.locator(sel).first().click({ timeout: 3000 });
+        opened = true;
+        logger.log(`[renameBot] Opened name editor via: ${sel}`);
+        break;
+      } catch {}
+    }
+    if (!opened) {
+      // Fallback: click the first row in the name section (entire row is sometimes clickable)
+      try {
+        await page.locator('a[href*="/name"]').first().click({ timeout: 3000 });
+        opened = true;
+      } catch {}
+    }
+    if (!opened) {
+      logger.warn('[renameBot] Could not open name editor — proceeding with existing name');
+      return false;
+    }
+
+    await page.waitForTimeout(2500);
+
+    // Fill first name
+    const firstInput = page.locator('input[aria-label*="First name" i], input[name="firstName"]').first();
+    await firstInput.waitFor({ state: 'visible', timeout: 5000 });
+    await firstInput.click();
+    await firstInput.fill('');
+    await firstInput.type(firstName, { delay: 20 });
+
+    // Fill last name (even if empty, clear it so we don't leave stale text)
+    const lastInput = page.locator('input[aria-label*="Last name" i], input[name="lastName"]').first();
+    try {
+      await lastInput.waitFor({ state: 'visible', timeout: 3000 });
+      await lastInput.click();
+      await lastInput.fill('');
+      if (lastName) await lastInput.type(lastName, { delay: 20 });
+    } catch {}
+
+    // Click Save
+    const saveSelectors = [
+      'button:has-text("Save")',
+      'div[role="button"]:has-text("Save")',
+      'button[aria-label*="Save" i]',
+    ];
+    let saved = false;
+    for (const sel of saveSelectors) {
+      try {
+        await page.locator(sel).first().click({ timeout: 3000 });
+        saved = true;
+        break;
+      } catch {}
+    }
+    if (!saved) {
+      logger.warn('[renameBot] Could not find Save button — proceeding anyway');
+      return false;
+    }
+
+    // Wait for the save to propagate
+    await page.waitForTimeout(4000);
+    logger.log(`[renameBot] Display name updated successfully to "${fullName}"`);
+    return true;
+  } catch (err: any) {
+    logger.warn(`[renameBot] Rename failed: ${err.message} — bot will join with current name`);
+    return false;
+  }
+}
+
+/**
  * Find the Playwright Chromium binary on disk.
  * Checks shared cache locations first (for production deploys where browsers
  * are installed to a system-wide path), then falls back to Playwright's default.
@@ -194,7 +295,15 @@ export class MeetingBotService {
         Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
       });
 
-      // 3. Join meeting based on platform
+      // 3. If signed-in, update the bot account's Google display name to match
+      // the requesting user (e.g., "Usama's Notetaker"). Skip if anonymous —
+      // anonymous context isn't signed in, so there's no Google profile to edit.
+      if (storageState) {
+        this.logger.log(`[createBot] Renaming bot Google display name to "${botName}"`);
+        await renameBotDisplayName(page, botName, this.logger);
+      }
+
+      // 4. Join meeting based on platform
       const platform = this.detectPlatform(meetingUrl);
       this.logger.log(`Bot ${botId} joining ${platform} meeting: ${meetingUrl}`);
 

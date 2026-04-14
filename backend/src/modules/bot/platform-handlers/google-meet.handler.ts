@@ -242,5 +242,26 @@ export async function joinGoogleMeet(
 
   await page.waitForTimeout(3000);
   await snapshot(page, 'after-join-click', uploader);
-  log('Join clicked, waiting for admission...');
+  log('Join clicked, verifying result...');
+
+  // Verify the click actually resulted in admission (or waiting-to-be-admitted).
+  // Meet can silently reject anonymous/Workspace-policy join attempts by routing
+  // the bot back to "You can't join this video call" within a few seconds —
+  // so we need to check for that specifically and throw, otherwise the bot
+  // will happily "record" an empty rejection page.
+  const cantJoin = await page
+    .locator("text=/can't join this video call/i")
+    .first()
+    .isVisible({ timeout: 1000 })
+    .catch(() => false);
+  if (cantJoin) {
+    log('ERROR: Meet rejected the join request (likely Workspace anonymous-user policy)');
+    await snapshot(page, 'rejected-after-join', uploader);
+    throw new Error(
+      'Meet rejected the bot\'s join request. The Workspace admin needs to enable ' +
+        '"Let users without a Google Account join meetings" in admin.google.com, ' +
+        'OR configure a signed-in bot session via BOT_GOOGLE_SESSION_S3_KEY.',
+    );
+  }
+  log('Join result: bot is either admitted or waiting in lobby');
 }
