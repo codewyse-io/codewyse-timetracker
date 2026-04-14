@@ -65,6 +65,47 @@ export class MeetingBotService {
     private readonly s3Service: S3Service,
   ) {}
 
+  /**
+   * Load the bot's persisted Google session (cookies + localStorage) so the
+   * bot appears as a signed-in real Google user. Workspace meetings silently
+   * reject anonymous join requests, so this is the only way to make the bot
+   * actually admittable to a Workspace meeting.
+   *
+   * Returns a Playwright `storageState` object, or `undefined` if no session
+   * is configured. Looks in two places:
+   *   1. S3 key from BOT_GOOGLE_SESSION_S3_KEY env var (preferred)
+   *   2. Local file path from BOT_GOOGLE_SESSION_PATH env var
+   */
+  private async loadBotStorageState(): Promise<any | undefined> {
+    const s3Key = this.configService.get<string>('BOT_GOOGLE_SESSION_S3_KEY');
+    const localPath = this.configService.get<string>('BOT_GOOGLE_SESSION_PATH');
+
+    if (s3Key) {
+      try {
+        this.logger.log(`[loadBotStorageState] Fetching session from S3: ${s3Key}`);
+        const json = await this.s3Service.getObjectContent(s3Key);
+        if (json) return JSON.parse(json);
+      } catch (err: any) {
+        this.logger.warn(`[loadBotStorageState] S3 fetch failed: ${err.message}`);
+      }
+    }
+
+    if (localPath) {
+      try {
+        const fs = require('fs');
+        if (fs.existsSync(localPath)) {
+          this.logger.log(`[loadBotStorageState] Loading session from local file: ${localPath}`);
+          return JSON.parse(fs.readFileSync(localPath, 'utf-8'));
+        }
+      } catch (err: any) {
+        this.logger.warn(`[loadBotStorageState] Local file read failed: ${err.message}`);
+      }
+    }
+
+    this.logger.warn('[loadBotStorageState] No bot Google session configured — bot will join anonymously (Workspace meetings will likely reject)');
+    return undefined;
+  }
+
   /** Build an uploader closure for a specific bot session. Screenshots land
    *  in S3 under meeting-debug/{botId}/{label}-{ts}.png and the returned
    *  presigned URL is suitable for pasting into a browser to view. */
@@ -135,10 +176,16 @@ export class MeetingBotService {
         },
       });
 
+      // Load persisted Google session if available — required for joining
+      // Workspace meetings (anonymous bots are silently rejected by Workspace anti-abuse).
+      const storageState = await this.loadBotStorageState();
+      this.logger.log(`[createBot] Using ${storageState ? 'PERSISTED' : 'ANONYMOUS'} browser context`);
+
       const context = await browser.newContext({
         userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
         viewport: { width: 1280, height: 720 },
         permissions: ['microphone', 'camera'],
+        storageState,
       });
       const page = await context.newPage();
 
