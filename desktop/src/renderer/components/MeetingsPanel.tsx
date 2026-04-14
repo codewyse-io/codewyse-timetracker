@@ -575,9 +575,14 @@ export default function MeetingsPanel() {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           {(['scheduled', 'transcribed'] as const).map((tab) => {
+            const startOfTodayMs = dayjs().startOf('day').valueOf();
             const count =
               tab === 'scheduled'
-                ? meetings.filter((m) => m.status !== 'completed').length
+                ? meetings.filter((m) => {
+                    if (m.status === 'completed') return false;
+                    if (!m.scheduledStart) return true;
+                    return dayjs(m.scheduledStart).valueOf() >= startOfTodayMs;
+                  }).length
                 : meetings.filter((m) => m.status === 'completed').length;
             const active = activeTab === tab;
             return (
@@ -643,11 +648,20 @@ export default function MeetingsPanel() {
         </div>
       </div>
 
-      {/* Meetings List — filtered by active tab */}
+      {/* Meetings List — filtered by active tab.
+          - Scheduled tab: only today-or-future non-completed meetings (past
+            scheduled ones are noise — they've already happened).
+          - Transcribed tab: any completed meeting regardless of date
+            (this is where past meetings belong if they were recorded). */}
       {(() => {
+        const startOfTodayMs = dayjs().startOf('day').valueOf();
         const visible =
           activeTab === 'scheduled'
-            ? meetings.filter((m) => m.status !== 'completed')
+            ? meetings.filter((m) => {
+                if (m.status === 'completed') return false;
+                if (!m.scheduledStart) return true; // ad-hoc / no schedule — always show
+                return dayjs(m.scheduledStart).valueOf() >= startOfTodayMs;
+              })
             : meetings.filter((m) => m.status === 'completed');
 
         if (loading) {

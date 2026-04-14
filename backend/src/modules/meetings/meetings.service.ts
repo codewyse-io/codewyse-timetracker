@@ -98,22 +98,37 @@ export class MeetingsService {
 
   async listMeetings(userId: string, orgId: string, query: MeetingQueryDto) {
     const { startDate, endDate, page, limit } = query;
-    const where: any = { organizationId: orgId };
+
+    // Use the query builder so we can OR the date filter with `scheduledStart IS NULL`
+    // — manually-joined meetings have no scheduledStart and shouldn't be filtered out
+    // by a date range.
+    const qb = this.meetingRepo
+      .createQueryBuilder('meeting')
+      .where('meeting.organizationId = :orgId', { orgId });
 
     if (startDate && endDate) {
-      where.scheduledStart = Between(new Date(startDate), new Date(endDate));
+      qb.andWhere(
+        '(meeting.scheduledStart BETWEEN :startDate AND :endDate OR meeting.scheduledStart IS NULL)',
+        { startDate: new Date(startDate), endDate: new Date(endDate) },
+      );
     } else if (startDate) {
-      where.scheduledStart = MoreThanOrEqual(new Date(startDate));
+      qb.andWhere(
+        '(meeting.scheduledStart >= :startDate OR meeting.scheduledStart IS NULL)',
+        { startDate: new Date(startDate) },
+      );
     } else if (endDate) {
-      where.scheduledStart = LessThanOrEqual(new Date(endDate));
+      qb.andWhere(
+        '(meeting.scheduledStart <= :endDate OR meeting.scheduledStart IS NULL)',
+        { endDate: new Date(endDate) },
+      );
     }
 
-    const [data, total] = await this.meetingRepo.findAndCount({
-      where,
-      order: { scheduledStart: 'DESC' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    const [data, total] = await qb
+      .orderBy('meeting.scheduledStart', 'DESC')
+      .addOrderBy('meeting.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
 
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
