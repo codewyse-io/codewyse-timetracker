@@ -36,8 +36,24 @@ elif ! swapon --show | grep -q /var/swapfile; then
   echo 'Swap re-enabled'
 fi
 
-# Install production dependencies
-npm install --omit=dev --no-audit --no-fund
+# Install ALL dependencies (including devDependencies) so we can build the TS
+npm install --no-audit --no-fund
+
+# Compile TypeScript → dist/
+echo 'Building backend (nest build)...'
+npm run build
+
+# Verify dist/main.js exists
+if [ ! -f dist/main.js ]; then
+  echo 'ERROR: dist/main.js was not produced by nest build'
+  ls -la dist/ 2>&1 || echo 'dist/ does not exist'
+  exit 1
+fi
+echo "Build complete: $(ls -la dist/main.js)"
+
+# Prune devDependencies to save disk space
+echo 'Pruning devDependencies...'
+npm prune --omit=dev --no-audit --no-fund
 
 # Install Playwright Chromium to a shared cache directory so webapp user can read it
 sudo mkdir -p "$PLAYWRIGHT_CACHE"
