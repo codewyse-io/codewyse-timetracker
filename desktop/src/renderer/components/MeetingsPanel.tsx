@@ -77,6 +77,9 @@ export default function MeetingsPanel() {
   const [dateFilter, setDateFilter] = useState<dayjs.Dayjs | null>(dayjs());
   const limit = 10;
 
+  // Active tab: 'scheduled' (upcoming + in-progress) vs 'transcribed' (completed with transcript)
+  const [activeTab, setActiveTab] = useState<'scheduled' | 'transcribed'>('scheduled');
+
   // Join meeting modal
   const [modalOpen, setModalOpen] = useState(false);
   const [formUrl, setFormUrl] = useState('');
@@ -570,16 +573,50 @@ export default function MeetingsPanel() {
           gap: 10,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <h2 style={{ color: '#fff', margin: 0, fontSize: 18, fontWeight: 600 }}>Meetings</h2>
-          {total > 0 && (
-            <span style={{
-              fontSize: 11, fontWeight: 600, color: '#a78bfa',
-              background: 'rgba(124,92,252,0.12)', borderRadius: 12, padding: '2px 8px',
-            }}>
-              {total}
-            </span>
-          )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {(['scheduled', 'transcribed'] as const).map((tab) => {
+            const count =
+              tab === 'scheduled'
+                ? meetings.filter((m) => m.status !== 'completed').length
+                : meetings.filter((m) => m.status === 'completed').length;
+            const active = activeTab === tab;
+            return (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                style={{
+                  background: active ? 'rgba(124,92,252,0.18)' : 'transparent',
+                  border: active ? '1px solid rgba(124,92,252,0.35)' : '1px solid transparent',
+                  color: active ? '#fff' : 'rgba(255,255,255,0.55)',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  borderRadius: 8,
+                  padding: '6px 12px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {tab === 'scheduled' ? 'Scheduled' : 'Transcribed'}
+                {count > 0 && (
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: active ? '#a78bfa' : 'rgba(255,255,255,0.5)',
+                      background: active ? 'rgba(124,92,252,0.2)' : 'rgba(255,255,255,0.05)',
+                      borderRadius: 12,
+                      padding: '2px 8px',
+                    }}
+                  >
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <DatePicker
@@ -606,40 +643,72 @@ export default function MeetingsPanel() {
         </div>
       </div>
 
-      {/* Meetings List */}
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: 40 }}>
-          <Spin />
-        </div>
-      ) : meetings.length === 0 ? (
-        <Empty
-          description={<span style={{ color: 'rgba(255,255,255,0.4)' }}>No meetings yet</span>}
-          style={{ padding: 40 }}
-        />
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {meetings.map((meeting) => (
+      {/* Meetings List — filtered by active tab */}
+      {(() => {
+        const visible =
+          activeTab === 'scheduled'
+            ? meetings.filter((m) => m.status !== 'completed')
+            : meetings.filter((m) => m.status === 'completed');
+
+        if (loading) {
+          return (
+            <div style={{ textAlign: 'center', padding: 40 }}>
+              <Spin />
+            </div>
+          );
+        }
+
+        if (visible.length === 0) {
+          return (
+            <Empty
+              description={
+                <span style={{ color: 'rgba(255,255,255,0.4)' }}>
+                  {activeTab === 'scheduled'
+                    ? 'No scheduled meetings'
+                    : 'No transcribed meetings yet'}
+                </span>
+              }
+              style={{ padding: 40 }}
+            />
+          );
+        }
+
+        return (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+              gap: 14,
+            }}
+          >
+            {visible.map((meeting) => (
           <React.Fragment key={meeting.id}>
             <div
               style={{
                 ...glassCard,
+                padding: 18,
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
+                flexDirection: 'column',
                 gap: 12,
-                flexWrap: 'wrap',
+                minHeight: 140,
+                position: 'relative',
+                borderTop: `3px solid ${STATUS_COLORS[meeting.status]}`,
               }}
             >
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 10 }}>
                   <span
                     style={{
                       color: '#fff',
-                      fontSize: 14,
+                      fontSize: 15,
                       fontWeight: 600,
+                      lineHeight: 1.3,
+                      flex: 1,
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
                     }}
                   >
                     {meeting.title}
@@ -651,6 +720,7 @@ export default function MeetingsPanel() {
                       padding: '0 6px',
                       borderRadius: 4,
                       flexShrink: 0,
+                      margin: 0,
                     }}
                   >
                     {PLATFORM_LABELS[meeting.platform]}
@@ -658,7 +728,7 @@ export default function MeetingsPanel() {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   {meeting.scheduledStart && (
-                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>
+                    <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12 }}>
                       {dayjs(meeting.scheduledStart).format('MMM D, h:mm A')}
                     </span>
                   )}
@@ -669,6 +739,7 @@ export default function MeetingsPanel() {
                       lineHeight: '16px',
                       padding: '0 6px',
                       borderRadius: 4,
+                      margin: 0,
                       ...(meeting.status === 'recording'
                         ? { animation: 'pulse-recording 1.5s ease-in-out infinite' }
                         : {}),
@@ -678,7 +749,16 @@ export default function MeetingsPanel() {
                   </Tag>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  gap: 4,
+                  flexShrink: 0,
+                  justifyContent: 'flex-end',
+                  borderTop: '1px solid rgba(255,255,255,0.06)',
+                  paddingTop: 10,
+                }}
+              >
                 {meeting.status === 'scheduled' && (
                   <Button
                     type="text"
@@ -763,8 +843,9 @@ export default function MeetingsPanel() {
             )}
           </React.Fragment>
           ))}
-        </div>
-      )}
+          </div>
+        );
+      })()}
 
       {/* Pagination */}
       {total > limit && (

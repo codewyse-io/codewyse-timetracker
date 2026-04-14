@@ -13,7 +13,8 @@
       "Bash(node -e \"const { DeepgramClient } = require\\('@deepgram/sdk'\\); const c = new DeepgramClient; console.log\\(typeof c\\)\")",
       "Bash(npm view:*)",
       "Bash(node -e \"const dg = require\\('@deepgram/sdk'\\); console.log\\(Object.keys\\(dg\\).slice\\(0, 30\\)\\);\")",
-      "Bash(node -e ':*)"
+      "Bash(node -e ':*)",
+      "Bash(find \"c:/Users/usama/Downloads/codewyse-timetracker/backend/.ebextensions\" -type f -exec echo \"=== {} ===\" \\\\; -exec cat {} \\\\;)"
     ],
     "additionalDirectories": [
       "C:\\Users\\usama\\Downloads\\codewyse-timetracker\\backend\\src\\modules\\bot"

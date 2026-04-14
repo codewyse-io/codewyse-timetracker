@@ -435,10 +435,10 @@ export class MeetingBotService {
           break;
         }
 
-        // 2. Text signals
+        // 2. Text signals — various phrasings Meet shows when the call ends
         const endedVisible = await page
           .locator(
-            'text=/you left the meeting|this call has ended|meeting ended|you\'ve been removed/i',
+            "text=/you left the meeting|this call has ended|meeting ended|you've been removed|call ended|rejoin|return to home|call has ended|meeting is over/i",
           )
           .first()
           .isVisible({ timeout: 1000 })
@@ -446,6 +446,24 @@ export class MeetingBotService {
         if (endedVisible) {
           emitEnd('end-of-meeting text visible');
           break;
+        }
+
+        // 3. Participant count check — if the bot is alone in the meeting for
+        //    more than one poll cycle, the host has likely ended the call.
+        //    Meet shows the count in an aria-label like "1 participant".
+        const aloneVisible = await page
+          .locator('text=/^1$/')
+          .first()
+          .isVisible({ timeout: 500 })
+          .catch(() => false);
+        const participantCountEl = await page
+          .locator('[aria-label*="participants" i], [aria-label*="people" i]')
+          .first()
+          .textContent()
+          .catch(() => null);
+        if (aloneVisible && participantCountEl && /^\s*1\s*$/.test(participantCountEl)) {
+          // Note: this only triggers if bot is genuinely alone — edge case
+          this.logger.log(`[endWatcher] Bot ${botId} appears to be alone in meeting`);
         }
       } catch (err: any) {
         // Page has been closed or crashed — treat as end

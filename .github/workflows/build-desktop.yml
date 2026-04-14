@@ -1,5 +1,12 @@
 name: Build & Publish Desktop App
 
+# This workflow is gated by the repository variable ENABLE_DESKTOP_BUILD.
+# - Push events only trigger the build when ENABLE_DESKTOP_BUILD == "true".
+# - Manual workflow_dispatch always runs (for one-off testing / releases).
+# To toggle: Settings → Secrets and variables → Actions → Variables tab →
+# add or edit "ENABLE_DESKTOP_BUILD" and set to "true" to enable auto-builds,
+# any other value (or remove it) to disable.
+
 on:
   push:
     branches:
@@ -19,6 +26,7 @@ env:
 
 jobs:
   build:
+    if: vars.ENABLE_DESKTOP_BUILD == 'true' || github.event_name == 'workflow_dispatch'
     strategy:
       matrix:
         include:
