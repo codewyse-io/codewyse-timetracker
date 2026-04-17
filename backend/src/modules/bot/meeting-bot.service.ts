@@ -507,8 +507,25 @@ export class MeetingBotService {
       });
     }
 
-    // 2. Close browser
-    try { await bot.browser.close(); } catch {}
+    // 2. Close browser — with a 5s timeout and force-kill fallback.
+    // Playwright's browser.close() can hang if a page is in a bad state
+    // (e.g. stuck on a removed-from-meeting screen with a service worker).
+    try {
+      await Promise.race([
+        bot.browser.close(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('browser close timeout')), 5000)),
+      ]);
+    } catch (err: any) {
+      this.logger.warn(`[stopBot] browser.close() failed: ${err.message} — forcing kill`);
+      try {
+        const proc = (bot.browser as any)._process?.();
+        if (proc?.pid) {
+          process.kill(proc.pid, 'SIGKILL');
+        }
+      } catch (killErr: any) {
+        this.logger.warn(`[stopBot] force-kill also failed: ${killErr.message}`);
+      }
+    }
 
     // 3. Cleanup PulseAudio
     if (process.platform === 'linux') {
@@ -522,8 +539,17 @@ export class MeetingBotService {
     return bot.audioFilePath;
   }
 
+  /** Path to the bot's audio file — accessible even after the bot has been
+   *  unregistered from the pool, since the file persists in /tmp. */
   getAudioFilePath(botId: string): string | null {
-    return this.pool.get(botId)?.audioFilePath || null;
+    // Check the live pool first (bot still running)
+    const live = this.pool.get(botId)?.audioFilePath;
+    if (live) return live;
+    // Otherwise reconstruct the expected path — the file lives in tmpdir
+    // as `meeting_<botId>.wav` (see createBot). Return it if it exists.
+    const fs = require('fs');
+    const expected = join(tmpdir(), `meeting_${botId}.wav`);
+    return fs.existsSync(expected) ? expected : null;
   }
 
   getLiveTranscript(botId: string): string[] {

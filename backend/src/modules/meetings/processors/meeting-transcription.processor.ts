@@ -27,7 +27,24 @@ export class MeetingTranscriptionProcessor {
   @Process()
   async handle(job: Job<{ meetingId: string }>) {
     const meeting = await this.meetingRepo.findOne({ where: { id: job.data.meetingId } });
-    if (!meeting || !meeting.recallBotId) return;
+    if (!meeting) return;
+
+    // If there's no bot id, we can't find the audio — bail but update status so
+    // the meeting doesn't stay stuck on PROCESSING forever.
+    if (!meeting.recallBotId) {
+      this.logger.warn(`Meeting ${meeting.id} has no recallBotId; marking failed`);
+      await this.meetingRepo.update(meeting.id, {
+        status: 'failed' as any,
+        errorMessage: 'No bot session found — audio was not captured',
+      } as any);
+      if (this.realtimeGateway) {
+        this.realtimeGateway.emitToUser(meeting.userId, 'meeting:status', {
+          meetingId: meeting.id,
+          status: 'failed',
+        });
+      }
+      return;
+    }
 
     try {
       let fullText = '';

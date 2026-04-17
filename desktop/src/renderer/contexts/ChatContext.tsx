@@ -254,6 +254,7 @@ interface ChatContextValue {
   loadMessages: (conversationId: string, cursor?: string) => Promise<{ hasMore: boolean }>;
   loadConversations: () => Promise<void>;
   createConversation: (type: 'direct' | 'group', participantIds: string[], name?: string) => Promise<Conversation>;
+  renameConversation: (conversationId: string, name: string) => Promise<void>;
   loadChatUsers: () => Promise<void>;
   getMessageStatus: (conversationId: string, messageId: string) => 'sent' | 'delivered' | 'seen';
   totalUnread: number;
@@ -377,6 +378,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       const conversation = res.data?.data || res.data;
       await loadConversations();
       return conversation;
+    },
+    [loadConversations],
+  );
+
+  const renameConversation = useCallback(
+    async (conversationId: string, name: string): Promise<void> => {
+      await apiClient.patch(`/chat/conversations/${conversationId}`, { name });
+      await loadConversations();
     },
     [loadConversations],
   );
@@ -512,6 +521,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     loadMessages,
     loadConversations,
     createConversation,
+    renameConversation,
     loadChatUsers,
     getMessageStatus,
     totalUnread,
@@ -524,6 +534,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     loadMessages,
     loadConversations,
     createConversation,
+    renameConversation,
     loadChatUsers,
     getMessageStatus,
     totalUnread,

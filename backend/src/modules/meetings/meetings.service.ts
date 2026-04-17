@@ -322,6 +322,29 @@ export class MeetingsService {
     if (cleaned > 0) {
       this.logger.log(`[reconcile] Cleaned up ${cleaned} stuck recording meeting(s)`);
     }
+
+    // Also rescue meetings stuck in PROCESSING for too long. If the transcription
+    // worker is down, Redis is unreachable, or the job errored silently, a
+    // meeting can stay in PROCESSING forever. After 10 min, mark it failed.
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+    const stuckProcessing = await this.meetingRepo
+      .createQueryBuilder('m')
+      .where('m.status = :status', { status: MeetingStatus.PROCESSING })
+      .andWhere('m.updatedAt < :cutoff', { cutoff: tenMinutesAgo })
+      .getMany();
+
+    for (const meeting of stuckProcessing) {
+      this.logger.warn(`[reconcile] Meeting ${meeting.id} stuck in PROCESSING > 10min — marking failed`);
+      meeting.status = MeetingStatus.FAILED;
+      meeting.errorMessage = 'Transcription did not complete within 10 minutes';
+      await this.meetingRepo.save(meeting);
+      if (this.realtimeGateway) {
+        this.realtimeGateway.emitToUser(meeting.userId, 'meeting:status', {
+          meetingId: meeting.id,
+          status: 'failed',
+        });
+      }
+    }
   }
 
   /**

@@ -102,6 +102,43 @@ export class ChatService {
     return this.getConversationById(saved.id);
   }
 
+  /**
+   * Rename a group conversation. Only participants of the conversation can
+   * rename it (any member — we keep it permissive; tighten to `owner` role
+   * here if you want that restriction later).
+   * Also emits a system message so everyone sees who renamed it.
+   */
+  async renameConversation(userId: string, conversationId: string, newName: string): Promise<Conversation> {
+    const conversation = await this.conversationRepo.findOne({
+      where: { id: conversationId },
+      relations: ['participants'],
+    });
+    if (!conversation) throw new NotFoundException('Conversation not found');
+    if (conversation.type !== 'group') {
+      throw new BadRequestException('Only group conversations can be renamed');
+    }
+
+    const isParticipant = conversation.participants.some((p) => p.userId === userId);
+    if (!isParticipant) {
+      throw new ForbiddenException('You are not a participant of this conversation');
+    }
+
+    const oldName = conversation.name;
+    conversation.name = newName;
+    await this.conversationRepo.save(conversation);
+
+    // System message so everyone sees the rename
+    const systemMsg = this.messageRepo.create({
+      conversationId,
+      senderId: userId,
+      type: 'system',
+      content: `Group renamed from "${oldName || 'Group Chat'}" to "${newName}"`,
+    });
+    await this.messageRepo.save(systemMsg);
+
+    return this.getConversationById(conversationId);
+  }
+
   private async findDirectConversation(userId1: string, userId2: string): Promise<Conversation | null> {
     // Find conversations where both users are participants and type is direct
     const result = await this.conversationRepo

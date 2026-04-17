@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Body,
   Param,
@@ -72,6 +73,18 @@ export class ChatController {
       dto.participantIds,
       dto.name,
     );
+  }
+
+  @Patch('conversations/:id')
+  async renameConversation(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: { name: string },
+  ) {
+    const name = (body?.name || '').trim();
+    if (!name) throw new BadRequestException('Group name cannot be empty');
+    if (name.length > 100) throw new BadRequestException('Group name too long (max 100 chars)');
+    return this.chatService.renameConversation(req.user.id, id, name);
   }
 
   @Get('conversations/:id/messages')

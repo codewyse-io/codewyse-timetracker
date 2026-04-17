@@ -10,11 +10,15 @@ import { PhoneOutlined, VideoCameraOutlined, TeamOutlined, ArrowLeftOutlined } f
 import { Button, Tooltip } from 'antd';
 
 export default function ChatPanel() {
-  const { state, dispatch, loadMessages, markAsRead } = useChat();
+  const { state, dispatch, loadMessages, markAsRead, renameConversation } = useChat();
   const { user } = useAuth();
   const { initiateCall } = useCall();
   const [showNewConv, setShowNewConv] = useState(false);
   const [hasMore, setHasMore] = useState(false);
+
+  // Inline rename for group chats
+  const [renaming, setRenaming] = useState(false);
+  const [renameDraft, setRenameDraft] = useState('');
 
   const activeConv = state.conversations.find((c) => c.id === state.activeConversationId);
   const activeMessages = state.activeConversationId ? state.messages[state.activeConversationId] || [] : [];
@@ -87,19 +91,63 @@ export default function ChatPanel() {
                 onClick={handleBack}
                 style={{ width: 32, height: 32, border: 'none', flexShrink: 0 }}
               />
-              <div style={{ minWidth: 0 }}>
-                <div
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: 'rgba(255,255,255,0.9)',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                >
-                  {getConversationDisplayName()}
-                </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                {renaming && activeConv?.type === 'group' ? (
+                  <input
+                    autoFocus
+                    value={renameDraft}
+                    onChange={(e) => setRenameDraft(e.target.value)}
+                    onBlur={async () => {
+                      const trimmed = renameDraft.trim();
+                      if (trimmed && trimmed !== (activeConv?.name || '') && activeConv) {
+                        try {
+                          await renameConversation(activeConv.id, trimmed);
+                        } catch {
+                          // revert silently
+                        }
+                      }
+                      setRenaming(false);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                      if (e.key === 'Escape') { setRenaming(false); }
+                    }}
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: 'rgba(255,255,255,0.95)',
+                      background: 'rgba(255,255,255,0.06)',
+                      border: '1px solid rgba(124, 92, 252, 0.4)',
+                      borderRadius: 6,
+                      outline: 'none',
+                      padding: '4px 8px',
+                      width: '100%',
+                      maxWidth: 320,
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                ) : (
+                  <div
+                    onClick={() => {
+                      if (activeConv?.type === 'group') {
+                        setRenameDraft(activeConv.name || 'Group Chat');
+                        setRenaming(true);
+                      }
+                    }}
+                    title={activeConv?.type === 'group' ? 'Click to rename group' : undefined}
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: 'rgba(255,255,255,0.9)',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      cursor: activeConv?.type === 'group' ? 'pointer' : 'default',
+                    }}
+                  >
+                    {getConversationDisplayName()}
+                  </div>
+                )}
                 {typingUserIds.length > 0 && (
                   <div style={{ fontSize: 10, color: '#38efb3', fontStyle: 'italic' }}>typing...</div>
                 )}
