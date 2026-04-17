@@ -20,6 +20,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { CurrentOrg } from '../../common/decorators/current-org.decorator';
 import { ChatService } from './chat.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { S3Service } from '../s3/s3.service';
@@ -182,9 +183,16 @@ export class ChatController {
   }
 
   @Get('users')
-  async getUsers(@Req() req: any) {
+  async getUsers(@Req() req: any, @CurrentOrg() orgId: string) {
+    // Only return users from the same organization as the requester.
+    // Without this filter, the "New Conversation" dialog shows every user
+    // in the system, which breaks multi-tenancy.
     const users = await this.userRepo.find({
-      where: { status: 'active' as any, id: Not(req.user.id) },
+      where: {
+        status: 'active' as any,
+        id: Not(req.user.id),
+        organizationId: orgId,
+      },
       select: ['id', 'firstName', 'lastName', 'email', 'designation'],
     });
     return users;
