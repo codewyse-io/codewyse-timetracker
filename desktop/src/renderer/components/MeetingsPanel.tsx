@@ -407,6 +407,59 @@ export default function MeetingsPanel() {
             )}
 
             {/* Transcript */}
+            {/* Live transcript — while the bot is actively recording */}
+            {selectedMeeting.status === 'recording' && (
+              <div style={{ ...glassCard }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <div style={{
+                    width: 8, height: 8, borderRadius: '50%', background: '#ff4d4f',
+                    animation: 'pulse-recording 1.5s ease-in-out infinite',
+                  }} />
+                  <h3 style={{ color: '#ff6b6b', margin: 0, fontSize: 14, fontWeight: 600 }}>
+                    Live Transcript
+                  </h3>
+                </div>
+                <div
+                  ref={liveTranscriptRef}
+                  style={{
+                    maxHeight: 400,
+                    overflowY: 'auto',
+                    padding: '12px 16px',
+                    background: 'rgba(0,0,0,0.25)',
+                    borderRadius: 10,
+                    border: '1px solid rgba(255,255,255,0.04)',
+                  }}
+                >
+                  {liveTranscript.filter((t) => t.meetingId === selectedMeeting.id).length === 0 ? (
+                    <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, fontStyle: 'italic', textAlign: 'center', padding: 20 }}>
+                      Waiting for audio from the meeting...
+                    </div>
+                  ) : (
+                    liveTranscript
+                      .filter((t) => t.meetingId === selectedMeeting.id)
+                      .map((entry, idx) => {
+                        const speakerColors = ['#a78bfa', '#38efb3', '#f59e0b', '#fb7185', '#67e8f9', '#fdba74'];
+                        const speakerNum = parseInt(entry.speaker.replace(/\D/g, '') || '0', 10);
+                        const color = speakerColors[speakerNum % speakerColors.length];
+                        return (
+                          <div key={idx} style={{ marginBottom: 12 }}>
+                            <div style={{
+                              fontSize: 10, fontWeight: 700, color,
+                              textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3,
+                            }}>
+                              {entry.speaker}
+                            </div>
+                            <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, lineHeight: 1.7 }}>
+                              {entry.text}
+                            </div>
+                          </div>
+                        );
+                      })
+                  )}
+                </div>
+              </div>
+            )}
+
             {selectedMeeting.transcriptText && (
               <div style={{ ...glassCard }}>
                 <h3 style={{ color: '#a78bfa', margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>
@@ -701,8 +754,12 @@ export default function MeetingsPanel() {
             style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
           >
             <div
+              onClick={() => handleViewDetail(meeting)}
+              role="button"
               style={{
                 ...glassCard,
+                cursor: 'pointer',
+                transition: 'background 0.15s ease, transform 0.15s ease',
                 padding: 18,
                 display: 'flex',
                 flexDirection: 'column',
@@ -767,6 +824,7 @@ export default function MeetingsPanel() {
                 </div>
               </div>
               <div
+                onClick={(e) => e.stopPropagation()}
                 style={{
                   display: 'flex',
                   gap: 4,
@@ -794,15 +852,7 @@ export default function MeetingsPanel() {
                     title="Stop Recording"
                   />
                 )}
-                {meeting.status === 'completed' && (
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<EyeOutlined style={{ color: '#a78bfa' }} />}
-                    onClick={() => handleViewDetail(meeting)}
-                    title="View Details"
-                  />
-                )}
+                {/* Entire card is clickable to open details — no need for a separate eye button */}
                 <Button
                   type="text"
                   size="small"
