@@ -185,7 +185,23 @@ export class MeetingBotService {
       try {
         this.logger.log(`[loadBotStorageState] Fetching session from S3: ${s3Key}`);
         const json = await this.s3Service.getObjectContent(s3Key);
-        if (json) return JSON.parse(json);
+        if (!json) {
+          this.logger.warn(`[loadBotStorageState] S3 key '${s3Key}' returned empty content`);
+        } else {
+          const parsed = JSON.parse(json);
+          const cookieCount = parsed?.cookies?.length ?? 0;
+          const originCount = parsed?.origins?.length ?? 0;
+          this.logger.log(
+            `[loadBotStorageState] Loaded session: ${cookieCount} cookies, ${originCount} origins with localStorage`,
+          );
+          if (cookieCount === 0) {
+            this.logger.warn(
+              '[loadBotStorageState] Session has 0 cookies — did the capture script complete? ' +
+                'The bot will appear anonymous to Meet',
+            );
+          }
+          return parsed;
+        }
       } catch (err: any) {
         this.logger.warn(`[loadBotStorageState] S3 fetch failed: ${err.message}`);
       }
@@ -295,12 +311,17 @@ export class MeetingBotService {
         Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
       });
 
-      // 3. If signed-in, update the bot account's Google display name to match
-      // the requesting user (e.g., "Usama's Notetaker"). Skip if anonymous —
-      // anonymous context isn't signed in, so there's no Google profile to edit.
-      if (storageState) {
+      // 3. Optionally rename the bot's Google display name per user ("Usama's
+      //    Notetaker"). Disabled by default — renaming on every join is an
+      //    obvious bot pattern to Google's anti-abuse system and tends to get
+      //    the bot account flagged. Set BOT_ENABLE_RENAME=true to re-enable.
+      const renameEnabled =
+        this.configService.get<string>('BOT_ENABLE_RENAME', 'false').toLowerCase() === 'true';
+      if (storageState && renameEnabled) {
         this.logger.log(`[createBot] Renaming bot Google display name to "${botName}"`);
         await renameBotDisplayName(page, botName, this.logger);
+      } else if (storageState) {
+        this.logger.log(`[createBot] Rename disabled (BOT_ENABLE_RENAME=false) — bot will join as its Google account name`);
       }
 
       // 4. Join meeting based on platform
