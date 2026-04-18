@@ -105,16 +105,17 @@ sudo $PKG_MGR install -y ffmpeg 2>&1 || {
   fi
 }
 
-# Install x11vnc so the operator can connect remotely to log the bot
-# into Google on the same IP as the production bot (see scripts/login-bot-on-server.sh)
-sudo $PKG_MGR install -y x11vnc 2>&1 || echo "x11vnc install failed (not critical — needed only for bot login)"
+# Install tigervnc-server (Xvnc) so the operator can connect remotely to log
+# the bot into Google on the same IP as the production bot. x11vnc isn't
+# available in Amazon Linux 2023 default repos; Xvnc is the supported alternative.
+sudo $PKG_MGR install -y tigervnc-server tigervnc-server-minimal 2>&1 || echo "tigervnc install failed (not critical — needed only for bot login)"
 
 # Verify installations
 echo "--- Verifying installs ---"
 which pactl || echo "pactl NOT found"
 which pulseaudio || echo "pulseaudio NOT found"
 which ffmpeg || echo "ffmpeg NOT found"
-which x11vnc || echo "x11vnc NOT found (optional, for bot login only)"
+which Xvnc || echo "Xvnc NOT found (optional, for bot login only)"
 
 # Create the persistent bot profile dir. It persists across deploys because
 # it lives in /var/cache/, not /var/app/. The bot account's Google session

@@ -42,7 +42,10 @@ set -e
 
 PROFILE_DIR="${BOT_PROFILE_DIR:-/var/cache/playwright/bot-profile}"
 NOVNC_PORT=6080
-VNC_PORT=5900
+VNC_PORT=5901
+# Use display :98 so we don't touch the production Xvfb on :99 (the bot's
+# runtime display). This login session is fully isolated.
+VNC_DISPLAY=:98
 CHROMIUM_PATH=$(find /var/cache/playwright -type f -name chrome 2>/dev/null | head -1)
 
 if [ -z "$CHROMIUM_PATH" ]; then
@@ -51,10 +54,15 @@ if [ -z "$CHROMIUM_PATH" ]; then
   exit 1
 fi
 
-# Ensure x11vnc is installed (prebuild hook does this, but double-check)
-if ! command -v x11vnc >/dev/null 2>&1; then
-  echo "Installing x11vnc..."
-  sudo dnf install -y x11vnc || sudo yum install -y x11vnc
+# TigerVNC provides Xvnc — an X server with VNC built in. Available on
+# Amazon Linux 2023 default repos (unlike x11vnc, which isn't).
+if ! command -v Xvnc >/dev/null 2>&1; then
+  echo "Installing tigervnc-server..."
+  sudo dnf install -y tigervnc-server tigervnc-server-minimal || \
+    sudo yum install -y tigervnc-server tigervnc-server-minimal || {
+      echo "ERROR: failed to install tigervnc-server from default repos"
+      exit 1
+    }
 fi
 
 # Ensure noVNC + websockify are installed
@@ -71,18 +79,33 @@ sudo chown -R webapp:webapp "$PROFILE_DIR"
 sudo chmod 700 "$PROFILE_DIR"
 
 # Kill any previous instances
-sudo pkill -9 x11vnc 2>/dev/null || true
+sudo pkill -9 -f "Xvnc $VNC_DISPLAY" 2>/dev/null || true
 sudo pkill -9 -f websockify 2>/dev/null || true
 sleep 1
 
 echo '========================================='
-echo "Starting x11vnc on display :99 (internal port $VNC_PORT)"
+echo "Starting Xvnc on display $VNC_DISPLAY (internal port $VNC_PORT)"
 echo '========================================='
 
-# x11vnc — bind only to localhost (we'll forward via SSM/SSH)
-sudo x11vnc -display :99 -forever -shared -nopw -localhost -rfbport $VNC_PORT -bg -o /tmp/x11vnc.log
+# Xvnc: X server + VNC in one process. SecurityTypes=None disables the VNC
+# password prompt (we don't need it — connection is local-only, tunneled via
+# SSM/SSH, and noVNC itself has no auth either).
+sudo Xvnc $VNC_DISPLAY \
+  -geometry 1280x720 \
+  -depth 24 \
+  -SecurityTypes None \
+  -localhost \
+  -rfbport $VNC_PORT \
+  -AlwaysShared \
+  > /tmp/xvnc.log 2>&1 &
+XVNC_PID=$!
 
-sleep 1
+sleep 2
+if ! kill -0 $XVNC_PID 2>/dev/null; then
+  echo "ERROR: Xvnc failed to start. Last log:"
+  tail -20 /tmp/xvnc.log
+  exit 1
+fi
 
 echo '========================================='
 echo "Starting noVNC web client on port $NOVNC_PORT"
@@ -125,8 +148,9 @@ echo '========================================='
 echo "Launching Chromium with profile: $PROFILE_DIR"
 echo '========================================='
 
-# Launch Chromium as the webapp user with the persistent profile dir
-sudo -u webapp -E bash -c "DISPLAY=:99 '$CHROMIUM_PATH' \
+# Launch Chromium as the webapp user with the persistent profile dir on the
+# login Xvnc display (:98) — kept separate from the production Xvfb (:99).
+sudo -u webapp -E bash -c "DISPLAY=$VNC_DISPLAY '$CHROMIUM_PATH' \
   --user-data-dir='$PROFILE_DIR' \
   --no-first-run \
   --no-default-browser-check \
@@ -139,7 +163,7 @@ echo ''
 echo 'Chromium closed. Profile saved to:'
 echo "  $PROFILE_DIR"
 echo ''
-echo 'Stopping noVNC and x11vnc...'
+echo 'Stopping noVNC and Xvnc...'
 sudo pkill -9 -f websockify 2>/dev/null || true
-sudo pkill -9 x11vnc 2>/dev/null || true
+sudo pkill -9 -f "Xvnc $VNC_DISPLAY" 2>/dev/null || true
 echo 'Done. The bot will use this profile on its next meeting join.'
