@@ -56,8 +56,12 @@ jobs:
           cp -r dist deploy/
           cp -r .platform deploy/
           cp -r .ebextensions deploy/
+          cp -r scripts deploy/
           cp package*.json deploy/
           cp Procfile deploy/
+
+          # Ensure shell scripts are executable on the server
+          chmod +x deploy/scripts/*.sh 2>/dev/null || true
 
           cd deploy
           zip -r ../deploy.zip .
@@ -65,6 +69,8 @@ jobs:
 
           echo "Deployment package created: deploy.zip"
           ls -lh deploy.zip
+          echo "Scripts included:"
+          ls -la scripts/ || echo "(none)"
 
       - name: Get timestamp
         id: timestamp
