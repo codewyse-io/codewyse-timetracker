@@ -149,6 +149,11 @@ export default function MeetingsPanel() {
         .catch(() => {});
     };
 
+    const handleDeleted = (data: { meetingId: string }) => {
+      // Bot failed to join a manually-created meeting — backend deleted it
+      setMeetings((prev) => prev.filter((m) => m.id !== data.meetingId));
+    };
+
     const handleLiveTranscript = (data: { meetingId: string; speaker: string; text: string; timestamp: string }) => {
       setLiveTranscript((prev) => [...prev.slice(-200), data]); // keep last 200 entries
       // Auto-scroll
@@ -162,11 +167,13 @@ export default function MeetingsPanel() {
     socket.on('meeting:status', handleStatus);
     socket.on('meeting:completed', handleCompleted);
     socket.on('meeting:live-transcript', handleLiveTranscript);
+    socket.on('meeting:deleted', handleDeleted);
 
     return () => {
       socket.off('meeting:status', handleStatus);
       socket.off('meeting:completed', handleCompleted);
       socket.off('meeting:live-transcript', handleLiveTranscript);
+      socket.off('meeting:deleted', handleDeleted);
     };
   }, [socket]);
 

@@ -1,11 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Browser } from 'playwright';
+import type { Browser, BrowserContext } from 'playwright';
 import type { ChildProcess } from 'child_process';
 
 interface ActiveBot {
   meetingId: string;
-  browser: Browser;
+  /** In persistent-context mode, this is the context's browser() reference
+   *  (can be null for launchPersistentContext in some Playwright versions).
+   *  In traditional launch mode, this is the full Browser instance. */
+  browser: Browser | null;
+  /** The BrowserContext — always set. Close this to tear down the bot
+   *  regardless of launch mode. */
+  context: BrowserContext;
   ffmpegProcess: ChildProcess | null;
   audioFilePath: string;
   startedAt: Date;
@@ -66,7 +72,8 @@ export class BotPoolManager {
     const bot = this.activeBots.get(botId);
     if (!bot) return;
     try { bot.ffmpegProcess?.kill('SIGKILL'); } catch {}
-    try { await bot.browser.close(); } catch {}
+    try { await bot.context.close(); } catch {}
+    try { await bot.browser?.close(); } catch {}
     this.unregister(botId);
   }
 

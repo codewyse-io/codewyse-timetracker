@@ -27,8 +27,13 @@ HAS_XVFB=$(command -v Xvfb 2>/dev/null || echo "")
 
 if [ -n "$HAS_PACTL" ] && [ -n "$HAS_FFMPEG" ] && [ -n "$HAS_XVFB" ]; then
   echo "All deps already installed — skipping package install"
+  # Ensure the persistent profile dir exists + webapp can write to it
+  sudo mkdir -p /var/cache/playwright/bot-profile
+  sudo chown -R webapp:webapp /var/cache/playwright/bot-profile 2>/dev/null || true
+  sudo chmod 700 /var/cache/playwright/bot-profile 2>/dev/null || true
   set_env_var "PULSE_SERVER" "unix:/var/run/pulse/native"
   set_env_var "DISPLAY" ":99"
+  set_env_var "BOT_PROFILE_DIR" "/var/cache/playwright/bot-profile"
   echo '========================================='
   exit 0
 fi
@@ -100,17 +105,34 @@ sudo $PKG_MGR install -y ffmpeg 2>&1 || {
   fi
 }
 
+# Install x11vnc so the operator can connect remotely to log the bot
+# into Google on the same IP as the production bot (see scripts/login-bot-on-server.sh)
+sudo $PKG_MGR install -y x11vnc 2>&1 || echo "x11vnc install failed (not critical — needed only for bot login)"
+
 # Verify installations
 echo "--- Verifying installs ---"
 which pactl || echo "pactl NOT found"
 which pulseaudio || echo "pulseaudio NOT found"
 which ffmpeg || echo "ffmpeg NOT found"
+which x11vnc || echo "x11vnc NOT found (optional, for bot login only)"
+
+# Create the persistent bot profile dir. It persists across deploys because
+# it lives in /var/cache/, not /var/app/. The bot account's Google session
+# (cookies, localStorage, IndexedDB, service workers) lives here.
+sudo mkdir -p /var/cache/playwright/bot-profile
+sudo chown -R webapp:webapp /var/cache/playwright/bot-profile
+sudo chmod 700 /var/cache/playwright/bot-profile
 
 # Tell the runtime app where the PulseAudio system socket lives
 set_env_var "PULSE_SERVER" "unix:/var/run/pulse/native"
 
 # Tell the runtime app to use the Xvfb virtual display
 set_env_var "DISPLAY" ":99"
+
+# Point the bot at its persistent profile dir. When this path exists and is
+# non-empty, the bot uses launchPersistentContext — the only reliable way to
+# keep Google signed in across runs from an AWS datacenter IP.
+set_env_var "BOT_PROFILE_DIR" "/var/cache/playwright/bot-profile"
 
 echo '========================================='
 echo 'Bot dependencies install completed'

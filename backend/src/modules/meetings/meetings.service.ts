@@ -157,17 +157,17 @@ export class MeetingsService {
       throw new ForbiddenException('You do not own this meeting');
     }
 
-    // Mark as joining and respond immediately. The bot launch (which takes
-    // 10-30s for Puppeteer to navigate + click "Join") runs in the background.
-    // Status changes flow through to the UI via WebSocket events.
-    meeting.status = MeetingStatus.RECORDING;
+    // Mark as "joining" — yellow state — so the UI clearly shows the bot is
+    // still trying to connect (not actively recording yet). The status flips
+    // to RECORDING only after createBot() returns successfully.
+    meeting.status = MeetingStatus.BOT_JOINING;
     meeting.errorMessage = null as any;
     await this.meetingRepo.save(meeting);
 
     if (this.realtimeGateway) {
       this.realtimeGateway.emitToUser(meeting.userId, 'meeting:status', {
         meetingId: meeting.id,
-        status: 'joining',
+        status: 'bot_joining',
       });
     }
 
@@ -186,6 +186,8 @@ export class MeetingsService {
 
     try {
       const bot = await this.meetingBotService.createBot(meeting.meetingUrl, botName, meeting.id);
+      // Bot has successfully clicked "Ask to join" (or already in, for Open meetings).
+      // Flip to RECORDING now — this is when audio capture actually starts.
       meeting.recallBotId = bot.id;
       meeting.status = MeetingStatus.RECORDING;
       await this.meetingRepo.save(meeting);
@@ -200,6 +202,23 @@ export class MeetingsService {
     } catch (err: any) {
       this.logger.error(`[launchBot] Failed for meeting ${meeting.id}: ${err.message}`);
       this.logger.error(`[launchBot] Stack: ${err.stack}`);
+
+      // For manually-created meetings (no googleEventId), delete on failure —
+      // they'd just clutter the Scheduled tab as "Failed" forever. Calendar-
+      // synced meetings get marked failed so the user can retry them.
+      if (!meeting.googleEventId) {
+        this.logger.log(`[launchBot] Deleting manually-created meeting ${meeting.id} after failed bot launch`);
+        try {
+          await this.meetingRepo.remove(meeting);
+          if (this.realtimeGateway) {
+            this.realtimeGateway.emitToUser(meeting.userId, 'meeting:deleted', { meetingId: meetingId });
+          }
+        } catch (delErr: any) {
+          this.logger.warn(`[launchBot] Failed to delete manual meeting: ${delErr.message}`);
+        }
+        return;
+      }
+
       meeting.status = MeetingStatus.FAILED;
       meeting.errorMessage = err.message;
       await this.meetingRepo.save(meeting);
@@ -281,7 +300,10 @@ export class MeetingsService {
   @Cron('0 */5 * * * *')
   async reconcileStuckRecordings(): Promise<void> {
     const meetings = await this.meetingRepo.find({
-      where: { status: MeetingStatus.RECORDING },
+      where: [
+        { status: MeetingStatus.RECORDING },
+        { status: MeetingStatus.BOT_JOINING },
+      ],
     });
     if (meetings.length === 0) return;
 
@@ -373,8 +395,9 @@ export class MeetingsService {
 
     for (const meeting of meetings) {
       if (!meeting.meetingUrl) continue;
-      // Mark as joining immediately to prevent another cron tick from re-launching
-      meeting.status = MeetingStatus.RECORDING;
+      // Mark as BOT_JOINING (yellow) to prevent another cron tick from re-launching.
+      // launchBotInBackground will flip to RECORDING once the bot is actually in.
+      meeting.status = MeetingStatus.BOT_JOINING;
       await this.meetingRepo.save(meeting);
 
       this.logger.log(`[autoJoin] Launching bot for meeting ${meeting.id} (${meeting.title}) — scheduledStart=${meeting.scheduledStart?.toISOString()}`);

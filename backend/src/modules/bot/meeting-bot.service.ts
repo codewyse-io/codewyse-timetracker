@@ -9,7 +9,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { EventEmitter } from 'events';
 import * as fs from 'fs';
-import { chromium, Browser } from 'playwright';
+import { chromium, Browser, BrowserContext } from 'playwright';
 
 /**
  * Rename the signed-in bot's Google account display name so the bot appears
@@ -251,6 +251,7 @@ export class MeetingBotService {
     this.logger.log(`[createBot] botId=${botId}, audioPath=${audioFilePath}`);
 
     let browser: Browser | null = null;
+    let context: BrowserContext | null = null;
     try {
       // 1. Setup PulseAudio virtual sink (Linux only)
       let sinkModuleId: string | null = null;
@@ -269,45 +270,84 @@ export class MeetingBotService {
       // 2. Launch Playwright Chromium in HEADED mode via Xvfb.
       // Headless Chromium is detected and blocked by Google Meet, so we run
       // a real headed browser on a virtual X display (DISPLAY=:99 from Xvfb).
+      //
+      // Two modes:
+      //   A. PERSISTENT — BOT_PROFILE_DIR is set → launchPersistentContext with
+      //      that directory. Cookies, localStorage, IndexedDB, and service
+      //      worker state accumulate on disk across runs. The bot is logged
+      //      in once (interactively on the server, same IP as runtime use)
+      //      and stays logged in indefinitely.
+      //   B. STORAGE_STATE — fallback: launch + newContext(storageState) from
+      //      S3 or a local JSON file. Faster to set up but breaks after ~week
+      //      due to IP-mismatch invalidation.
       const chromiumPath = findChromiumExecutable();
-      this.logger.log(`[createBot] Step 2: Launching Playwright Chromium (executablePath=${chromiumPath || 'default'}, DISPLAY=${process.env.DISPLAY || 'unset'})`);
-      browser = await chromium.launch({
-        headless: false,
-        executablePath: chromiumPath,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
-          '--disable-blink-features=AutomationControlled',
-          '--autoplay-policy=no-user-gesture-required',
-          '--use-fake-ui-for-media-stream',
-          '--use-fake-device-for-media-stream',
-          '--window-size=1280,720',
-          '--start-maximized',
-        ],
-        env: {
-          ...process.env,
-          DISPLAY: process.env.DISPLAY || ':99',
-          ...(isLinux && sinkModuleId ? { PULSE_SINK: `bot_${botId}` } : {}),
-        },
-      });
+      const profileDir = this.configService.get<string>('BOT_PROFILE_DIR');
+      this.logger.log(
+        `[createBot] Step 2: Launching Playwright Chromium (executablePath=${chromiumPath || 'default'}, DISPLAY=${process.env.DISPLAY || 'unset'}, profileDir=${profileDir || 'none'})`,
+      );
 
-      // Load persisted Google session if available — required for joining
-      // Workspace meetings (anonymous bots are silently rejected by Workspace anti-abuse).
-      const storageState = await this.loadBotStorageState();
-      this.logger.log(`[createBot] Using ${storageState ? 'PERSISTED' : 'ANONYMOUS'} browser context`);
-
-      const context = await browser.newContext({
-        userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      const commonArgs = [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-blink-features=AutomationControlled',
+        '--autoplay-policy=no-user-gesture-required',
+        '--use-fake-ui-for-media-stream',
+        '--use-fake-device-for-media-stream',
+        '--window-size=1280,720',
+        '--start-maximized',
+      ];
+      const commonEnv = {
+        ...process.env,
+        DISPLAY: process.env.DISPLAY || ':99',
+        ...(isLinux && sinkModuleId ? { PULSE_SINK: `bot_${botId}` } : {}),
+      };
+      const commonContextOpts = {
+        userAgent:
+          'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
         viewport: { width: 1280, height: 720 },
-        permissions: ['microphone', 'camera'],
-        storageState,
-      });
-      const page = await context.newPage();
+        permissions: ['microphone', 'camera'] as const,
+      };
+
+      // `hasSession` tracks whether we should expect to be signed into Google —
+      // either because a persistent profile exists, or storageState was loaded.
+      let hasSession = false;
+      if (profileDir && fs.existsSync(profileDir)) {
+        this.logger.log(`[createBot] Using PERSISTENT browser profile at: ${profileDir}`);
+        context = await chromium.launchPersistentContext(profileDir, {
+          headless: false,
+          executablePath: chromiumPath,
+          args: commonArgs,
+          env: commonEnv,
+          ...commonContextOpts,
+          permissions: Array.from(commonContextOpts.permissions),
+        });
+        browser = context.browser();
+        hasSession = true;
+      } else {
+        const storageState = await this.loadBotStorageState();
+        this.logger.log(
+          `[createBot] Using ${storageState ? 'PERSISTED (storageState)' : 'ANONYMOUS'} browser context (BOT_PROFILE_DIR not set or missing)`,
+        );
+        browser = await chromium.launch({
+          headless: false,
+          executablePath: chromiumPath,
+          args: commonArgs,
+          env: commonEnv,
+        });
+        context = await browser.newContext({
+          ...commonContextOpts,
+          permissions: Array.from(commonContextOpts.permissions),
+          storageState,
+        });
+        hasSession = !!storageState;
+      }
+
+      const page = context.pages()[0] || (await context.newPage());
 
       // Mask the navigator.webdriver flag to reduce automation detection
-      await page.addInitScript(() => {
+      await context.addInitScript(() => {
         Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
       });
 
@@ -317,10 +357,10 @@ export class MeetingBotService {
       //    the bot account flagged. Set BOT_ENABLE_RENAME=true to re-enable.
       const renameEnabled =
         this.configService.get<string>('BOT_ENABLE_RENAME', 'false').toLowerCase() === 'true';
-      if (storageState && renameEnabled) {
+      if (hasSession && renameEnabled) {
         this.logger.log(`[createBot] Renaming bot Google display name to "${botName}"`);
         await renameBotDisplayName(page, botName, this.logger);
-      } else if (storageState) {
+      } else if (hasSession) {
         this.logger.log(`[createBot] Rename disabled (BOT_ENABLE_RENAME=false) — bot will join as its Google account name`);
       }
 
@@ -337,7 +377,8 @@ export class MeetingBotService {
         else await page.goto(meetingUrl, { waitUntil: 'networkidle', timeout: 30000 });
       } catch (joinErr: any) {
         this.logger.error(`Bot ${botId} failed to join meeting: ${joinErr.message}`);
-        await browser.close();
+        try { await context.close(); } catch {}
+        try { await browser?.close(); } catch {}
         if (isLinux && sinkModuleId) {
           try { execSync(`pactl unload-module ${sinkModuleId}`); } catch {}
         }
@@ -386,6 +427,7 @@ export class MeetingBotService {
       this.pool.register(botId, {
         meetingId: meetingId || botId,
         browser,
+        context,
         ffmpegProcess,
         audioFilePath,
         startedAt: new Date(),
@@ -407,6 +449,9 @@ export class MeetingBotService {
     } catch (err: any) {
       this.logger.error(`[createBot] FAILED at step ${err.step || 'unknown'}: ${err.message}`);
       this.logger.error(`[createBot] Stack: ${err.stack}`);
+      if (context) {
+        try { await context.close(); } catch {}
+      }
       if (browser) {
         try { await browser.close(); } catch {}
       }
@@ -507,18 +552,21 @@ export class MeetingBotService {
       });
     }
 
-    // 2. Close browser — with a 5s timeout and force-kill fallback.
-    // Playwright's browser.close() can hang if a page is in a bad state
-    // (e.g. stuck on a removed-from-meeting screen with a service worker).
+    // 2. Close context + browser — with a 5s timeout and force-kill fallback.
+    // For persistent contexts, closing the context is what matters (it tears
+    // down the browser too). For launch mode, we close browser after context.
     try {
       await Promise.race([
-        bot.browser.close(),
+        (async () => {
+          try { await bot.context.close(); } catch {}
+          try { await bot.browser?.close(); } catch {}
+        })(),
         new Promise((_, reject) => setTimeout(() => reject(new Error('browser close timeout')), 5000)),
       ]);
     } catch (err: any) {
-      this.logger.warn(`[stopBot] browser.close() failed: ${err.message} — forcing kill`);
+      this.logger.warn(`[stopBot] close timed out: ${err.message} — forcing kill`);
       try {
-        const proc = (bot.browser as any)._process?.();
+        const proc = (bot.browser as any)?._process?.();
         if (proc?.pid) {
           process.kill(proc.pid, 'SIGKILL');
         }
