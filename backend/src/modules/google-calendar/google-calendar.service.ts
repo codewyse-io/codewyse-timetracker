@@ -138,13 +138,27 @@ export class GoogleCalendarService {
     await this.connectionRepo.delete({ userId });
   }
 
-  async syncCalendarEvents(userId: string): Promise<void> {
+  /** Minimum gap between syncs for the same user. Protects against thundering
+   *  Sync-button clicks and accidental cron overlap. Set higher in production. */
+  private static readonly MIN_SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+  async syncCalendarEvents(userId: string, options: { force?: boolean } = {}): Promise<void> {
     const connection = await this.connectionRepo.findOne({
       where: { userId },
     });
 
     if (!connection || !connection.calendarSyncEnabled) {
       return;
+    }
+
+    // Cooldown: skip if last sync was very recent. Prevents API spam from
+    // duplicate cron ticks, manual button mashing, or bot retries.
+    if (!options.force && connection.lastSyncAt) {
+      const elapsed = Date.now() - connection.lastSyncAt.getTime();
+      if (elapsed < GoogleCalendarService.MIN_SYNC_INTERVAL_MS) {
+        this.logger.debug(`Skipping sync for user ${userId} — last sync ${Math.round(elapsed / 1000)}s ago`);
+        return;
+      }
     }
 
     await this.refreshTokenIfNeeded(connection);
@@ -160,14 +174,41 @@ export class GoogleCalendarService {
     const now = new Date();
     const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
+    // Build request: incremental if we have a syncToken, full otherwise.
+    // syncToken is mutually exclusive with timeMin/timeMax/orderBy per Google docs.
+    const listParams: any = connection.syncToken
+      ? { calendarId: 'primary', singleEvents: true, syncToken: connection.syncToken, maxResults: 250 }
+      : {
+          calendarId: 'primary',
+          timeMin: now.toISOString(),
+          timeMax: sevenDaysLater.toISOString(),
+          singleEvents: true,
+          orderBy: 'startTime',
+          maxResults: 250,
+        };
+
     try {
-      const response = await calendar.events.list({
-        calendarId: 'primary',
-        timeMin: now.toISOString(),
-        timeMax: sevenDaysLater.toISOString(),
-        singleEvents: true,
-        orderBy: 'startTime',
-      });
+      let response: any;
+      try {
+        response = await calendar.events.list(listParams);
+      } catch (err: any) {
+        // 410 Gone = syncToken expired (Google deletes them after ~30 days
+        // or after major calendar changes). Fall back to a full sync.
+        if (err?.response?.status === 410 || err?.code === 410) {
+          this.logger.warn(`syncToken expired for user ${userId} — falling back to full sync`);
+          connection.syncToken = null;
+          response = await calendar.events.list({
+            calendarId: 'primary',
+            timeMin: now.toISOString(),
+            timeMax: sevenDaysLater.toISOString(),
+            singleEvents: true,
+            orderBy: 'startTime',
+            maxResults: 250,
+          });
+        } else {
+          throw err;
+        }
+      }
 
       const events = (response as any).data?.items || [];
 
@@ -228,11 +269,19 @@ export class GoogleCalendarService {
         await this.meetingRepo.save(meeting as any);
       }
 
-      // Update last sync time
+      // Update last sync time + persist nextSyncToken for incremental sync.
+      // Without this, every cron tick re-fetches the full 7-day window.
       connection.lastSyncAt = new Date();
+      const nextSyncToken = (response as any)?.data?.nextSyncToken;
+      if (nextSyncToken) {
+        connection.syncToken = nextSyncToken;
+      }
       await this.connectionRepo.save(connection);
 
-      this.logger.log(`Synced ${events.length} calendar events for user ${userId}`);
+      this.logger.log(
+        `Synced ${events.length} calendar events for user ${userId} ` +
+          `(${listParams.syncToken ? 'incremental' : 'full'}, nextSyncToken: ${nextSyncToken ? 'saved' : 'none'})`,
+      );
     } catch (error) {
       this.logger.error(`Failed to sync calendar events for user ${userId}: ${error.message}`);
     }
@@ -298,13 +347,23 @@ export class GoogleCalendarService {
     return MeetingPlatform.UNKNOWN;
   }
 
-  @Cron('0 */15 * * * *')
+  /**
+   * Scheduled calendar sync. Runs every 30 minutes. Each per-user sync is
+   * additionally rate-limited inside syncCalendarEvents() and uses Google's
+   * incremental sync (nextSyncToken) so each tick is typically 1 quota unit.
+   *
+   * Quota math (Google Calendar API free tier = 1,000,000 quota units/day):
+   *   - 30-min cron × 48 ticks/day × N users × 1 unit (incremental) = 48N units
+   *   - Even at 1000 active users, that's only ~48k units/day — well below the limit.
+   */
+  @Cron('0 */30 * * * *')
   async handleCalendarSyncCron(): Promise<void> {
-    this.logger.log('Running scheduled calendar sync for all connections');
-
     const connections = await this.connectionRepo.find({
       where: { calendarSyncEnabled: true as any },
     });
+
+    if (connections.length === 0) return;
+    this.logger.log(`Running scheduled calendar sync for ${connections.length} connection(s)`);
 
     for (const connection of connections) {
       try {

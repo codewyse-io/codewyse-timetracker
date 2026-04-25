@@ -74,7 +74,8 @@ export class GoogleCalendarController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async sync(@Req() req: any) {
-    await this.googleCalendarService.syncCalendarEvents(req.user.id);
+    // Manual button click — bypass the cooldown that protects the cron path
+    await this.googleCalendarService.syncCalendarEvents(req.user.id, { force: true });
     return { message: 'Calendar sync completed' };
   }
 }

@@ -39,6 +39,13 @@ export class GoogleCalendarConnection {
   @Column({ name: 'last_sync_at', type: 'datetime', nullable: true })
   lastSyncAt: Date | null;
 
+  /** Google's nextSyncToken from the previous events.list — used for
+   *  incremental sync. When present, we only fetch changed events instead
+   *  of re-pulling the entire 7-day window. Massive cost reduction:
+   *  one full list ≈ 50 events × 1 quota unit, incremental ≈ 1 quota unit. */
+  @Column({ name: 'sync_token', type: 'text', nullable: true })
+  syncToken: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
