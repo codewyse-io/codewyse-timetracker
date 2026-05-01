@@ -21,4 +21,8 @@ export const timeTrackingApi = {
   updateSession(sessionId: string, activeDuration: number): Promise<ApiResponse<WorkSession>> {
     return apiClient.patch(`/time-tracking/sessions/${sessionId}`, { activeDuration });
   },
+
+  deleteSession(sessionId: string): Promise<ApiResponse<{ deleted: true }>> {
+    return apiClient.delete(`/time-tracking/sessions/${sessionId}`);
+  },
 };

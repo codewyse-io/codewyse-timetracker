@@ -593,6 +593,25 @@ export class TimeTrackingService {
   }
 
   /**
+   * Admin: delete a session.
+   */
+  async adminDeleteSession(sessionId: string, organizationId?: string): Promise<void> {
+    const session = await this.sessionRepository.findOne({
+      where: { id: sessionId },
+    });
+    if (!session) throw new NotFoundException('Session not found');
+    if (organizationId && session.organizationId !== organizationId) {
+      throw new NotFoundException('Session not found');
+    }
+
+    await this.sessionRepository.remove(session);
+
+    // Recalculate focus score for the affected day
+    const sessionDate = session.startTime.toISOString().split('T')[0];
+    this.focusScoreService.calculateDailyScore(session.userId, sessionDate).catch(() => {});
+  }
+
+  /**
    * Calculate total, idle, and active durations for a session.
    */
   private calculateDurations(session: WorkSession): void {

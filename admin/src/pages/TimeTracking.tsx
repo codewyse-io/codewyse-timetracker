@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Card,
   Table,
@@ -11,7 +12,7 @@ import {
   Button,
   message,
 } from 'antd';
-import { DownloadOutlined, ClockCircleOutlined, HistoryOutlined, CaretRightOutlined } from '@ant-design/icons';
+import { DownloadOutlined, ClockCircleOutlined, HistoryOutlined, RightOutlined, CaretRightOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
@@ -221,6 +222,7 @@ function groupSessionsByDate(sessions: WorkSession[], tz?: string): DayGroup[] {
 }
 
 function SessionHistoryTab() {
+  const navigate = useNavigate();
   const [sessions, setSessions] = useState<WorkSession[]>([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -424,6 +426,14 @@ function SessionHistoryTab() {
         <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>{formatDuration(val)}</span>
       ),
     },
+    {
+      title: '',
+      key: 'arrow',
+      width: 40,
+      render: () => (
+        <RightOutlined style={{ color: 'var(--text-muted)', fontSize: 12 }} />
+      ),
+    },
   ];
 
   // Day group columns (when employee is selected)
@@ -569,37 +579,16 @@ function SessionHistoryTab() {
           columns={employeeGroupColumns}
           rowKey="key"
           loading={loading}
-          rowClassName={() => 'modern-row'}
+          rowClassName={() => 'modern-row clickable-row'}
+          onRow={(record) => ({
+            onClick: () => navigate(`/time-tracking/sessions/${record.key}`),
+            style: { cursor: 'pointer' },
+          })}
           pagination={{
             current: page,
             pageSize: 20,
             total: employeeGroups.length,
             showTotal: (t) => `Total ${t} employees`,
-          }}
-          expandable={{
-            expandedRowRender: (record) => (
-              <Table
-                dataSource={record.sessions}
-                columns={sessionSubColumns}
-                rowKey="id"
-                pagination={false}
-                size="small"
-                style={{ margin: '0 0 0 16px' }}
-                rowClassName={() => 'modern-row'}
-              />
-            ),
-            expandIcon: ({ expanded, onExpand, record }) => (
-              <CaretRightOutlined
-                onClick={(e) => onExpand(record, e)}
-                style={{
-                  fontSize: 11,
-                  color: 'var(--text-muted)',
-                  cursor: 'pointer',
-                  transition: 'transform 0.2s',
-                  transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
-                }}
-              />
-            ),
           }}
         />
       )}

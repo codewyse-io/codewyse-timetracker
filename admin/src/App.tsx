@@ -12,8 +12,7 @@ import ShiftsPage from './pages/Shifts';
 import TimeTrackingPage from './pages/TimeTracking';
 import PayrollPage from './pages/Payroll';
 import PayrollDetailPage from './pages/PayrollDetail';
-import KpisPage from './pages/Kpis';
-import ReportsPage from './pages/Reports';
+import SessionHistoryDetailPage from './pages/SessionHistoryDetail';
 import AiInsightsPage from './pages/AiInsights';
 import LeaveRequestsPage from './pages/LeaveRequests';
 import AnnouncementsPage from './pages/Announcements';
@@ -106,10 +105,9 @@ function AppRoutes() {
         <Route path="users" element={<PageErrorBoundary><UsersPage /></PageErrorBoundary>} />
         <Route path="shifts" element={<PageErrorBoundary><ShiftsPage /></PageErrorBoundary>} />
         <Route path="time-tracking" element={<PageErrorBoundary><TimeTrackingPage /></PageErrorBoundary>} />
+        <Route path="time-tracking/sessions/:userId" element={<PageErrorBoundary><SessionHistoryDetailPage /></PageErrorBoundary>} />
         <Route path="payroll" element={<PageErrorBoundary><PayrollPage /></PageErrorBoundary>} />
         <Route path="payroll/:userId" element={<PageErrorBoundary><PayrollDetailPage /></PageErrorBoundary>} />
-        <Route path="kpis" element={<PageErrorBoundary><KpisPage /></PageErrorBoundary>} />
-        <Route path="reports" element={<PageErrorBoundary><ReportsPage /></PageErrorBoundary>} />
         <Route path="ai-insights" element={<PageErrorBoundary><AiInsightsPage /></PageErrorBoundary>} />
         <Route path="leave-requests" element={<PageErrorBoundary><LeaveRequestsPage /></PageErrorBoundary>} />
         <Route path="announcements" element={<PageErrorBoundary><AnnouncementsPage /></PageErrorBoundary>} />

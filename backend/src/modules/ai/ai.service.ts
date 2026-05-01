@@ -163,13 +163,19 @@ export class AiService {
     });
   }
 
-  async getTeamInsights(): Promise<AiInsight[]> {
-    return this.insightRepo.find({
-      where: { type: InsightType.TEAM },
-      order: { generatedAt: 'DESC' },
-      take: 20,
-      relations: ['user'],
-    });
+  async getTeamInsights(organizationId?: string): Promise<AiInsight[]> {
+    const qb = this.insightRepo
+      .createQueryBuilder('insight')
+      .leftJoinAndSelect('insight.user', 'user')
+      .where('insight.type = :type', { type: InsightType.TEAM })
+      .orderBy('insight.generatedAt', 'DESC')
+      .take(20);
+
+    if (organizationId) {
+      qb.andWhere('user.organizationId = :organizationId', { organizationId });
+    }
+
+    return qb.getMany();
   }
 
   async getCoachingTipsForUser(userId: string): Promise<AiCoachingTip[]> {
@@ -199,18 +205,24 @@ export class AiService {
     return tips;
   }
 
-  async getTeamCoachingTips(): Promise<AiCoachingTip[]> {
-    return this.coachingRepo.find({
-      order: { generatedAt: 'DESC' },
-      take: 50,
-      relations: ['user'],
-    });
+  async getTeamCoachingTips(organizationId?: string): Promise<AiCoachingTip[]> {
+    const qb = this.coachingRepo
+      .createQueryBuilder('tip')
+      .leftJoinAndSelect('tip.user', 'user')
+      .orderBy('tip.generatedAt', 'DESC')
+      .take(50);
+
+    if (organizationId) {
+      qb.andWhere('user.organizationId = :organizationId', { organizationId });
+    }
+
+    return qb.getMany();
   }
 
-  async getTeamCoachingGrouped(): Promise<
+  async getTeamCoachingGrouped(organizationId?: string): Promise<
     { userId: string; user: { firstName: string; lastName: string }; tips: AiCoachingTip[] }[]
   > {
-    const tips = await this.getTeamCoachingTips();
+    const tips = await this.getTeamCoachingTips(organizationId);
     const grouped = new Map<string, { user: { firstName: string; lastName: string }; tips: AiCoachingTip[] }>();
 
     for (const tip of tips) {

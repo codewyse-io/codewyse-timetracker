@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Param,
   Body,
   Query,
@@ -124,5 +125,17 @@ export class TimeTrackingController {
     @Body() body: { activeDuration: number },
   ): Promise<WorkSession> {
     return this.timeTrackingService.adminUpdateSession(sessionId, body.activeDuration);
+  }
+
+  @Delete('sessions/:id')
+  @Roles('admin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Admin: delete a session' })
+  async deleteSession(
+    @Param('id') sessionId: string,
+    @CurrentOrg() orgId: string,
+  ): Promise<{ deleted: true }> {
+    await this.timeTrackingService.adminDeleteSession(sessionId, orgId);
+    return { deleted: true };
   }
 }

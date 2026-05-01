@@ -13,6 +13,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../../common/enums/role.enum';
+import { CurrentOrg } from '../../common/decorators/current-org.decorator';
 
 @ApiTags('AI Insights')
 @ApiBearerAuth()
@@ -36,15 +37,15 @@ export class AiController {
   @Get('team')
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Get team AI insights (admin)' })
-  async getTeamInsights() {
-    return this.aiService.getTeamInsights();
+  async getTeamInsights(@CurrentOrg() orgId: string) {
+    return this.aiService.getTeamInsights(orgId);
   }
 
   @Get('coaching')
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Get team coaching tips grouped by employee (admin)' })
-  async getTeamCoachingGrouped() {
-    return this.aiService.getTeamCoachingGrouped();
+  async getTeamCoachingGrouped(@CurrentOrg() orgId: string) {
+    return this.aiService.getTeamCoachingGrouped(orgId);
   }
 
   @Get('employee/:userId')
