@@ -43,7 +43,7 @@ export default function SessionHistoryDetailPage() {
       const params: Record<string, string | number | undefined> = {
         userId,
         page: 1,
-        limit: 500,
+        limit: 200,
       };
       if (dateRange?.[0]) params.startDate = dateRange[0].format('YYYY-MM-DD');
       if (dateRange?.[1]) params.endDate = dateRange[1].format('YYYY-MM-DD');
