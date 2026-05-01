@@ -20,6 +20,7 @@ import type { ColumnsType } from 'antd/es/table';
 
 import type { WorkSession } from '../types';
 import { timeTrackingApi } from '../api/time-tracking.api';
+import apiClient from '../api/client';
 import { formatDuration, formatDate, formatTime } from '../utils/format';
 
 const { RangePicker } = DatePicker;
@@ -53,9 +54,22 @@ export default function SessionHistoryDetailPage() {
       setSessions(data);
       if (data.length > 0 && data[0].user) {
         setEmployeeName(`${data[0].user.firstName} ${data[0].user.lastName}`);
+      } else if (data.length === 0) {
+        try {
+          const userRes = await apiClient.get(`/users/${userId}`);
+          const u = (userRes as any).data;
+          if (u?.firstName) setEmployeeName(`${u.firstName} ${u.lastName}`);
+        } catch {
+          // fallback name not available
+        }
       }
-    } catch {
-      message.error('Failed to load sessions');
+    } catch (err: any) {
+      const detail =
+        err?.response?.data?.message ||
+        err?.message ||
+        'Unknown error';
+      console.error('[SessionHistoryDetail] load failed:', err);
+      message.error(`Failed to load sessions: ${Array.isArray(detail) ? detail.join(', ') : detail}`);
     } finally {
       setLoading(false);
     }
