@@ -213,14 +213,18 @@ export class PeerReviewsService {
       : [];
 
     // HR reviewees: every active HR user in the org, excluding self.
-    const hrUsers = await this.userRepo.find({
-      where: {
-        organizationId: me.organizationId,
-        status: UserStatus.ACTIVE,
-        isHr: true,
-      },
-    });
+    // We use an explicit query builder so the is_hr tinyint comparison
+    // doesn't rely on the boolean transformer being applied in WHERE.
+    const hrUsers = await this.userRepo
+      .createQueryBuilder('u')
+      .where('u.organization_id = :orgId', { orgId: me.organizationId })
+      .andWhere('u.status = :status', { status: UserStatus.ACTIVE })
+      .andWhere('u.is_hr = 1')
+      .getMany();
     const hrCandidates = hrUsers.filter((u) => u.id !== me.id);
+    this.logger.log(
+      `[peer-reviews] user=${me.id} org=${me.organizationId} found ${hrUsers.length} HR user(s), ${hrCandidates.length} reviewable`,
+    );
 
     const allRevieweeIds = [
       ...teammates.map((u) => u.id),
