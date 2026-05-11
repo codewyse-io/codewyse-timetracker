@@ -5,6 +5,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -57,6 +58,22 @@ export class PeerReviewsController {
     @Body() dto: SubmitPeerReviewResponseDto,
   ) {
     return this.service.submitResponse(req.user.id, surveyId, revieweeId, dto);
+  }
+
+  // ── Leaderboard (visible to all authenticated users in the org) ──
+  @Get('leaderboard')
+  @ApiOperation({ summary: 'Org-wide leaderboard of peer-review averages' })
+  async leaderboard(
+    @Req() req: any,
+    @Query('surveyId') surveyId?: string,
+  ) {
+    return this.service.getLeaderboardForUser(req.user.id, surveyId);
+  }
+
+  @Get('surveys')
+  @ApiOperation({ summary: 'List all surveys in my organization' })
+  async surveys(@Req() req: any) {
+    return this.service.listSurveysForUser(req.user.id);
   }
 
   // ── Admin ──

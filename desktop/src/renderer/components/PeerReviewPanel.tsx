@@ -1,16 +1,20 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Spin, message } from 'antd';
+import { Spin, message, Select } from 'antd';
 import {
   TeamOutlined,
   ArrowLeftOutlined,
   CheckCircleFilled,
   ClockCircleOutlined,
+  TrophyOutlined,
+  FormOutlined,
 } from '@ant-design/icons';
 import {
   getActivePeerReview,
   getPeerReviewQuestions,
   getPeerReviewDraft,
   submitPeerReview,
+  getPeerReviewLeaderboard,
+  listPeerReviewSurveys,
 } from '../api/client';
 
 type Category =
@@ -42,11 +46,25 @@ interface Survey {
   status: 'open' | 'closed';
 }
 
+interface LeaderboardRow {
+  reviewee: { id: string; firstName: string; lastName: string };
+  reviewerCount: number;
+  overallAverage: number;
+  categoryAverages: Record<Category, number>;
+}
+
+interface LeaderboardData {
+  survey: Survey;
+  results: LeaderboardRow[];
+  myEntry: LeaderboardRow | null;
+  myRank: number | null;
+}
+
 const CATEGORY_LABEL: Record<Category, string> = {
   performance: 'Performance',
   responsibility: 'Responsibility',
   knowledge: 'Knowledge',
-  leadership_collaboration: 'Leadership & Collaboration',
+  leadership_collaboration: 'Leadership & Collab.',
 };
 
 const CATEGORY_COLOR: Record<Category, string> = {
@@ -66,6 +84,7 @@ const SCALE_LABELS = [
 ];
 
 function formatPeriod(yyyyMM: string): string {
+  if (!yyyyMM) return '';
   const [y, m] = yyyyMM.split('-').map(Number);
   const d = new Date(y, (m || 1) - 1, 1);
   return d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
@@ -76,8 +95,14 @@ function daysLeft(iso: string): number {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 }
 
+type View = 'leaderboard' | 'survey';
+
 export default function PeerReviewPanel() {
-  const [loading, setLoading] = useState(true);
+  // Top-level view (leaderboard | survey)
+  const [view, setView] = useState<View>('leaderboard');
+
+  // Survey state
+  const [surveyLoading, setSurveyLoading] = useState(true);
   const [survey, setSurvey] = useState<Survey | null>(null);
   const [teammates, setTeammates] = useState<Teammate[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -86,8 +111,14 @@ export default function PeerReviewPanel() {
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // Leaderboard state
+  const [lbLoading, setLbLoading] = useState(true);
+  const [lb, setLb] = useState<LeaderboardData | null>(null);
+  const [allSurveys, setAllSurveys] = useState<Survey[]>([]);
+  const [pickedSurveyId, setPickedSurveyId] = useState<string | undefined>(undefined);
+
+  const loadActiveSurvey = useCallback(async () => {
+    setSurveyLoading(true);
     try {
       const [activeRes, questionsRes] = await Promise.all([
         getActivePeerReview(),
@@ -104,15 +135,35 @@ export default function PeerReviewPanel() {
         setTeammates([]);
       }
     } catch {
-      message.error('Failed to load peer reviews');
+      // silent — survey is optional now
     } finally {
-      setLoading(false);
+      setSurveyLoading(false);
+    }
+  }, []);
+
+  const loadLeaderboard = useCallback(async (surveyId?: string) => {
+    setLbLoading(true);
+    try {
+      const [lbRes, surveysRes] = await Promise.all([
+        getPeerReviewLeaderboard(surveyId),
+        listPeerReviewSurveys(),
+      ]);
+      const data = lbRes?.data ?? lbRes;
+      const surveys = surveysRes?.data ?? surveysRes;
+      setLb(data || null);
+      setAllSurveys(Array.isArray(surveys) ? surveys : []);
+      if (data?.survey?.id && !surveyId) setPickedSurveyId(data.survey.id);
+    } catch {
+      setLb(null);
+    } finally {
+      setLbLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    loadActiveSurvey();
+    loadLeaderboard();
+  }, [loadActiveSurvey, loadLeaderboard]);
 
   const grouped = useMemo(() => {
     const map: Record<Category, Question[]> = {
@@ -149,7 +200,7 @@ export default function PeerReviewPanel() {
           setComment(draft.comment || '');
         }
       } catch {
-        // ignore — fresh form
+        // ignore
       }
     }
   };
@@ -179,44 +230,17 @@ export default function PeerReviewPanel() {
       setSelected(null);
       setScores({});
       setComment('');
-      await load();
+      await Promise.all([loadActiveSurvey(), loadLeaderboard(pickedSurveyId)]);
     } catch (err: any) {
       const detail =
-        err?.response?.data?.message ||
-        err?.message ||
-        'Failed to submit review';
+        err?.response?.data?.message || err?.message || 'Failed to submit review';
       message.error(Array.isArray(detail) ? detail.join(', ') : detail);
     } finally {
       setSubmitting(false);
     }
   };
 
-  // ── Empty state — no active survey ──
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 64 }}>
-        <Spin />
-      </div>
-    );
-  }
-
-  if (!survey) {
-    return (
-      <div style={{ padding: 20 }}>
-        <div style={panelStyle}>
-          <TeamOutlined style={{ fontSize: 32, color: 'rgba(255,255,255,0.25)', display: 'block', marginBottom: 12 }} />
-          <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: 15, fontWeight: 600, marginBottom: 4 }}>
-            No active peer review
-          </div>
-          <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12 }}>
-            A new peer review opens at the start of each month and stays open for 7 days.
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Detail form ──
+  // ── Survey detail form ──
   if (selected) {
     return (
       <div style={{ padding: 20 }}>
@@ -329,16 +353,339 @@ export default function PeerReviewPanel() {
     );
   }
 
-  // ── Teammate list ──
-  const remaining = daysLeft(survey.closesAt);
-  const completedCount = teammates.filter((t) => t.status === 'submitted').length;
+  // ── Main panel: tab switcher + content ──
   return (
     <div style={{ padding: 20 }}>
-      <div style={{ ...panelStyle, padding: 16, marginBottom: 14 }}>
+      {/* Sub-tab switcher */}
+      <div
+        style={{
+          display: 'inline-flex',
+          background: 'rgba(255,255,255,0.04)',
+          borderRadius: 10,
+          padding: 4,
+          gap: 2,
+          marginBottom: 16,
+        }}
+      >
+        {([
+          { key: 'leaderboard' as View, label: 'Leaderboard', icon: <TrophyOutlined /> },
+          { key: 'survey' as View, label: 'Survey', icon: <FormOutlined /> },
+        ]).map((tab) => {
+          const active = view === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setView(tab.key)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '7px 14px',
+                borderRadius: 8,
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: 600,
+                background: active ? 'rgba(124, 92, 252, 0.18)' : 'transparent',
+                color: active ? '#c4b5fd' : 'rgba(255,255,255,0.55)',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {view === 'leaderboard' ? (
+        <LeaderboardView
+          loading={lbLoading}
+          data={lb}
+          allSurveys={allSurveys}
+          pickedSurveyId={pickedSurveyId}
+          onPickSurvey={(id) => {
+            setPickedSurveyId(id);
+            loadLeaderboard(id);
+          }}
+        />
+      ) : (
+        <SurveyView
+          loading={surveyLoading}
+          survey={survey}
+          teammates={teammates}
+          onOpenTeammate={openTeammate}
+        />
+      )}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────
+// Leaderboard sub-view
+// ──────────────────────────────────────────────
+
+function LeaderboardView({
+  loading,
+  data,
+  allSurveys,
+  pickedSurveyId,
+  onPickSurvey,
+}: {
+  loading: boolean;
+  data: LeaderboardData | null;
+  allSurveys: Survey[];
+  pickedSurveyId?: string;
+  onPickSurvey: (id: string) => void;
+}) {
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: 64 }}>
+        <Spin />
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div style={panelStyle}>
+        <TrophyOutlined style={{ fontSize: 32, color: 'rgba(255,255,255,0.25)', display: 'block', marginBottom: 12 }} />
+        <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: 15, fontWeight: 600, marginBottom: 4 }}>
+          No reviews yet
+        </div>
+        <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12 }}>
+          Once teammates submit their peer reviews, the leaderboard appears here.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ ...panelStyle, padding: 14, marginBottom: 14, textAlign: 'left' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>
+              Peer Review Leaderboard
+            </div>
+            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginTop: 2 }}>
+              {formatPeriod(data.survey.periodMonth)} &middot; {data.survey.status === 'open' ? 'Live results' : 'Final'}
+            </div>
+          </div>
+          {allSurveys.length > 1 && (
+            <Select
+              size="small"
+              value={pickedSurveyId}
+              style={{ minWidth: 180 }}
+              onChange={(v) => onPickSurvey(v)}
+              options={allSurveys.map((s) => ({
+                value: s.id,
+                label: `${formatPeriod(s.periodMonth)}${s.status === 'open' ? ' • Live' : ''}`,
+              }))}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Your rank */}
+      {data.myEntry && data.myRank && (
+        <div
+          style={{
+            ...panelStyle,
+            padding: 14,
+            marginBottom: 14,
+            textAlign: 'left',
+            background:
+              'linear-gradient(135deg, rgba(124, 92, 252, 0.12), rgba(91, 141, 239, 0.08))',
+            borderColor: 'rgba(124, 92, 252, 0.25)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div>
+              <div style={{ color: 'rgba(196, 181, 253, 0.85)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.05 }}>
+                Your rank
+              </div>
+              <div style={{ color: '#fff', fontSize: 22, fontWeight: 700, marginTop: 4 }}>
+                #{data.myRank}{' '}
+                <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13, fontWeight: 500 }}>
+                  of {data.results.length}
+                </span>
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.05 }}>
+                Overall
+              </div>
+              <div style={{ color: '#c4b5fd', fontSize: 22, fontWeight: 700, marginTop: 4 }}>
+                {data.myEntry.overallAverage.toFixed(2)}
+                <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, fontWeight: 500 }}>/5</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {data.results.length === 0 ? (
+        <div style={panelStyle}>
+          <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13 }}>
+            No submitted reviews for this survey yet.
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {data.results.map((row, idx) => (
+            <LeaderboardRow
+              key={row.reviewee.id}
+              rank={idx + 1}
+              row={row}
+              isMe={data.myEntry?.reviewee.id === row.reviewee.id}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LeaderboardRow({
+  rank,
+  row,
+  isMe,
+}: {
+  rank: number;
+  row: LeaderboardRow;
+  isMe: boolean;
+}) {
+  const medalColor = rank === 1 ? '#fbbf24' : rank === 2 ? '#c4c4ce' : rank === 3 ? '#d97706' : null;
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: 12,
+        background: isMe
+          ? 'linear-gradient(135deg, rgba(124, 92, 252, 0.12), rgba(91, 141, 239, 0.06))'
+          : 'rgba(255, 255, 255, 0.02)',
+        border: `1px solid ${isMe ? 'rgba(124, 92, 252, 0.3)' : 'rgba(255, 255, 255, 0.06)'}`,
+        borderRadius: 12,
+      }}
+    >
+      <div
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: 8,
+          background: medalColor ? `${medalColor}25` : 'rgba(255,255,255,0.04)',
+          border: medalColor ? `1px solid ${medalColor}50` : '1px solid rgba(255,255,255,0.05)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 12,
+          fontWeight: 700,
+          color: medalColor || 'rgba(255,255,255,0.55)',
+          flexShrink: 0,
+        }}
+      >
+        {medalColor ? <TrophyOutlined /> : rank}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            color: '#fff',
+            fontSize: 13,
+            fontWeight: 600,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {row.reviewee.firstName} {row.reviewee.lastName}{' '}
+          {isMe && (
+            <span style={{ color: '#c4b5fd', fontSize: 10, fontWeight: 700, marginLeft: 4 }}>
+              YOU
+            </span>
+          )}
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            marginTop: 4,
+            color: 'rgba(255,255,255,0.4)',
+            fontSize: 10,
+            flexWrap: 'wrap',
+          }}
+        >
+          {(['performance', 'responsibility', 'knowledge', 'leadership_collaboration'] as Category[]).map((c) => (
+            <span key={c} style={{ color: CATEGORY_COLOR[c] }}>
+              {CATEGORY_LABEL[c]}: <strong>{row.categoryAverages[c].toFixed(2)}</strong>
+            </span>
+          ))}
+        </div>
+      </div>
+      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+        <div style={{ color: '#fff', fontSize: 16, fontWeight: 700 }}>
+          {row.overallAverage.toFixed(2)}
+          <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11, fontWeight: 500 }}>/5</span>
+        </div>
+        <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10 }}>
+          {row.reviewerCount} reviewer{row.reviewerCount === 1 ? '' : 's'}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────
+// Survey sub-view
+// ──────────────────────────────────────────────
+
+function SurveyView({
+  loading,
+  survey,
+  teammates,
+  onOpenTeammate,
+}: {
+  loading: boolean;
+  survey: Survey | null;
+  teammates: Teammate[];
+  onOpenTeammate: (t: Teammate) => void;
+}) {
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: 64 }}>
+        <Spin />
+      </div>
+    );
+  }
+
+  if (!survey) {
+    return (
+      <div style={panelStyle}>
+        <FormOutlined style={{ fontSize: 32, color: 'rgba(255,255,255,0.25)', display: 'block', marginBottom: 12 }} />
+        <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: 15, fontWeight: 600, marginBottom: 4 }}>
+          No active peer review
+        </div>
+        <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12 }}>
+          A new peer review opens at the start of each month and stays open for 7 days.
+          Check back then to rate your teammates.
+        </div>
+      </div>
+    );
+  }
+
+  const remaining = daysLeft(survey.closesAt);
+  const completedCount = teammates.filter((t) => t.status === 'submitted').length;
+
+  return (
+    <div>
+      <div style={{ ...panelStyle, padding: 16, marginBottom: 14, textAlign: 'left' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div>
             <div style={{ color: '#fff', fontSize: 15, fontWeight: 700 }}>
-              Peer Review — {formatPeriod(survey.periodMonth)}
+              Survey — {formatPeriod(survey.periodMonth)}
             </div>
             <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginTop: 2 }}>
               {completedCount}/{teammates.length} teammates rated &middot; closes{' '}
@@ -372,8 +719,12 @@ export default function PeerReviewPanel() {
 
       {teammates.length === 0 ? (
         <div style={panelStyle}>
-          <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>
-            No active teammates to review.
+          <TeamOutlined style={{ fontSize: 32, color: 'rgba(255,255,255,0.25)', display: 'block', marginBottom: 12 }} />
+          <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+            No teammates to review
+          </div>
+          <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12 }}>
+            You haven't been added to any team yet. Ask an admin to assign you to a team.
           </div>
         </div>
       ) : (
@@ -383,7 +734,7 @@ export default function PeerReviewPanel() {
             return (
               <button
                 key={t.id}
-                onClick={() => !submitted && openTeammate(t)}
+                onClick={() => !submitted && onOpenTeammate(t)}
                 disabled={submitted}
                 style={{
                   ...rowStyle,

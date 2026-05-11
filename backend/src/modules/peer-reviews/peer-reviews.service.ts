@@ -363,6 +363,141 @@ export class PeerReviewsService {
   }
 
   // ──────────────────────────────────────────────
+  // Employee-visible leaderboard
+  // ──────────────────────────────────────────────
+
+  /**
+   * List surveys (any status) visible to an employee — scoped to their org.
+   */
+  async listSurveysForUser(userId: string) {
+    const me = await this.userRepo.findOne({ where: { id: userId } });
+    if (!me?.organizationId) return [];
+    return this.surveyRepo.find({
+      where: { organizationId: me.organizationId },
+      order: { opensAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Public leaderboard of average peer-review scores per employee in the
+   * requesting user's org, for a specific survey (or the most recent one
+   * if surveyId is not provided). Reviewer identities are NOT returned —
+   * this is the safe, employee-visible view.
+   */
+  async getLeaderboardForUser(userId: string, surveyId?: string) {
+    const me = await this.userRepo.findOne({ where: { id: userId } });
+    if (!me?.organizationId) return null;
+
+    // Pick survey: if surveyId provided, validate org ownership.
+    // Otherwise prefer most recent open survey, falling back to most recent overall.
+    let survey: PeerReviewSurvey | null = null;
+    if (surveyId) {
+      survey = await this.surveyRepo.findOne({ where: { id: surveyId } });
+      if (!survey || survey.organizationId !== me.organizationId) {
+        throw new NotFoundException('Survey not found.');
+      }
+    } else {
+      survey =
+        (await this.surveyRepo.findOne({
+          where: {
+            organizationId: me.organizationId,
+            status: PeerReviewSurveyStatus.OPEN,
+          },
+          order: { opensAt: 'DESC' },
+        })) ||
+        (await this.surveyRepo.findOne({
+          where: { organizationId: me.organizationId },
+          order: { opensAt: 'DESC' },
+        }));
+    }
+    if (!survey) return null;
+
+    const responses = await this.responseRepo.find({
+      where: { surveyId: survey.id, status: PeerReviewResponseStatus.SUBMITTED },
+      relations: ['answers', 'reviewee'],
+    });
+
+    type PerCategory = Record<PeerReviewCategory, { sum: number; count: number }>;
+    const byReviewee = new Map<
+      string,
+      {
+        reviewee: { id: string; firstName: string; lastName: string };
+        reviewerCount: number;
+        perCategory: PerCategory;
+        overallSum: number;
+        overallCount: number;
+      }
+    >();
+
+    const emptyCat = (): PerCategory => ({
+      [PeerReviewCategory.PERFORMANCE]: { sum: 0, count: 0 },
+      [PeerReviewCategory.RESPONSIBILITY]: { sum: 0, count: 0 },
+      [PeerReviewCategory.KNOWLEDGE]: { sum: 0, count: 0 },
+      [PeerReviewCategory.LEADERSHIP_COLLABORATION]: { sum: 0, count: 0 },
+    });
+
+    for (const r of responses) {
+      if (!byReviewee.has(r.revieweeId)) {
+        byReviewee.set(r.revieweeId, {
+          reviewee: {
+            id: r.revieweeId,
+            firstName: r.reviewee?.firstName ?? '',
+            lastName: r.reviewee?.lastName ?? '',
+          },
+          reviewerCount: 0,
+          perCategory: emptyCat(),
+          overallSum: 0,
+          overallCount: 0,
+        });
+      }
+      const bucket = byReviewee.get(r.revieweeId)!;
+      bucket.reviewerCount += 1;
+      for (const a of r.answers || []) {
+        bucket.perCategory[a.category].sum += a.score;
+        bucket.perCategory[a.category].count += 1;
+        bucket.overallSum += a.score;
+        bucket.overallCount += 1;
+      }
+    }
+
+    const rows = Array.from(byReviewee.values()).map((b) => ({
+      reviewee: b.reviewee,
+      reviewerCount: b.reviewerCount,
+      overallAverage:
+        b.overallCount > 0
+          ? Math.round((b.overallSum / b.overallCount) * 100) / 100
+          : 0,
+      categoryAverages: {
+        [PeerReviewCategory.PERFORMANCE]: avgB(b.perCategory[PeerReviewCategory.PERFORMANCE]),
+        [PeerReviewCategory.RESPONSIBILITY]: avgB(b.perCategory[PeerReviewCategory.RESPONSIBILITY]),
+        [PeerReviewCategory.KNOWLEDGE]: avgB(b.perCategory[PeerReviewCategory.KNOWLEDGE]),
+        [PeerReviewCategory.LEADERSHIP_COLLABORATION]: avgB(
+          b.perCategory[PeerReviewCategory.LEADERSHIP_COLLABORATION],
+        ),
+      },
+    }));
+
+    rows.sort((a, b) => b.overallAverage - a.overallAverage);
+
+    return {
+      survey: {
+        id: survey.id,
+        periodMonth: survey.periodMonth,
+        opensAt: survey.opensAt,
+        closesAt: survey.closesAt,
+        status: survey.status,
+      },
+      results: rows,
+      // Surface the current user's own rank for the "Your rank" widget.
+      myEntry: rows.find((r) => r.reviewee.id === me.id) || null,
+      myRank: (() => {
+        const i = rows.findIndex((r) => r.reviewee.id === me.id);
+        return i >= 0 ? i + 1 : null;
+      })(),
+    };
+  }
+
+  // ──────────────────────────────────────────────
   // Admin endpoints
   // ──────────────────────────────────────────────
 
@@ -521,6 +656,8 @@ function avg(b: { sum: number; count: number }): number {
   if (b.count === 0) return 0;
   return Math.round((b.sum / b.count) * 100) / 100;
 }
+
+const avgB = avg;
 
 function previousMonthYYYYMM(now: Date): string {
   const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);

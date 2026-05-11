@@ -193,4 +193,16 @@ export async function submitPeerReview(
   return res.data;
 }
 
+export async function getPeerReviewLeaderboard(surveyId?: string) {
+  const res = await apiClient.get('/peer-reviews/leaderboard', {
+    params: surveyId ? { surveyId } : undefined,
+  });
+  return res.data;
+}
+
+export async function listPeerReviewSurveys() {
+  const res = await apiClient.get('/peer-reviews/surveys');
+  return res.data;
+}
+
 export default apiClient;
