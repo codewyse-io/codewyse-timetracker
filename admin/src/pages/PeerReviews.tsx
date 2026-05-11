@@ -22,6 +22,7 @@ import dayjs from 'dayjs';
 import {
   peerReviewsApi,
   type PeerReviewCategory,
+  type PeerReviewKind,
   type PeerReviewSurveySummary,
   type PeerReviewResult,
   type PeerReviewResultsResponse,
@@ -32,6 +33,10 @@ const CATEGORY_LABEL: Record<PeerReviewCategory, string> = {
   responsibility: 'Responsibility',
   knowledge: 'Knowledge',
   leadership_collaboration: 'Leadership & Collaboration',
+  hr_responsiveness: 'Responsiveness',
+  hr_empathy: 'Empathy & Support',
+  hr_fairness: 'Process & Fairness',
+  hr_communication: 'Communication',
 };
 
 const CATEGORY_COLOR: Record<PeerReviewCategory, string> = {
@@ -39,7 +44,25 @@ const CATEGORY_COLOR: Record<PeerReviewCategory, string> = {
   responsibility: '#3b82f6',
   knowledge: '#10b981',
   leadership_collaboration: '#f59e0b',
+  hr_responsiveness: '#ec4899',
+  hr_empathy: '#06b6d4',
+  hr_fairness: '#8b5cf6',
+  hr_communication: '#84cc16',
 };
+
+const TEAM_CATEGORIES: PeerReviewCategory[] = [
+  'performance',
+  'responsibility',
+  'knowledge',
+  'leadership_collaboration',
+];
+
+const HR_CATEGORIES: PeerReviewCategory[] = [
+  'hr_responsiveness',
+  'hr_empathy',
+  'hr_fairness',
+  'hr_communication',
+];
 
 function formatPeriod(yyyyMM: string): string {
   if (!yyyyMM) return '';
@@ -62,6 +85,7 @@ export default function PeerReviewsPage() {
   const [loading, setLoading] = useState(true);
   const [surveys, setSurveys] = useState<PeerReviewSurveySummary[]>([]);
   const [selectedSurveyId, setSelectedSurveyId] = useState<string | null>(null);
+  const [resultsKind, setResultsKind] = useState<PeerReviewKind>('team');
   const [results, setResults] = useState<PeerReviewResultsResponse | null>(null);
   const [resultsLoading, setResultsLoading] = useState(false);
   const [questionMap, setQuestionMap] = useState<Map<string, string>>(new Map());
@@ -73,12 +97,15 @@ export default function PeerReviewsPage() {
     try {
       const [surveysRes, questionsRes] = await Promise.all([
         peerReviewsApi.listSurveys(),
-        peerReviewsApi.getQuestions(),
+        peerReviewsApi.getAllQuestions(),
       ]);
       setSurveys(surveysRes.data || []);
       const map = new Map<string, string>();
-      for (const q of questionsRes.data || []) {
-        map.set(q.key, q.prompt);
+      const all = questionsRes.data;
+      if (all) {
+        for (const q of [...all.team, ...all.hr]) {
+          map.set(q.key, q.prompt);
+        }
       }
       setQuestionMap(map);
     } catch {
@@ -92,10 +119,10 @@ export default function PeerReviewsPage() {
     loadSurveys();
   }, [loadSurveys]);
 
-  const loadResults = useCallback(async (surveyId: string) => {
+  const loadResults = useCallback(async (surveyId: string, kind: PeerReviewKind) => {
     setResultsLoading(true);
     try {
-      const res = await peerReviewsApi.getResults(surveyId);
+      const res = await peerReviewsApi.getResults(surveyId, kind);
       setResults(res.data);
     } catch {
       message.error('Failed to load survey results');
@@ -105,9 +132,9 @@ export default function PeerReviewsPage() {
   }, []);
 
   useEffect(() => {
-    if (selectedSurveyId) loadResults(selectedSurveyId);
+    if (selectedSurveyId) loadResults(selectedSurveyId, resultsKind);
     else setResults(null);
-  }, [selectedSurveyId, loadResults]);
+  }, [selectedSurveyId, resultsKind, loadResults]);
 
   const handleOpenSurvey = useCallback(async () => {
     Modal.confirm({
@@ -190,10 +217,12 @@ export default function PeerReviewsPage() {
     [],
   );
 
-  const resultColumns: ColumnsType<PeerReviewResult> = useMemo(
-    () => [
+  const activeCategories = resultsKind === 'hr' ? HR_CATEGORIES : TEAM_CATEGORIES;
+
+  const resultColumns: ColumnsType<PeerReviewResult> = useMemo(() => {
+    const cols: ColumnsType<PeerReviewResult> = [
       {
-        title: 'Employee',
+        title: resultsKind === 'hr' ? 'HR Member' : 'Employee',
         key: 'reviewee',
         render: (_, r) => (
           <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
@@ -228,39 +257,26 @@ export default function PeerReviewsPage() {
         defaultSortOrder: 'descend',
         render: (v: number) => <ScoreCell value={v} />,
       },
-      {
-        title: 'Performance',
-        key: 'performance',
-        render: (_, r) => <ScoreCell value={r.categoryAverages.performance} />,
-      },
-      {
-        title: 'Responsibility',
-        key: 'responsibility',
-        render: (_, r) => <ScoreCell value={r.categoryAverages.responsibility} />,
-      },
-      {
-        title: 'Knowledge',
-        key: 'knowledge',
-        render: (_, r) => <ScoreCell value={r.categoryAverages.knowledge} />,
-      },
-      {
-        title: 'Leadership & Collab.',
-        key: 'leadership',
-        render: (_, r) => <ScoreCell value={r.categoryAverages.leadership_collaboration} />,
-      },
+      ...activeCategories.map((cat) => ({
+        title: CATEGORY_LABEL[cat],
+        key: cat,
+        render: (_: unknown, r: PeerReviewResult) => (
+          <ScoreCell value={r.categoryAverages?.[cat] ?? 0} />
+        ),
+      })),
       {
         title: '',
         key: 'drill',
-        align: 'right',
-        render: (_, r) => (
+        align: 'right' as const,
+        render: (_: unknown, r: PeerReviewResult) => (
           <Button type="link" icon={<EyeOutlined />} onClick={() => setDrillReviewee(r)}>
             Details
           </Button>
         ),
       },
-    ],
-    [],
-  );
+    ];
+    return cols;
+  }, [resultsKind, activeCategories]);
 
   // ── Survey list ──
   if (!selectedSurveyId) {
@@ -334,6 +350,7 @@ export default function PeerReviewsPage() {
             onClick={() => {
               setSelectedSurveyId(null);
               setResults(null);
+              setResultsKind('team');
             }}
             style={{ borderRadius: 10 }}
           >
@@ -345,10 +362,47 @@ export default function PeerReviewsPage() {
             </div>
             {results && (
               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                {results.results.length} employee{results.results.length !== 1 ? 's' : ''} rated &middot; closes {dayjs(results.survey.closesAt).format('MMM D, YYYY')}
+                {results.results.length}{' '}
+                {resultsKind === 'hr' ? 'HR member' : 'employee'}
+                {results.results.length !== 1 ? 's' : ''} rated &middot; closes{' '}
+                {dayjs(results.survey.closesAt).format('MMM D, YYYY')}
               </div>
             )}
           </div>
+        </div>
+        {/* Team / HR toggle */}
+        <div
+          style={{
+            display: 'inline-flex',
+            background: 'var(--surface-sunken)',
+            borderRadius: 10,
+            padding: 4,
+            gap: 2,
+          }}
+        >
+          {(['team', 'hr'] as PeerReviewKind[]).map((k) => {
+            const active = resultsKind === k;
+            return (
+              <button
+                key={k}
+                onClick={() => setResultsKind(k)}
+                style={{
+                  padding: '7px 16px',
+                  borderRadius: 8,
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  background: active ? 'var(--surface-card)' : 'transparent',
+                  color: active ? 'var(--primary)' : 'var(--text-secondary)',
+                  boxShadow: active ? 'var(--shadow-sm)' : 'none',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {k === 'team' ? 'Team Reviews' : 'HR Reviews'}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -365,7 +419,13 @@ export default function PeerReviewsPage() {
             <Spin size="large" />
           </div>
         ) : results.results.length === 0 ? (
-          <Empty description="No submitted responses yet" />
+          <Empty
+            description={
+              resultsKind === 'hr'
+                ? 'No HR-review responses submitted yet (no users marked as HR, or no reviews received).'
+                : 'No team-review responses submitted yet.'
+            }
+          />
         ) : (
           <Table
             dataSource={results.results}
@@ -381,7 +441,9 @@ export default function PeerReviewsPage() {
         open={!!drillReviewee}
         title={
           drillReviewee
-            ? `${drillReviewee.reviewee.firstName} ${drillReviewee.reviewee.lastName} — individual reviews`
+            ? `${drillReviewee.reviewee.firstName} ${drillReviewee.reviewee.lastName} — ${
+                resultsKind === 'hr' ? 'individual HR reviews' : 'individual reviews'
+              }`
             : ''
         }
         onCancel={() => setDrillReviewee(null)}

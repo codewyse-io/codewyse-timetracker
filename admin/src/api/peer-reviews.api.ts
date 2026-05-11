@@ -5,7 +5,13 @@ export type PeerReviewCategory =
   | 'performance'
   | 'responsibility'
   | 'knowledge'
-  | 'leadership_collaboration';
+  | 'leadership_collaboration'
+  | 'hr_responsiveness'
+  | 'hr_empathy'
+  | 'hr_fairness'
+  | 'hr_communication';
+
+export type PeerReviewKind = 'team' | 'hr';
 
 export interface PeerReviewSurveySummary {
   id: string;
@@ -41,6 +47,7 @@ export interface PeerReviewResultsResponse {
     closesAt: string;
     status: 'open' | 'closed';
   };
+  kind?: PeerReviewKind;
   results: PeerReviewResult[];
 }
 
@@ -48,13 +55,29 @@ export const peerReviewsApi = {
   listSurveys(): Promise<ApiResponse<PeerReviewSurveySummary[]>> {
     return apiClient.get('/peer-reviews/admin/surveys');
   },
-  getResults(surveyId: string): Promise<ApiResponse<PeerReviewResultsResponse>> {
-    return apiClient.get(`/peer-reviews/admin/surveys/${surveyId}/results`);
+  getResults(
+    surveyId: string,
+    kind: PeerReviewKind = 'team',
+  ): Promise<ApiResponse<PeerReviewResultsResponse>> {
+    return apiClient.get(`/peer-reviews/admin/surveys/${surveyId}/results`, {
+      params: { kind },
+    });
   },
-  getQuestions(): Promise<
+  getQuestions(
+    kind: PeerReviewKind = 'team',
+  ): Promise<
     ApiResponse<Array<{ key: string; category: PeerReviewCategory; prompt: string }>>
   > {
-    return apiClient.get('/peer-reviews/questions');
+    return apiClient.get('/peer-reviews/questions', { params: { kind } });
+  },
+
+  getAllQuestions(): Promise<
+    ApiResponse<{
+      team: Array<{ key: string; category: PeerReviewCategory; prompt: string }>;
+      hr: Array<{ key: string; category: PeerReviewCategory; prompt: string }>;
+    }>
+  > {
+    return apiClient.get('/peer-reviews/questions/all');
   },
   openSurvey(payload: { periodMonth?: string; openDays?: number } = {}): Promise<
     ApiResponse<{ id: string; periodMonth: string; opensAt: string; closesAt: string; status: 'open' | 'closed' }>
