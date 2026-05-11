@@ -205,4 +205,9 @@ export async function listPeerReviewSurveys() {
   return res.data;
 }
 
+export async function getMyTeams() {
+  const res = await apiClient.get('/teams/me');
+  return res.data;
+}
+
 export default apiClient;

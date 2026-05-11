@@ -7,6 +7,7 @@ import {
   ClockCircleOutlined,
   TrophyOutlined,
   FormOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons';
 import {
   getActivePeerReview,
@@ -15,6 +16,7 @@ import {
   submitPeerReview,
   getPeerReviewLeaderboard,
   listPeerReviewSurveys,
+  getMyTeams,
 } from '../api/client';
 
 type Category =
@@ -105,6 +107,7 @@ export default function PeerReviewPanel() {
   const [surveyLoading, setSurveyLoading] = useState(true);
   const [survey, setSurvey] = useState<Survey | null>(null);
   const [teammates, setTeammates] = useState<Teammate[]>([]);
+  const [myTeams, setMyTeams] = useState<{ id: string; name: string }[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [selected, setSelected] = useState<Teammate | null>(null);
   const [scores, setScores] = useState<Record<string, number>>({});
@@ -120,12 +123,14 @@ export default function PeerReviewPanel() {
   const loadActiveSurvey = useCallback(async () => {
     setSurveyLoading(true);
     try {
-      const [activeRes, questionsRes] = await Promise.all([
+      const [activeRes, questionsRes, teamsRes] = await Promise.all([
         getActivePeerReview(),
         getPeerReviewQuestions(),
+        getMyTeams().catch(() => null),
       ]);
       const active = activeRes?.data ?? activeRes;
       const qs = questionsRes?.data ?? questionsRes;
+      const teams = teamsRes?.data ?? teamsRes;
       setQuestions(Array.isArray(qs) ? qs : []);
       if (active && active.survey) {
         setSurvey(active.survey);
@@ -134,6 +139,11 @@ export default function PeerReviewPanel() {
         setSurvey(null);
         setTeammates([]);
       }
+      setMyTeams(
+        Array.isArray(teams?.teams)
+          ? teams.teams.map((t: any) => ({ id: t.id, name: t.name }))
+          : [],
+      );
     } catch {
       // silent — survey is optional now
     } finally {
@@ -414,7 +424,9 @@ export default function PeerReviewPanel() {
           loading={surveyLoading}
           survey={survey}
           teammates={teammates}
+          myTeams={myTeams}
           onOpenTeammate={openTeammate}
+          onRefresh={loadActiveSurvey}
         />
       )}
     </div>
@@ -646,12 +658,16 @@ function SurveyView({
   loading,
   survey,
   teammates,
+  myTeams,
   onOpenTeammate,
+  onRefresh,
 }: {
   loading: boolean;
   survey: Survey | null;
   teammates: Teammate[];
+  myTeams: { id: string; name: string }[];
   onOpenTeammate: (t: Teammate) => void;
+  onRefresh: () => void;
 }) {
   if (loading) {
     return (
@@ -672,6 +688,9 @@ function SurveyView({
           A new peer review opens at the start of each month and stays open for 7 days.
           Check back then to rate your teammates.
         </div>
+        <button onClick={onRefresh} style={{ ...refreshBtn, marginTop: 14 }}>
+          <ReloadOutlined /> Refresh
+        </button>
       </div>
     );
   }
@@ -691,28 +710,39 @@ function SurveyView({
               {completedCount}/{teammates.length} teammates rated &middot; closes{' '}
               {new Date(survey.closesAt).toLocaleDateString()}
             </div>
+            {myTeams.length > 0 && (
+              <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, marginTop: 4 }}>
+                Your team{myTeams.length > 1 ? 's' : ''}:{' '}
+                {myTeams.map((t) => t.name).join(', ')}
+              </div>
+            )}
           </div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '6px 12px',
-              borderRadius: 20,
-              background:
-                remaining <= 2
-                  ? 'rgba(239, 68, 68, 0.12)'
-                  : 'rgba(124, 92, 252, 0.12)',
-              border: `1px solid ${
-                remaining <= 2 ? 'rgba(239,68,68,0.35)' : 'rgba(124,92,252,0.3)'
-              }`,
-              color: remaining <= 2 ? '#fca5a5' : '#c4b5fd',
-              fontSize: 11,
-              fontWeight: 600,
-            }}
-          >
-            <ClockCircleOutlined />
-            {remaining} day{remaining !== 1 ? 's' : ''} left
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button onClick={onRefresh} title="Refresh" style={refreshBtn}>
+              <ReloadOutlined />
+            </button>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 12px',
+                borderRadius: 20,
+                background:
+                  remaining <= 2
+                    ? 'rgba(239, 68, 68, 0.12)'
+                    : 'rgba(124, 92, 252, 0.12)',
+                border: `1px solid ${
+                  remaining <= 2 ? 'rgba(239,68,68,0.35)' : 'rgba(124,92,252,0.3)'
+                }`,
+                color: remaining <= 2 ? '#fca5a5' : '#c4b5fd',
+                fontSize: 11,
+                fontWeight: 600,
+              }}
+            >
+              <ClockCircleOutlined />
+              {remaining} day{remaining !== 1 ? 's' : ''} left
+            </div>
           </div>
         </div>
       </div>
@@ -723,9 +753,21 @@ function SurveyView({
           <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
             No teammates to review
           </div>
-          <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12 }}>
-            You haven't been added to any team yet. Ask an admin to assign you to a team.
+          <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12, lineHeight: 1.5 }}>
+            {myTeams.length === 0 ? (
+              <>You haven't been added to any team yet. Ask an admin to assign you to a team.</>
+            ) : (
+              <>
+                You're in <strong>{myTeams.map((t) => t.name).join(', ')}</strong>, but no
+                other <strong>active</strong> teammates were found. Teammates who haven't
+                accepted their invitation yet won't appear. Try the refresh button after
+                they sign in.
+              </>
+            )}
           </div>
+          <button onClick={onRefresh} style={{ ...refreshBtn, marginTop: 14 }}>
+            <ReloadOutlined /> Refresh
+          </button>
         </div>
       ) : (
         <div style={{ display: 'grid', gap: 8 }}>
@@ -918,6 +960,20 @@ const textAreaStyle: React.CSSProperties = {
   fontFamily: "'Inter', sans-serif",
   resize: 'vertical' as const,
   outline: 'none',
+};
+
+const refreshBtn: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: '6px 10px',
+  borderRadius: 8,
+  background: 'rgba(255,255,255,0.04)',
+  border: '1px solid rgba(255,255,255,0.08)',
+  color: 'rgba(255,255,255,0.65)',
+  fontSize: 11,
+  fontWeight: 600,
+  cursor: 'pointer',
 };
 
 const primaryBtn: React.CSSProperties = {

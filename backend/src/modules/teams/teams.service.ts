@@ -221,6 +221,75 @@ export class TeamsService {
     return teammates.has(userIdB);
   }
 
+  /**
+   * Get the team IDs a user currently belongs to (org-scoped).
+   */
+  async getUserTeamIds(userId: string, organizationId: string): Promise<string[]> {
+    const memberships = await this.membershipRepo
+      .createQueryBuilder('m')
+      .innerJoin('teams', 't', 't.id = m.team_id')
+      .select('m.team_id', 'teamId')
+      .where('m.user_id = :uid', { uid: userId })
+      .andWhere('t.organization_id = :org', { org: organizationId })
+      .getRawMany<{ teamId: string }>();
+    return memberships.map((r) => r.teamId);
+  }
+
+  /**
+   * Set the list of teams a user belongs to. Replaces existing memberships
+   * for THIS user within the org (any teams not in the new list are removed).
+   */
+  async setUserTeams(
+    userId: string,
+    organizationId: string,
+    teamIds: string[],
+  ): Promise<string[]> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found.');
+    if (user.organizationId !== organizationId) {
+      throw new ForbiddenException();
+    }
+
+    const wanted = Array.from(new Set(teamIds));
+    if (wanted.length > 0) {
+      const validTeams = await this.teamRepo.find({
+        where: { id: In(wanted), organizationId },
+        select: ['id'],
+      });
+      if (validTeams.length !== wanted.length) {
+        throw new BadRequestException(
+          'Some teams do not exist in this organization.',
+        );
+      }
+    }
+
+    const current = await this.membershipRepo.find({ where: { userId } });
+    // Restrict to org's teams (defensive)
+    const currentInOrg = await this.teamRepo.find({
+      where: { id: In(current.map((m) => m.teamId).length ? current.map((m) => m.teamId) : ['']), organizationId },
+      select: ['id'],
+    });
+    const orgTeamIds = new Set(currentInOrg.map((t) => t.id));
+    const currentOrgMemberships = current.filter((m) => orgTeamIds.has(m.teamId));
+
+    const currentIds = new Set(currentOrgMemberships.map((m) => m.teamId));
+    const wantedSet = new Set(wanted);
+
+    const toRemove = currentOrgMemberships.filter((m) => !wantedSet.has(m.teamId));
+    const toAdd = wanted.filter((id) => !currentIds.has(id));
+
+    if (toRemove.length > 0) {
+      await this.membershipRepo.remove(toRemove);
+    }
+    if (toAdd.length > 0) {
+      await this.membershipRepo.save(
+        toAdd.map((teamId) => this.membershipRepo.create({ teamId, userId })),
+      );
+    }
+
+    return this.getUserTeamIds(userId, organizationId);
+  }
+
   private async findOwned(teamId: string, organizationId: string) {
     const team = await this.teamRepo.findOne({ where: { id: teamId } });
     if (!team) throw new NotFoundException('Team not found.');

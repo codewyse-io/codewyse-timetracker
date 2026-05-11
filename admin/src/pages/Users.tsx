@@ -26,6 +26,7 @@ import { usersApi } from '../api/users.api';
 import type { CreateUserData, UpdateUserData } from '../api/users.api';
 import { shiftsApi } from '../api/shifts.api';
 import { superAdminApi } from '../api/super-admin.api';
+import { teamsApi, type Team } from '../api/teams.api';
 import { useAuth } from '../contexts/AuthContext';
 import { useOrg } from '../contexts/OrgContext';
 import type { User, Shift, Organization } from '../types';
@@ -178,6 +179,7 @@ export default function UsersPage() {
   const currencySymbol = org?.currencySymbol || '$';
   const [users, setUsers] = useState<User[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
@@ -219,6 +221,15 @@ export default function UsersPage() {
     }
   }, []);
 
+  const fetchTeams = useCallback(async () => {
+    try {
+      const response = await teamsApi.list();
+      setTeams(response.data || []);
+    } catch {
+      // Teams are optional for the form
+    }
+  }, []);
+
   // Build unique designation options from defaults + users + custom
   const designationOptions = (() => {
     const all = new Set(DEFAULT_DESIGNATIONS);
@@ -246,6 +257,10 @@ export default function UsersPage() {
   }, [fetchShifts]);
 
   useEffect(() => {
+    fetchTeams();
+  }, [fetchTeams]);
+
+  useEffect(() => {
     if (authUser?.role === 'super_admin') {
       superAdminApi.getOrganizations().then((res) => {
         const orgs = Array.isArray(res.data) ? res.data : (res as any).data?.data || [];
@@ -254,14 +269,28 @@ export default function UsersPage() {
     }
   }, [authUser?.role]);
 
-  const handleAddUser = async (values: CreateUserData) => {
+  const handleAddUser = async (values: CreateUserData & { teamIds?: string[] }) => {
     setSubmitting(true);
     try {
-      await usersApi.createUser(values);
+      const { teamIds, ...userPayload } = values;
+      const res = await usersApi.createUser(userPayload);
+      const created = (res as any)?.data || res;
+      if (created?.id && teamIds && teamIds.length > 0) {
+        try {
+          await teamsApi.setUserTeams(created.id, teamIds);
+        } catch (err: any) {
+          message.warning(
+            `User created, but team assignment failed: ${
+              err?.response?.data?.message || 'unknown error'
+            }`,
+          );
+        }
+      }
       message.success('User created successfully');
       setAddModalOpen(false);
       addForm.resetFields();
       fetchUsers();
+      fetchTeams();
     } catch (err: any) {
       message.error(err?.response?.data?.message || 'Failed to create user');
     } finally {
@@ -269,21 +298,34 @@ export default function UsersPage() {
     }
   };
 
-  const handleEditUser = async (values: UpdateUserData) => {
+  const handleEditUser = async (values: UpdateUserData & { teamIds?: string[] }) => {
     if (!editingUser) return;
     setSubmitting(true);
     try {
+      const { teamIds, ...userValues } = values;
       const payload = {
-        ...values,
-        hourlyRate: values.hourlyRate != null ? Number(values.hourlyRate) : undefined,
-        shiftId: values.shiftId === undefined ? null : values.shiftId,
+        ...userValues,
+        hourlyRate: userValues.hourlyRate != null ? Number(userValues.hourlyRate) : undefined,
+        shiftId: userValues.shiftId === undefined ? null : userValues.shiftId,
       };
       await usersApi.updateUser(editingUser.id, payload);
+      if (teamIds !== undefined) {
+        try {
+          await teamsApi.setUserTeams(editingUser.id, teamIds);
+        } catch (err: any) {
+          message.warning(
+            `User updated, but team assignment failed: ${
+              err?.response?.data?.message || 'unknown error'
+            }`,
+          );
+        }
+      }
       message.success('User updated successfully');
       setEditModalOpen(false);
       setEditingUser(null);
       editForm.resetFields();
       fetchUsers();
+      fetchTeams();
     } catch (err: any) {
       message.error(err?.response?.data?.message || 'Failed to update user');
     } finally {
@@ -322,6 +364,9 @@ export default function UsersPage() {
 
   const openEditModal = (user: User) => {
     setEditingUser(user);
+    // Pre-compute team membership from the already-loaded teams list to avoid
+    // an extra round-trip. The /teams response includes member rosters.
+    const initialTeamIds = teams.filter((t) => t.members.some((m) => m.id === user.id)).map((t) => t.id);
     editForm.setFieldsValue({
       firstName: user.firstName,
       lastName: user.lastName,
@@ -329,6 +374,7 @@ export default function UsersPage() {
       designation: user.designation,
       hourlyRate: Number(user.hourlyRate),
       shiftId: user.shiftId,
+      teamIds: initialTeamIds,
       allowedLeavesPerYear: user.allowedLeavesPerYear,
       bankName: user.bankName || '',
       accountHolderName: user.accountHolderName || '',
@@ -337,6 +383,17 @@ export default function UsersPage() {
       organizationId: user.organizationId,
     });
     setEditModalOpen(true);
+
+    // Refresh authoritative team list from backend in case teams were updated
+    // elsewhere since the page loaded.
+    teamsApi
+      .getUserTeams(user.id)
+      .then((res) => {
+        editForm.setFieldsValue({ teamIds: res.data || [] });
+      })
+      .catch(() => {
+        // keep cached value
+      });
   };
 
   const getShiftName = (shiftId: string | null) => {
@@ -648,6 +705,29 @@ export default function UsersPage() {
                       </>
                     );
                   }}
+                </Form.Item>
+                <Form.Item
+                  name="teamIds"
+                  label={<span style={labelStyle}>Teams</span>}
+                  extra={
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      Users can belong to multiple teams. Peer reviews are scoped to teammates.
+                    </span>
+                  }
+                >
+                  <Select
+                    mode="multiple"
+                    allowClear
+                    showSearch
+                    optionFilterProp="label"
+                    placeholder={
+                      teams.length === 0
+                        ? 'No teams yet — create one on the Teams page'
+                        : 'Select teams (optional)'
+                    }
+                    style={{ borderRadius: 8 }}
+                    options={teams.map((t) => ({ value: t.id, label: t.name }))}
+                  />
                 </Form.Item>
               </>
             ),

@@ -34,4 +34,10 @@ export const teamsApi = {
   assignMembers(id: string, memberIds: string[]): Promise<ApiResponse<Team[]>> {
     return apiClient.put(`/teams/${id}/members`, { memberIds });
   },
+  getUserTeams(userId: string): Promise<ApiResponse<string[]>> {
+    return apiClient.get(`/teams/users/${userId}`);
+  },
+  setUserTeams(userId: string, teamIds: string[]): Promise<ApiResponse<string[]>> {
+    return apiClient.put(`/teams/users/${userId}`, { teamIds });
+  },
 };

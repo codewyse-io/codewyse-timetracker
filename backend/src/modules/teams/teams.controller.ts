@@ -77,4 +77,26 @@ export class TeamsController {
   myTeams(@Req() req: any) {
     return this.service.getMyTeams(req.user.id);
   }
+
+  // ── Admin: per-user team membership ──
+  @Get('users/:userId')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'List the team IDs a user belongs to' })
+  getUserTeams(
+    @CurrentOrg() orgId: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+  ) {
+    return this.service.getUserTeamIds(userId, orgId);
+  }
+
+  @Put('users/:userId')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Replace the list of teams a user belongs to' })
+  setUserTeams(
+    @CurrentOrg() orgId: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() body: { teamIds: string[] },
+  ) {
+    return this.service.setUserTeams(userId, orgId, body.teamIds || []);
+  }
 }
