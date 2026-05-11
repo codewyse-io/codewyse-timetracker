@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, memo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, memo } from 'react';
 import { Layout, Button, Tooltip } from 'antd';
 import {
   LogoutOutlined,
@@ -14,7 +14,7 @@ import {
   MenuUnfoldOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
-import { getMe } from '../api/client';
+import { getMe, getActivePeerReview } from '../api/client';
 import { User } from '../types';
 import Timer from '../components/Timer';
 import SessionHistory from '../components/SessionHistory';
@@ -27,15 +27,17 @@ import LeaveRequestPanel from '../components/LeaveRequestPanel';
 import OnboardingTutorial from '../components/OnboardingTutorial';
 import UpdateBanner from '../components/UpdateBanner';
 import AnnouncementsPanel from '../components/AnnouncementsPanel';
+import PeerReviewPanel from '../components/PeerReviewPanel';
 import ChatPanel from '../components/chat/ChatPanel';
 import MeetingsPanel from '../components/MeetingsPanel';
 import { useChat } from '../contexts/ChatContext';
+import { StarOutlined } from '@ant-design/icons';
 
 const { Content } = Layout;
 
-type TabKey = 'dashboard' | 'timeline' | 'leaves' | 'announcements' | 'chat' | 'meetings' | 'profile';
+type TabKey = 'dashboard' | 'timeline' | 'leaves' | 'announcements' | 'chat' | 'meetings' | 'peer-reviews' | 'profile';
 
-const NAV_ITEMS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
+const BASE_NAV_ITEMS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: 'dashboard', label: 'Dashboard', icon: <DashboardOutlined /> },
   { key: 'timeline', label: 'Timeline', icon: <FieldTimeOutlined /> },
   { key: 'chat', label: 'Chat', icon: <MessageOutlined /> },
@@ -43,6 +45,12 @@ const NAV_ITEMS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: 'meetings', label: 'Meetings', icon: <VideoCameraOutlined /> },
   { key: 'announcements', label: 'Notices', icon: <SoundOutlined /> },
 ];
+
+const PEER_REVIEW_NAV_ITEM = {
+  key: 'peer-reviews' as const,
+  label: 'Peer Review',
+  icon: <StarOutlined />,
+};
 
 // Isolated clock component — only this re-renders every second, not the entire Home tree
 const LiveClock = memo(function LiveClock({ timezone }: { timezone?: string }) {
@@ -113,6 +121,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
   const [fullUser, setFullUser] = useState<User | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [peerReviewActive, setPeerReviewActive] = useState(false);
   const fetchedRef = useRef(false);
 
   useEffect(() => {
@@ -122,6 +131,39 @@ export default function Home() {
       setFullUser(res.data || res);
     }).catch(() => {});
   }, []);
+
+  // Poll for active peer-review survey (every 5 min) so the tab appears
+  // automatically when a new month opens.
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const res = await getActivePeerReview();
+        const data = res?.data ?? res;
+        if (!cancelled) setPeerReviewActive(!!data?.survey);
+      } catch {
+        if (!cancelled) setPeerReviewActive(false);
+      }
+    };
+    check();
+    const interval = setInterval(check, 5 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const NAV_ITEMS = useMemo(
+    () => (peerReviewActive ? [...BASE_NAV_ITEMS, PEER_REVIEW_NAV_ITEM] : BASE_NAV_ITEMS),
+    [peerReviewActive],
+  );
+
+  // If the survey closes while the user is on the peer-review tab, send them home.
+  useEffect(() => {
+    if (!peerReviewActive && activeTab === 'peer-reviews') {
+      setActiveTab('dashboard');
+    }
+  }, [peerReviewActive, activeTab]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -501,6 +543,11 @@ export default function Home() {
             <div style={{ display: activeTab === 'announcements' ? 'block' : 'none' }}>
               <AnnouncementsPanel />
             </div>
+            {peerReviewActive && (
+              <div style={{ display: activeTab === 'peer-reviews' ? 'block' : 'none' }}>
+                <PeerReviewPanel />
+              </div>
+            )}
             <div style={{ display: activeTab === 'profile' ? 'block' : 'none' }}>
               <ProfilePanel />
             </div>

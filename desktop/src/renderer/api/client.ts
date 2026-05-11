@@ -162,4 +162,35 @@ export async function deleteMeeting(meetingId: string) {
   return res.data;
 }
 
+// ── Peer Reviews ──
+export async function getPeerReviewQuestions() {
+  const res = await apiClient.get('/peer-reviews/questions');
+  return res.data;
+}
+
+export async function getActivePeerReview() {
+  const res = await apiClient.get('/peer-reviews/active');
+  return res.data;
+}
+
+export async function getPeerReviewDraft(surveyId: string, revieweeId: string) {
+  const res = await apiClient.get(`/peer-reviews/${surveyId}/responses/${revieweeId}`);
+  return res.data;
+}
+
+export async function submitPeerReview(
+  surveyId: string,
+  revieweeId: string,
+  payload: {
+    answers: Array<{ questionKey: string; score: number }>;
+    comment?: string;
+  },
+) {
+  const res = await apiClient.post(
+    `/peer-reviews/${surveyId}/responses/${revieweeId}`,
+    payload,
+  );
+  return res.data;
+}
+
 export default apiClient;

@@ -29,6 +29,7 @@ import { CallModule } from './modules/call/call.module';
 import { BotModule } from './modules/bot/bot.module';
 import { MeetingsModule } from './modules/meetings/meetings.module';
 import { GoogleCalendarModule } from './modules/google-calendar/google-calendar.module';
+import { PeerReviewsModule } from './modules/peer-reviews/peer-reviews.module';
 import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
@@ -91,6 +92,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     MeetingsModule,
     GoogleCalendarModule,
     AppCategoriesModule,
+    PeerReviewsModule,
   ],
 })
 export class AppModule {}

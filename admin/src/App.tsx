@@ -14,6 +14,7 @@ import PayrollPage from './pages/Payroll';
 import PayrollDetailPage from './pages/PayrollDetail';
 import SessionHistoryDetailPage from './pages/SessionHistoryDetail';
 import AiInsightsPage from './pages/AiInsights';
+import PeerReviewsPage from './pages/PeerReviews';
 import LeaveRequestsPage from './pages/LeaveRequests';
 import AnnouncementsPage from './pages/Announcements';
 import OrganizationSettings from './pages/OrganizationSettings';
@@ -109,6 +110,7 @@ function AppRoutes() {
         <Route path="payroll" element={<PageErrorBoundary><PayrollPage /></PageErrorBoundary>} />
         <Route path="payroll/:userId" element={<PageErrorBoundary><PayrollDetailPage /></PageErrorBoundary>} />
         <Route path="ai-insights" element={<PageErrorBoundary><AiInsightsPage /></PageErrorBoundary>} />
+        <Route path="peer-reviews" element={<PageErrorBoundary><PeerReviewsPage /></PageErrorBoundary>} />
         <Route path="leave-requests" element={<PageErrorBoundary><LeaveRequestsPage /></PageErrorBoundary>} />
         <Route path="announcements" element={<PageErrorBoundary><AnnouncementsPage /></PageErrorBoundary>} />
         <Route path="settings" element={<PageErrorBoundary><OrganizationSettings /></PageErrorBoundary>} />

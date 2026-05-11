@@ -16,6 +16,7 @@ import {
   ClockCircleOutlined,
   DollarOutlined,
   BulbOutlined,
+  StarOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   UserOutlined,
@@ -42,6 +43,7 @@ const adminMenuItems = [
   { key: '/payroll', icon: <DollarOutlined />, label: 'Payroll' },
   { key: '/leave-requests', icon: <CalendarOutlined />, label: 'Leave Requests' },
   { key: '/announcements', icon: <NotificationOutlined />, label: 'Announcements' },
+  { key: '/peer-reviews', icon: <StarOutlined />, label: 'Peer Reviews' },
   { key: '/ai-insights', icon: <BulbOutlined />, label: 'AI Insights' },
   { key: '/settings', icon: <SettingOutlined />, label: 'Settings' },
 ];
@@ -62,6 +64,7 @@ const pageTitles: Record<string, string> = {
   '/payroll': 'Payroll',
   '/leave-requests': 'Leave Requests',
   '/announcements': 'Announcements',
+  '/peer-reviews': 'Peer Reviews',
   '/ai-insights': 'AI Insights',
   '/settings': 'Settings',
 };
@@ -75,6 +78,7 @@ const pageSubtitles: Record<string, string> = {
   '/payroll': 'Track compensation and billing',
   '/leave-requests': 'Review and manage employee leave requests',
   '/announcements': 'Send notifications to your team',
+  '/peer-reviews': 'Monthly peer-review surveys and results',
   '/ai-insights': 'AI-powered analysis & coaching',
   '/settings': 'Manage your organization settings',
 };
