@@ -22,6 +22,7 @@ export interface User {
   designation: string | null;
   hourlyRate: number;
   shiftId: string | null;
+  teamId?: string | null;
   allowedLeavesPerYear: number;
   consumedLeaves: number;
   status: 'invited' | 'active' | 'deactivated';

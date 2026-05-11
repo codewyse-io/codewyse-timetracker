@@ -12,6 +12,7 @@ import {
 import {
   DashboardOutlined,
   TeamOutlined,
+  UsergroupAddOutlined,
   ScheduleOutlined,
   ClockCircleOutlined,
   DollarOutlined,
@@ -38,6 +39,7 @@ import { BankOutlined } from '@ant-design/icons';
 const adminMenuItems = [
   { key: '/', icon: <DashboardOutlined />, label: 'Dashboard' },
   { key: '/users', icon: <TeamOutlined />, label: 'Team Members' },
+  { key: '/teams', icon: <UsergroupAddOutlined />, label: 'Teams' },
   { key: '/shifts', icon: <ScheduleOutlined />, label: 'Shifts' },
   { key: '/time-tracking', icon: <ClockCircleOutlined />, label: 'Time Tracking' },
   { key: '/payroll', icon: <DollarOutlined />, label: 'Payroll' },
@@ -59,6 +61,7 @@ const pageTitles: Record<string, string> = {
   '/': 'Dashboard',
   '/super-admin': 'Organizations',
   '/users': 'Team Members',
+  '/teams': 'Teams',
   '/shifts': 'Shifts',
   '/time-tracking': 'Time Tracking',
   '/payroll': 'Payroll',
@@ -73,6 +76,7 @@ const pageSubtitles: Record<string, string> = {
   '/': 'Welcome back! Here\'s your overview.',
   '/super-admin': 'Manage all organizations and their settings',
   '/users': 'Manage your team and their roles',
+  '/teams': 'Group employees into teams for peer reviews',
   '/shifts': 'Configure work schedules',
   '/time-tracking': 'Monitor sessions and activity',
   '/payroll': 'Track compensation and billing',

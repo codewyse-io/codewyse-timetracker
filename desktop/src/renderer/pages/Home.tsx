@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, memo } from 'react';
-import { Layout, Button, Tooltip } from 'antd';
+import { Layout, Button, Tooltip, notification } from 'antd';
 import {
   LogoutOutlined,
   MinusOutlined,
@@ -132,21 +132,90 @@ export default function Home() {
     }).catch(() => {});
   }, []);
 
-  // Poll for active peer-review survey (every 5 min) so the tab appears
-  // automatically when a new month opens.
+  // Poll for active peer-review survey (every 30s) so the tab appears
+  // promptly when admin opens one or the monthly cron fires.
+  // When state transitions false → true, show in-app + OS notifications.
   useEffect(() => {
     let cancelled = false;
+    let prevActive = false;
+    let prevSurveyId: string | null = null;
+    const notifiedKey = 'peerReviewNotifiedSurveyId';
+    const alreadyNotified = localStorage.getItem(notifiedKey);
+
+    const notifyOpen = (surveyId: string, periodMonth?: string) => {
+      if (alreadyNotified === surveyId) return;
+      localStorage.setItem(notifiedKey, surveyId);
+
+      const monthLabel = periodMonth
+        ? new Date(
+            parseInt(periodMonth.split('-')[0], 10),
+            parseInt(periodMonth.split('-')[1], 10) - 1,
+            1,
+          ).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+        : 'this period';
+
+      notification.open({
+        message: 'Peer Review opened',
+        description: `Rate your teammates for ${monthLabel}. You have 7 days to complete it.`,
+        placement: 'topRight',
+        duration: 10,
+        btn: (
+          <Button
+            type="primary"
+            size="small"
+            onClick={() => {
+              setActiveTab('peer-reviews');
+              notification.destroy();
+            }}
+          >
+            Open Review
+          </Button>
+        ),
+      });
+
+      // Native OS notification
+      try {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          const n = new Notification('Peer Review opened', {
+            body: `Rate your teammates for ${monthLabel}. 7 days to complete.`,
+          });
+          n.onclick = () => {
+            window.electronAPI?.showCallNotification?.('peer-review');
+            setActiveTab('peer-reviews');
+          };
+        } else if (typeof Notification !== 'undefined' && Notification.permission !== 'denied') {
+          Notification.requestPermission();
+        }
+      } catch {
+        // notifications unavailable
+      }
+    };
+
     const check = async () => {
       try {
         const res = await getActivePeerReview();
         const data = res?.data ?? res;
-        if (!cancelled) setPeerReviewActive(!!data?.survey);
+        const active = !!data?.survey;
+        const surveyId = data?.survey?.id ?? null;
+
+        if (cancelled) return;
+        setPeerReviewActive(active);
+
+        if (active && !prevActive && surveyId) {
+          notifyOpen(surveyId, data.survey.periodMonth);
+        } else if (active && surveyId && surveyId !== prevSurveyId) {
+          // A brand-new survey replaced an older one
+          notifyOpen(surveyId, data.survey.periodMonth);
+        }
+
+        prevActive = active;
+        prevSurveyId = surveyId;
       } catch {
         if (!cancelled) setPeerReviewActive(false);
       }
     };
     check();
-    const interval = setInterval(check, 5 * 60 * 1000);
+    const interval = setInterval(check, 30 * 1000);
     return () => {
       cancelled = true;
       clearInterval(interval);

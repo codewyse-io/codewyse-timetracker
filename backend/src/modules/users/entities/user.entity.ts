@@ -47,6 +47,9 @@ export class User {
   @JoinColumn({ name: 'shiftId' })
   shift: Shift;
 
+  @Column({ name: 'team_id', type: 'varchar', length: 36, nullable: true })
+  teamId: string | null;
+
   @Column({ type: 'int', default: 20 })
   allowedLeavesPerYear: number;
 

@@ -15,6 +15,7 @@ import PayrollDetailPage from './pages/PayrollDetail';
 import SessionHistoryDetailPage from './pages/SessionHistoryDetail';
 import AiInsightsPage from './pages/AiInsights';
 import PeerReviewsPage from './pages/PeerReviews';
+import TeamsPage from './pages/Teams';
 import LeaveRequestsPage from './pages/LeaveRequests';
 import AnnouncementsPage from './pages/Announcements';
 import OrganizationSettings from './pages/OrganizationSettings';
@@ -104,6 +105,7 @@ function AppRoutes() {
         <Route index element={<PageErrorBoundary><DashboardPage /></PageErrorBoundary>} />
         <Route path="super-admin" element={<PageErrorBoundary><SuperAdminDashboard /></PageErrorBoundary>} />
         <Route path="users" element={<PageErrorBoundary><UsersPage /></PageErrorBoundary>} />
+        <Route path="teams" element={<PageErrorBoundary><TeamsPage /></PageErrorBoundary>} />
         <Route path="shifts" element={<PageErrorBoundary><ShiftsPage /></PageErrorBoundary>} />
         <Route path="time-tracking" element={<PageErrorBoundary><TimeTrackingPage /></PageErrorBoundary>} />
         <Route path="time-tracking/sessions/:userId" element={<PageErrorBoundary><SessionHistoryDetailPage /></PageErrorBoundary>} />

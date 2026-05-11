@@ -147,6 +147,8 @@ export class PeerReviewsService {
 
   /**
    * The currently-open survey for this user's org, or null.
+   * Teammates are scoped to the same team as the user. Users without a team
+   * see an empty teammates list (the survey itself still exists).
    */
   async getActiveSurveyForUser(userId: string): Promise<{
     survey: PeerReviewSurvey;
@@ -171,13 +173,16 @@ export class PeerReviewsService {
     });
     if (!survey) return null;
 
-    const teammates = await this.userRepo.find({
-      where: {
-        organizationId: me.organizationId,
-        status: UserStatus.ACTIVE,
-        role: In([Role.EMPLOYEE, Role.ADMIN]),
-      },
-    });
+    const teammates = me.teamId
+      ? await this.userRepo.find({
+          where: {
+            organizationId: me.organizationId,
+            teamId: me.teamId,
+            status: UserStatus.ACTIVE,
+            role: In([Role.EMPLOYEE, Role.ADMIN]),
+          },
+        })
+      : [];
 
     const others = teammates.filter((u) => u.id !== userId);
     const responses = await this.responseRepo.find({
@@ -260,6 +265,11 @@ export class PeerReviewsService {
       reviewer.organizationId !== survey.organizationId
     ) {
       throw new ForbiddenException('Cross-organization reviews are not allowed.');
+    }
+    if (!reviewer.teamId || reviewer.teamId !== reviewee.teamId) {
+      throw new ForbiddenException(
+        'You can only review members of your own team.',
+      );
     }
     if (reviewee.status !== UserStatus.ACTIVE) {
       throw new BadRequestException('Reviewee is not an active team member.');
