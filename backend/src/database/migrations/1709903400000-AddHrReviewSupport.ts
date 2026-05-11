@@ -30,26 +30,23 @@ export class AddHrReviewSupport1709903400000 implements MigrationInterface {
       );
     }
 
-    // Drop old (surveyId, reviewerId, revieweeId) uniqueness and replace with
-    // (surveyId, reviewerId, revieweeId, kind) so a person can be reviewed
+    // Replace the (survey_id, reviewer_id, reviewee_id) unique index with
+    // (survey_id, reviewer_id, reviewee_id, kind) so a person can be reviewed
     // both as a teammate and as HR by the same reviewer.
+    //
+    // MySQL won't allow us to drop the old index while a foreign key still
+    // depends on it (the survey_id FK uses it as its supporting index), so
+    // we must CREATE the new index FIRST — once a replacement covering
+    // survey_id as its leftmost column exists, MySQL is happy to drop the old.
     const refreshed = await queryRunner.getTable('peer_review_responses');
-    const oldIdx = refreshed?.indices.find(
-      (i) =>
-        i.isUnique &&
-        i.columnNames.length === 3 &&
-        i.columnNames.includes('survey_id') &&
-        i.columnNames.includes('reviewer_id') &&
-        i.columnNames.includes('reviewee_id'),
-    );
-    if (oldIdx) {
-      await queryRunner.dropIndex('peer_review_responses', oldIdx);
-    }
     const hasNewIdx = refreshed?.indices.some(
       (i) =>
         i.isUnique &&
         i.columnNames.length === 4 &&
-        i.columnNames.includes('kind'),
+        i.columnNames.includes('kind') &&
+        i.columnNames.includes('survey_id') &&
+        i.columnNames.includes('reviewer_id') &&
+        i.columnNames.includes('reviewee_id'),
     );
     if (!hasNewIdx) {
       await queryRunner.createIndex(
@@ -60,6 +57,19 @@ export class AddHrReviewSupport1709903400000 implements MigrationInterface {
           isUnique: true,
         }),
       );
+    }
+
+    const afterCreate = await queryRunner.getTable('peer_review_responses');
+    const oldIdx = afterCreate?.indices.find(
+      (i) =>
+        i.isUnique &&
+        i.columnNames.length === 3 &&
+        i.columnNames.includes('survey_id') &&
+        i.columnNames.includes('reviewer_id') &&
+        i.columnNames.includes('reviewee_id'),
+    );
+    if (oldIdx) {
+      await queryRunner.dropIndex('peer_review_responses', oldIdx);
     }
 
     // ── extend peer_review_answers.category enum to include HR categories ──
