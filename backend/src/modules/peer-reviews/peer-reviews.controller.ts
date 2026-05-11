@@ -67,6 +67,16 @@ export class PeerReviewsController {
     return this.service.listSurveys(orgId);
   }
 
+  @Post('admin/surveys/open')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Manually open a peer-review survey (off-cycle or initial setup)' })
+  async openSurvey(
+    @CurrentOrg() orgId: string,
+    @Body() body: { periodMonth?: string; openDays?: number } = {},
+  ) {
+    return this.service.openSurveyNow(orgId, body);
+  }
+
   @Get('admin/surveys/:surveyId/results')
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Aggregated results for a survey' })

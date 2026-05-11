@@ -56,4 +56,9 @@ export const peerReviewsApi = {
   > {
     return apiClient.get('/peer-reviews/questions');
   },
+  openSurvey(payload: { periodMonth?: string; openDays?: number } = {}): Promise<
+    ApiResponse<{ id: string; periodMonth: string; opensAt: string; closesAt: string; status: 'open' | 'closed' }>
+  > {
+    return apiClient.post('/peer-reviews/admin/surveys/open', payload);
+  },
 };

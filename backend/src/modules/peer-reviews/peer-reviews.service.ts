@@ -94,6 +94,36 @@ export class PeerReviewsService {
   }
 
   /**
+   * Admin: manually open a survey for the current organization. Useful for
+   * off-cycle reviews or first-time setup before the monthly cron fires.
+   * - If a survey already exists for the period, returns it unchanged.
+   * - Period defaults to the previous month (YYYY-MM).
+   */
+  async openSurveyNow(
+    organizationId: string,
+    options: { periodMonth?: string; openDays?: number } = {},
+  ): Promise<PeerReviewSurvey> {
+    const periodMonth = options.periodMonth || previousMonthYYYYMM(new Date());
+    const openDays = options.openDays ?? SURVEY_OPEN_DAYS;
+
+    const existing = await this.surveyRepo.findOne({
+      where: { organizationId, periodMonth },
+    });
+    if (existing) return existing;
+
+    const opensAt = new Date();
+    const closesAt = new Date(opensAt.getTime() + openDays * 24 * 60 * 60 * 1000);
+    const survey = this.surveyRepo.create({
+      organizationId,
+      periodMonth,
+      opensAt,
+      closesAt,
+      status: PeerReviewSurveyStatus.OPEN,
+    });
+    return this.surveyRepo.save(survey);
+  }
+
+  /**
    * Runs hourly: close any survey whose window has expired.
    */
   @Cron(CronExpression.EVERY_HOUR)

@@ -14,6 +14,7 @@ import {
   TeamOutlined,
   StarFilled,
   EyeOutlined,
+  PlusOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
@@ -65,6 +66,7 @@ export default function PeerReviewsPage() {
   const [resultsLoading, setResultsLoading] = useState(false);
   const [questionMap, setQuestionMap] = useState<Map<string, string>>(new Map());
   const [drillReviewee, setDrillReviewee] = useState<PeerReviewResult | null>(null);
+  const [opening, setOpening] = useState(false);
 
   const loadSurveys = useCallback(async () => {
     setLoading(true);
@@ -106,6 +108,30 @@ export default function PeerReviewsPage() {
     if (selectedSurveyId) loadResults(selectedSurveyId);
     else setResults(null);
   }, [selectedSurveyId, loadResults]);
+
+  const handleOpenSurvey = useCallback(async () => {
+    Modal.confirm({
+      title: 'Open a peer-review survey now?',
+      content:
+        'This opens a survey for last month covering all active team members. It will remain open for 7 days. The desktop app will show the survey within a few minutes.',
+      okText: 'Open survey',
+      cancelText: 'Cancel',
+      onOk: async () => {
+        setOpening(true);
+        try {
+          await peerReviewsApi.openSurvey({});
+          message.success('Survey opened. Employees can start submitting reviews.');
+          await loadSurveys();
+        } catch (err: any) {
+          const detail =
+            err?.response?.data?.message || err?.message || 'Failed to open survey';
+          message.error(Array.isArray(detail) ? detail.join(', ') : detail);
+        } finally {
+          setOpening(false);
+        }
+      },
+    });
+  }, [loadSurveys]);
 
   const surveyColumns: ColumnsType<PeerReviewSurveySummary> = useMemo(
     () => [
@@ -240,6 +266,22 @@ export default function PeerReviewsPage() {
   if (!selectedSurveyId) {
     return (
       <div style={{ animation: 'fadeInUp 0.35s ease-out' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            loading={opening}
+            onClick={handleOpenSurvey}
+            style={{
+              borderRadius: 10,
+              background: 'var(--primary)',
+              borderColor: 'var(--primary)',
+              fontWeight: 500,
+            }}
+          >
+            Open Survey Now
+          </Button>
+        </div>
         <Card
           style={{
             borderRadius: 'var(--radius-lg)',
@@ -263,7 +305,7 @@ export default function PeerReviewsPage() {
                     No peer-review surveys yet
                   </div>
                   <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 4 }}>
-                    A new survey opens at the start of every month and stays open for 7 days.
+                    Surveys open automatically at the start of every month, or click "Open Survey Now" above to start one immediately.
                   </div>
                 </div>
               }
