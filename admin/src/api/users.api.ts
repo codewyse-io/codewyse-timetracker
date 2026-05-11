@@ -19,6 +19,7 @@ export interface CreateUserData {
   hourlyRate: number;
   shiftId?: string;
   allowedLeavesPerYear?: number;
+  isHr?: boolean;
 }
 
 export interface UpdateUserData {
@@ -29,6 +30,7 @@ export interface UpdateUserData {
   hourlyRate?: number;
   shiftId?: string | null;
   allowedLeavesPerYear?: number;
+  isHr?: boolean;
 }
 
 export const usersApi = {

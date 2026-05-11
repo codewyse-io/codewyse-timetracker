@@ -17,8 +17,13 @@ export enum PeerReviewResponseStatus {
   SUBMITTED = 'submitted',
 }
 
+export enum PeerReviewResponseKind {
+  TEAM = 'team',
+  HR = 'hr',
+}
+
 @Entity('peer_review_responses')
-@Index(['surveyId', 'reviewerId', 'revieweeId'], { unique: true })
+@Index(['surveyId', 'reviewerId', 'revieweeId', 'kind'], { unique: true })
 export class PeerReviewResponse {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -50,6 +55,13 @@ export class PeerReviewResponse {
     default: PeerReviewResponseStatus.DRAFT,
   })
   status: PeerReviewResponseStatus;
+
+  @Column({
+    type: 'enum',
+    enum: PeerReviewResponseKind,
+    default: PeerReviewResponseKind.TEAM,
+  })
+  kind: PeerReviewResponseKind;
 
   @Column({ name: 'submitted_at', type: 'datetime', nullable: true })
   submittedAt: Date | null;

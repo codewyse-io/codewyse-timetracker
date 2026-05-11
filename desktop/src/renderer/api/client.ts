@@ -163,8 +163,13 @@ export async function deleteMeeting(meetingId: string) {
 }
 
 // ── Peer Reviews ──
-export async function getPeerReviewQuestions() {
-  const res = await apiClient.get('/peer-reviews/questions');
+export async function getPeerReviewQuestions(kind: 'team' | 'hr' = 'team') {
+  const res = await apiClient.get('/peer-reviews/questions', { params: { kind } });
+  return res.data;
+}
+
+export async function getAllPeerReviewQuestions() {
+  const res = await apiClient.get('/peer-reviews/questions/all');
   return res.data;
 }
 
@@ -173,8 +178,16 @@ export async function getActivePeerReview() {
   return res.data;
 }
 
-export async function getPeerReviewDraft(surveyId: string, revieweeId: string) {
-  const res = await apiClient.get(`/peer-reviews/${surveyId}/responses/${revieweeId}`);
+export async function getPeerReviewDraft(
+  surveyId: string,
+  revieweeId: string,
+  kind: 'team' | 'hr' = 'team',
+) {
+  const url =
+    kind === 'hr'
+      ? `/peer-reviews/${surveyId}/hr-responses/${revieweeId}`
+      : `/peer-reviews/${surveyId}/responses/${revieweeId}`;
+  const res = await apiClient.get(url);
   return res.data;
 }
 
@@ -185,11 +198,13 @@ export async function submitPeerReview(
     answers: Array<{ questionKey: string; score: number }>;
     comment?: string;
   },
+  kind: 'team' | 'hr' = 'team',
 ) {
-  const res = await apiClient.post(
-    `/peer-reviews/${surveyId}/responses/${revieweeId}`,
-    payload,
-  );
+  const url =
+    kind === 'hr'
+      ? `/peer-reviews/${surveyId}/hr-responses/${revieweeId}`
+      : `/peer-reviews/${surveyId}/responses/${revieweeId}`;
+  const res = await apiClient.post(url, payload);
   return res.data;
 }
 

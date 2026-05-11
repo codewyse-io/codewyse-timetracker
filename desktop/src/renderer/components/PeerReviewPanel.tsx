@@ -11,7 +11,7 @@ import {
 } from '@ant-design/icons';
 import {
   getActivePeerReview,
-  getPeerReviewQuestions,
+  getAllPeerReviewQuestions,
   getPeerReviewDraft,
   submitPeerReview,
   getPeerReviewLeaderboard,
@@ -23,7 +23,26 @@ type Category =
   | 'performance'
   | 'responsibility'
   | 'knowledge'
-  | 'leadership_collaboration';
+  | 'leadership_collaboration'
+  | 'hr_responsiveness'
+  | 'hr_empathy'
+  | 'hr_fairness'
+  | 'hr_communication';
+
+type ReviewKind = 'team' | 'hr';
+
+const TEAM_CATEGORIES: Category[] = [
+  'performance',
+  'responsibility',
+  'knowledge',
+  'leadership_collaboration',
+];
+const HR_CATEGORIES: Category[] = [
+  'hr_responsiveness',
+  'hr_empathy',
+  'hr_fairness',
+  'hr_communication',
+];
 
 interface Question {
   key: string;
@@ -67,6 +86,10 @@ const CATEGORY_LABEL: Record<Category, string> = {
   responsibility: 'Responsibility',
   knowledge: 'Knowledge',
   leadership_collaboration: 'Leadership & Collab.',
+  hr_responsiveness: 'Responsiveness',
+  hr_empathy: 'Empathy & Support',
+  hr_fairness: 'Process & Fairness',
+  hr_communication: 'Communication',
 };
 
 const CATEGORY_COLOR: Record<Category, string> = {
@@ -74,6 +97,10 @@ const CATEGORY_COLOR: Record<Category, string> = {
   responsibility: '#5b8def',
   knowledge: '#10b981',
   leadership_collaboration: '#f59e0b',
+  hr_responsiveness: '#ec4899',
+  hr_empathy: '#22d3ee',
+  hr_fairness: '#8b5cf6',
+  hr_communication: '#a3e635',
 };
 
 const SCALE_LABELS = [
@@ -107,9 +134,11 @@ export default function PeerReviewPanel() {
   const [surveyLoading, setSurveyLoading] = useState(true);
   const [survey, setSurvey] = useState<Survey | null>(null);
   const [teammates, setTeammates] = useState<Teammate[]>([]);
+  const [hrReviewees, setHrReviewees] = useState<Teammate[]>([]);
   const [myTeams, setMyTeams] = useState<{ id: string; name: string }[]>([]);
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [selected, setSelected] = useState<Teammate | null>(null);
+  const [teamQuestions, setTeamQuestions] = useState<Question[]>([]);
+  const [hrQuestions, setHrQuestions] = useState<Question[]>([]);
+  const [selected, setSelected] = useState<{ person: Teammate; kind: ReviewKind } | null>(null);
   const [scores, setScores] = useState<Record<string, number>>({});
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -125,19 +154,22 @@ export default function PeerReviewPanel() {
     try {
       const [activeRes, questionsRes, teamsRes] = await Promise.all([
         getActivePeerReview(),
-        getPeerReviewQuestions(),
+        getAllPeerReviewQuestions(),
         getMyTeams().catch(() => null),
       ]);
       const active = activeRes?.data ?? activeRes;
       const qs = questionsRes?.data ?? questionsRes;
       const teams = teamsRes?.data ?? teamsRes;
-      setQuestions(Array.isArray(qs) ? qs : []);
+      setTeamQuestions(Array.isArray(qs?.team) ? qs.team : []);
+      setHrQuestions(Array.isArray(qs?.hr) ? qs.hr : []);
       if (active && active.survey) {
         setSurvey(active.survey);
         setTeammates(active.teammates || []);
+        setHrReviewees(active.hrReviewees || []);
       } else {
         setSurvey(null);
         setTeammates([]);
+        setHrReviewees([]);
       }
       setMyTeams(
         Array.isArray(teams?.teams)
@@ -175,31 +207,36 @@ export default function PeerReviewPanel() {
     loadLeaderboard();
   }, [loadActiveSurvey, loadLeaderboard]);
 
+  const activeQuestions = useMemo(() => {
+    if (selected?.kind === 'hr') return hrQuestions;
+    return teamQuestions;
+  }, [selected?.kind, teamQuestions, hrQuestions]);
+
+  const activeCategories: Category[] =
+    selected?.kind === 'hr' ? HR_CATEGORIES : TEAM_CATEGORIES;
+
   const grouped = useMemo(() => {
-    const map: Record<Category, Question[]> = {
-      performance: [],
-      responsibility: [],
-      knowledge: [],
-      leadership_collaboration: [],
-    };
-    for (const q of questions) {
-      if (map[q.category]) map[q.category].push(q);
+    const map: Partial<Record<Category, Question[]>> = {};
+    for (const c of activeCategories) map[c] = [];
+    for (const q of activeQuestions) {
+      if (map[q.category]) map[q.category]!.push(q);
     }
-    return map;
-  }, [questions]);
+    return map as Record<Category, Question[]>;
+  }, [activeQuestions, activeCategories]);
 
-  const allAnswered = questions.length > 0 && questions.every((q) => scores[q.key] >= 1);
-  const allMax = allAnswered && questions.every((q) => scores[q.key] === 5);
-  const allMin = allAnswered && questions.every((q) => scores[q.key] === 1);
+  const allAnswered =
+    activeQuestions.length > 0 && activeQuestions.every((q) => scores[q.key] >= 1);
+  const allMax = allAnswered && activeQuestions.every((q) => scores[q.key] === 5);
+  const allMin = allAnswered && activeQuestions.every((q) => scores[q.key] === 1);
 
-  const openTeammate = async (t: Teammate) => {
-    setSelected(t);
+  const openReview = async (t: Teammate, kind: ReviewKind) => {
+    setSelected({ person: t, kind });
     setScores({});
     setComment('');
     if (!survey) return;
     if (t.responseId) {
       try {
-        const draftRes = await getPeerReviewDraft(survey.id, t.id);
+        const draftRes = await getPeerReviewDraft(survey.id, t.id, kind);
         const draft = draftRes?.data ?? draftRes;
         if (draft) {
           const s: Record<string, number> = {};
@@ -217,8 +254,9 @@ export default function PeerReviewPanel() {
 
   const submit = async () => {
     if (!survey || !selected) return;
+    const expectedCount = activeQuestions.length;
     if (!allAnswered) {
-      message.warning(`Please answer all ${questions.length} questions.`);
+      message.warning(`Please answer all ${expectedCount} questions.`);
       return;
     }
     if (allMax) {
@@ -232,11 +270,13 @@ export default function PeerReviewPanel() {
     setSubmitting(true);
     try {
       const payload = {
-        answers: questions.map((q) => ({ questionKey: q.key, score: scores[q.key] })),
+        answers: activeQuestions.map((q) => ({ questionKey: q.key, score: scores[q.key] })),
         comment: comment.trim() || undefined,
       };
-      await submitPeerReview(survey.id, selected.id, payload);
-      message.success(`Review for ${selected.firstName} submitted`);
+      await submitPeerReview(survey.id, selected.person.id, payload, selected.kind);
+      message.success(
+        `${selected.kind === 'hr' ? 'HR review' : 'Review'} for ${selected.person.firstName} submitted`,
+      );
       setSelected(null);
       setScores({});
       setComment('');
@@ -260,17 +300,36 @@ export default function PeerReviewPanel() {
           </button>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ color: '#fff', fontSize: 15, fontWeight: 600 }}>
-              Reviewing {selected.firstName} {selected.lastName}
+              {selected.kind === 'hr' ? 'HR Review' : 'Reviewing'} {selected.person.firstName}{' '}
+              {selected.person.lastName}
             </div>
-            {selected.designation && (
+            {selected.person.designation && (
               <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 11 }}>
-                {selected.designation}
+                {selected.person.designation}
+              </div>
+            )}
+            {selected.kind === 'hr' && (
+              <div
+                style={{
+                  display: 'inline-flex',
+                  marginTop: 4,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.05,
+                  padding: '2px 8px',
+                  borderRadius: 4,
+                  background: 'rgba(236, 72, 153, 0.15)',
+                  color: '#f9a8d4',
+                }}
+              >
+                HR Questionnaire
               </div>
             )}
           </div>
         </div>
 
-        {(['performance', 'responsibility', 'knowledge', 'leadership_collaboration'] as Category[]).map(
+        {activeCategories.map(
           (cat) => (
             <div key={cat} style={{ ...panelStyle, padding: 16, marginBottom: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
@@ -424,8 +483,9 @@ export default function PeerReviewPanel() {
           loading={surveyLoading}
           survey={survey}
           teammates={teammates}
+          hrReviewees={hrReviewees}
           myTeams={myTeams}
-          onOpenTeammate={openTeammate}
+          onOpenReview={openReview}
           onRefresh={loadActiveSurvey}
         />
       )}
@@ -658,15 +718,17 @@ function SurveyView({
   loading,
   survey,
   teammates,
+  hrReviewees,
   myTeams,
-  onOpenTeammate,
+  onOpenReview,
   onRefresh,
 }: {
   loading: boolean;
   survey: Survey | null;
   teammates: Teammate[];
+  hrReviewees: Teammate[];
   myTeams: { id: string; name: string }[];
-  onOpenTeammate: (t: Teammate) => void;
+  onOpenReview: (t: Teammate, kind: ReviewKind) => void;
   onRefresh: () => void;
 }) {
   if (loading) {
@@ -747,6 +809,23 @@ function SurveyView({
         </div>
       </div>
 
+      {/* Section header — Team reviews */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <span style={{
+          fontSize: 11,
+          fontWeight: 700,
+          color: '#a78bfa',
+          letterSpacing: 0.06,
+          textTransform: 'uppercase',
+        }}>
+          Team Reviews
+        </span>
+        <span style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.05)' }} />
+        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
+          {teammates.length} teammate{teammates.length === 1 ? '' : 's'}
+        </span>
+      </div>
+
       {teammates.length === 0 ? (
         <div style={panelStyle}>
           <TeamOutlined style={{ fontSize: 32, color: 'rgba(255,255,255,0.25)', display: 'block', marginBottom: 12 }} />
@@ -776,7 +855,7 @@ function SurveyView({
             return (
               <button
                 key={t.id}
-                onClick={() => !submitted && onOpenTeammate(t)}
+                onClick={() => !submitted && onOpenReview(t, 'team')}
                 disabled={submitted}
                 style={{
                   ...rowStyle,
@@ -865,6 +944,124 @@ function SurveyView({
             );
           })}
         </div>
+      )}
+
+      {/* HR Reviews section — shown only when there are HR people to review */}
+      {hrReviewees.length > 0 && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '22px 0 8px' }}>
+            <span style={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: '#f9a8d4',
+              letterSpacing: 0.06,
+              textTransform: 'uppercase',
+            }}>
+              HR Reviews
+            </span>
+            <span style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.05)' }} />
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
+              {hrReviewees.length} HR member{hrReviewees.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 11, marginBottom: 10 }}>
+            Different questionnaire focused on responsiveness, empathy, fairness, and communication.
+          </div>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {hrReviewees.map((t) => {
+              const submitted = t.status === 'submitted';
+              return (
+                <button
+                  key={`hr-${t.id}`}
+                  onClick={() => !submitted && onOpenReview(t, 'hr')}
+                  disabled={submitted}
+                  style={{
+                    ...rowStyle,
+                    cursor: submitted ? 'default' : 'pointer',
+                    opacity: submitted ? 0.6 : 1,
+                    borderColor: 'rgba(236, 72, 153, 0.18)',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 10,
+                      background:
+                        'linear-gradient(135deg, rgba(236, 72, 153, 0.25), rgba(168, 85, 247, 0.18))',
+                      border: '1px solid rgba(236, 72, 153, 0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: '#f9a8d4',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {(t.firstName[0] || '') + (t.lastName[0] || '')}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                    <div
+                      style={{
+                        color: '#fff',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {t.firstName} {t.lastName}
+                    </div>
+                    <div
+                      style={{
+                        color: 'rgba(249, 168, 212, 0.6)',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        letterSpacing: 0.05,
+                      }}
+                    >
+                      HR{t.designation ? ` · ${t.designation}` : ''}
+                    </div>
+                  </div>
+                  {submitted ? (
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '3px 10px',
+                        borderRadius: 20,
+                        background: 'rgba(16, 185, 129, 0.12)',
+                        color: '#34d399',
+                        fontSize: 10,
+                        fontWeight: 600,
+                      }}
+                    >
+                      <CheckCircleFilled />
+                      Submitted
+                    </span>
+                  ) : (
+                    <span
+                      style={{
+                        padding: '3px 10px',
+                        borderRadius: 20,
+                        background: 'rgba(236, 72, 153, 0.12)',
+                        color: '#f9a8d4',
+                        fontSize: 10,
+                        fontWeight: 600,
+                      }}
+                    >
+                      Pending
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );

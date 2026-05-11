@@ -9,6 +9,7 @@ import {
   Select,
   InputNumber,
   Popconfirm,
+  Switch,
   message,
   Tooltip,
   Tabs,
@@ -375,6 +376,7 @@ export default function UsersPage() {
       hourlyRate: Number(user.hourlyRate),
       shiftId: user.shiftId,
       teamIds: initialTeamIds,
+      isHr: !!user.isHr,
       allowedLeavesPerYear: user.allowedLeavesPerYear,
       bankName: user.bankName || '',
       accountHolderName: user.accountHolderName || '',
@@ -728,6 +730,18 @@ export default function UsersPage() {
                     style={{ borderRadius: 8 }}
                     options={teams.map((t) => ({ value: t.id, label: t.name }))}
                   />
+                </Form.Item>
+                <Form.Item
+                  name="isHr"
+                  label={<span style={labelStyle}>HR member</span>}
+                  valuePropName="checked"
+                  extra={
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      When enabled, every active employee can review this person with the HR-specific questionnaire.
+                    </span>
+                  }
+                >
+                  <Switch />
                 </Form.Item>
               </>
             ),

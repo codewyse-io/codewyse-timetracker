@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsEmail,
   IsEnum,
   IsInt,
@@ -55,6 +56,11 @@ export class CreateUserDto {
   @Min(0)
   @Max(365)
   allowedLeavesPerYear?: number;
+
+  @ApiPropertyOptional({ description: 'Marks this user as HR (reviewable by any active employee)' })
+  @IsOptional()
+  @IsBoolean()
+  isHr?: boolean;
 
   @ApiPropertyOptional({ description: 'Organization ID (super_admin only)' })
   @IsOptional()

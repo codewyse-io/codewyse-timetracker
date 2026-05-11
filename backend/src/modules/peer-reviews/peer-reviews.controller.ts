@@ -12,6 +12,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PeerReviewsService } from './peer-reviews.service';
 import { SubmitPeerReviewResponseDto } from './dto/submit-response.dto';
+import { PeerReviewResponseKind } from './entities/peer-review-response.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -27,9 +28,15 @@ export class PeerReviewsController {
 
   // ── Catalog ──
   @Get('questions')
-  @ApiOperation({ summary: 'Get the peer-review question catalog' })
-  getQuestions() {
-    return this.service.getQuestions();
+  @ApiOperation({ summary: 'Get the peer-review question catalog (team or hr)' })
+  getQuestions(@Query('kind') kind?: 'team' | 'hr') {
+    return this.service.getQuestions(kind === 'hr' ? 'hr' : 'team');
+  }
+
+  @Get('questions/all')
+  @ApiOperation({ summary: 'Get all question catalogs in one call ({ team, hr })' })
+  getAllQuestions() {
+    return this.service.getAllQuestions();
   }
 
   // ── Employee ──
@@ -45,19 +52,64 @@ export class PeerReviewsController {
     @Req() req: any,
     @Param('surveyId', ParseUUIDPipe) surveyId: string,
     @Param('revieweeId', ParseUUIDPipe) revieweeId: string,
+    @Query('kind') kind?: 'team' | 'hr',
   ) {
-    return this.service.getResponseDraft(req.user.id, surveyId, revieweeId);
+    return this.service.getResponseDraft(
+      req.user.id,
+      surveyId,
+      revieweeId,
+      kind === 'hr' ? PeerReviewResponseKind.HR : PeerReviewResponseKind.TEAM,
+    );
   }
 
   @Post(':surveyId/responses/:revieweeId')
-  @ApiOperation({ summary: 'Submit a peer-review response for a teammate' })
+  @ApiOperation({ summary: 'Submit a peer-review response (team review)' })
   async submit(
     @Req() req: any,
     @Param('surveyId', ParseUUIDPipe) surveyId: string,
     @Param('revieweeId', ParseUUIDPipe) revieweeId: string,
     @Body() dto: SubmitPeerReviewResponseDto,
+    @Query('kind') kind?: 'team' | 'hr',
   ) {
-    return this.service.submitResponse(req.user.id, surveyId, revieweeId, dto);
+    return this.service.submitResponse(
+      req.user.id,
+      surveyId,
+      revieweeId,
+      dto,
+      kind === 'hr' ? PeerReviewResponseKind.HR : PeerReviewResponseKind.TEAM,
+    );
+  }
+
+  @Post(':surveyId/hr-responses/:revieweeId')
+  @ApiOperation({ summary: 'Submit an HR review response (for users marked is_hr = true)' })
+  async submitHr(
+    @Req() req: any,
+    @Param('surveyId', ParseUUIDPipe) surveyId: string,
+    @Param('revieweeId', ParseUUIDPipe) revieweeId: string,
+    @Body() dto: SubmitPeerReviewResponseDto,
+  ) {
+    return this.service.submitResponse(
+      req.user.id,
+      surveyId,
+      revieweeId,
+      dto,
+      PeerReviewResponseKind.HR,
+    );
+  }
+
+  @Get(':surveyId/hr-responses/:revieweeId')
+  @ApiOperation({ summary: 'Load existing HR-review draft for a person marked HR' })
+  async getHrDraft(
+    @Req() req: any,
+    @Param('surveyId', ParseUUIDPipe) surveyId: string,
+    @Param('revieweeId', ParseUUIDPipe) revieweeId: string,
+  ) {
+    return this.service.getResponseDraft(
+      req.user.id,
+      surveyId,
+      revieweeId,
+      PeerReviewResponseKind.HR,
+    );
   }
 
   // ── Leaderboard (visible to all authenticated users in the org) ──
@@ -96,11 +148,16 @@ export class PeerReviewsController {
 
   @Get('admin/surveys/:surveyId/results')
   @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Aggregated results for a survey' })
+  @ApiOperation({ summary: 'Aggregated team-review results for a survey (or HR with ?kind=hr)' })
   async surveyResults(
     @Param('surveyId', ParseUUIDPipe) surveyId: string,
     @CurrentOrg() orgId: string,
+    @Query('kind') kind?: 'team' | 'hr',
   ) {
-    return this.service.getSurveyResults(surveyId, orgId);
+    return this.service.getSurveyResults(
+      surveyId,
+      orgId,
+      kind === 'hr' ? PeerReviewResponseKind.HR : PeerReviewResponseKind.TEAM,
+    );
   }
 }

@@ -47,6 +47,9 @@ export class User {
   @JoinColumn({ name: 'shiftId' })
   shift: Shift;
 
+  @Column({ name: 'is_hr', type: 'tinyint', width: 1, default: 0, transformer: { to: (v: boolean) => (v ? 1 : 0), from: (v: number) => !!v } })
+  isHr: boolean;
+
   @Column({ type: 'int', default: 20 })
   allowedLeavesPerYear: number;
 

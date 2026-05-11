@@ -11,13 +11,18 @@ import { In, Repository } from 'typeorm';
 import { PeerReviewSurvey, PeerReviewSurveyStatus } from './entities/peer-review-survey.entity';
 import {
   PeerReviewResponse,
+  PeerReviewResponseKind,
   PeerReviewResponseStatus,
 } from './entities/peer-review-response.entity';
 import { PeerReviewAnswer } from './entities/peer-review-answer.entity';
 import {
   PEER_REVIEW_QUESTIONS,
+  HR_REVIEW_QUESTIONS,
   PeerReviewCategory,
   QUESTION_MAP,
+  HR_QUESTION_MAP,
+  getQuestionMap,
+  getQuestionsForKind,
 } from './peer-review-questions';
 import { User } from '../users/entities/user.entity';
 import { Role } from '../../common/enums/role.enum';
@@ -47,8 +52,15 @@ export class PeerReviewsService {
   // Catalog
   // ──────────────────────────────────────────────
 
-  getQuestions() {
-    return PEER_REVIEW_QUESTIONS;
+  getQuestions(kind: 'team' | 'hr' = 'team') {
+    return getQuestionsForKind(kind);
+  }
+
+  getAllQuestions() {
+    return {
+      team: PEER_REVIEW_QUESTIONS,
+      hr: HR_REVIEW_QUESTIONS,
+    };
   }
 
   // ──────────────────────────────────────────────
@@ -149,12 +161,21 @@ export class PeerReviewsService {
 
   /**
    * The currently-open survey for this user's org, or null.
-   * Teammates are scoped to the same team as the user. Users without a team
-   * see an empty teammates list (the survey itself still exists).
+   * Returns two reviewee lists:
+   *   - teammates: people in any of the user's teams (excluding self)
+   *   - hrReviewees: every ACTIVE user in the org with is_hr = true (excluding self)
    */
   async getActiveSurveyForUser(userId: string): Promise<{
     survey: PeerReviewSurvey;
     teammates: Array<{
+      id: string;
+      firstName: string;
+      lastName: string;
+      designation: string | null;
+      responseId: string | null;
+      status: PeerReviewResponseStatus | null;
+    }>;
+    hrReviewees: Array<{
       id: string;
       firstName: string;
       lastName: string;
@@ -191,39 +212,71 @@ export class PeerReviewsService {
         })
       : [];
 
-    const others = teammates;
-    const responses = await this.responseRepo.find({
+    // HR reviewees: every active HR user in the org, excluding self.
+    const hrUsers = await this.userRepo.find({
       where: {
-        surveyId: survey.id,
-        reviewerId: userId,
-        revieweeId: In(others.map((u) => u.id)),
+        organizationId: me.organizationId,
+        status: UserStatus.ACTIVE,
+        isHr: true,
       },
     });
-    const byReviewee = new Map(responses.map((r) => [r.revieweeId, r] as const));
+    const hrCandidates = hrUsers.filter((u) => u.id !== me.id);
+
+    const allRevieweeIds = [
+      ...teammates.map((u) => u.id),
+      ...hrCandidates.map((u) => u.id),
+    ];
+    const responses = allRevieweeIds.length
+      ? await this.responseRepo.find({
+          where: {
+            surveyId: survey.id,
+            reviewerId: userId,
+            revieweeId: In(allRevieweeIds),
+          },
+        })
+      : [];
+
+    // Index responses by (revieweeId, kind)
+    const teamResponseByReviewee = new Map<string, PeerReviewResponse>();
+    const hrResponseByReviewee = new Map<string, PeerReviewResponse>();
+    for (const r of responses) {
+      if (r.kind === PeerReviewResponseKind.HR) hrResponseByReviewee.set(r.revieweeId, r);
+      else teamResponseByReviewee.set(r.revieweeId, r);
+    }
 
     return {
       survey,
-      teammates: others.map((u) => ({
+      teammates: teammates.map((u) => ({
         id: u.id,
         firstName: u.firstName,
         lastName: u.lastName,
         designation: u.designation || null,
-        responseId: byReviewee.get(u.id)?.id ?? null,
-        status: byReviewee.get(u.id)?.status ?? null,
+        responseId: teamResponseByReviewee.get(u.id)?.id ?? null,
+        status: teamResponseByReviewee.get(u.id)?.status ?? null,
+      })),
+      hrReviewees: hrCandidates.map((u) => ({
+        id: u.id,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        designation: u.designation || null,
+        responseId: hrResponseByReviewee.get(u.id)?.id ?? null,
+        status: hrResponseByReviewee.get(u.id)?.status ?? null,
       })),
     };
   }
 
   /**
    * Load existing draft (if any) for a given reviewee in the active survey.
+   * Kind defaults to 'team'.
    */
   async getResponseDraft(
     reviewerId: string,
     surveyId: string,
     revieweeId: string,
+    kind: PeerReviewResponseKind = PeerReviewResponseKind.TEAM,
   ) {
     const response = await this.responseRepo.findOne({
-      where: { surveyId, reviewerId, revieweeId },
+      where: { surveyId, reviewerId, revieweeId, kind },
       relations: ['answers'],
     });
     return response;
@@ -245,6 +298,7 @@ export class PeerReviewsService {
     surveyId: string,
     revieweeId: string,
     dto: SubmitPeerReviewResponseDto,
+    kind: PeerReviewResponseKind = PeerReviewResponseKind.TEAM,
   ): Promise<PeerReviewResponse> {
     if (reviewerId === revieweeId) {
       throw new BadRequestException('You cannot review yourself.');
@@ -273,34 +327,57 @@ export class PeerReviewsService {
     ) {
       throw new ForbiddenException('Cross-organization reviews are not allowed.');
     }
-    const share = await this.teamsService.shareTeam(
-      reviewer.id,
-      reviewee.id,
-      reviewer.organizationId,
-    );
-    if (!share) {
-      throw new ForbiddenException(
-        'You can only review teammates you share a team with.',
-      );
-    }
     if (reviewee.status !== UserStatus.ACTIVE) {
-      throw new BadRequestException('Reviewee is not an active team member.');
+      throw new BadRequestException('Reviewee is not an active member.');
+    }
+    if (reviewer.status !== UserStatus.ACTIVE) {
+      throw new BadRequestException('Only active members can submit reviews.');
     }
 
-    // Validate answer set
+    // Scope check depends on kind:
+    //   - team: reviewer and reviewee must share at least one team
+    //   - hr:   reviewee must be marked as HR (anyone in the org can review)
+    if (kind === PeerReviewResponseKind.HR) {
+      if (!reviewee.isHr) {
+        throw new BadRequestException(
+          'This person is not marked as HR. Use the team review form instead.',
+        );
+      }
+    } else {
+      const share = await this.teamsService.shareTeam(
+        reviewer.id,
+        reviewee.id,
+        reviewer.organizationId,
+      );
+      if (!share) {
+        throw new ForbiddenException(
+          'You can only review teammates you share a team with.',
+        );
+      }
+    }
+
+    // Validate answer set against the question catalog for this kind
+    const questionMap = getQuestionMap(kind === PeerReviewResponseKind.HR ? 'hr' : 'team');
+    const expectedCount =
+      kind === PeerReviewResponseKind.HR
+        ? HR_REVIEW_QUESTIONS.length
+        : PEER_REVIEW_QUESTIONS.length;
+
     const seen = new Set<string>();
     for (const a of dto.answers) {
-      if (!QUESTION_MAP.has(a.questionKey)) {
-        throw new BadRequestException(`Unknown question: ${a.questionKey}`);
+      if (!questionMap.has(a.questionKey)) {
+        throw new BadRequestException(
+          `Unknown ${kind} question: ${a.questionKey}`,
+        );
       }
       if (seen.has(a.questionKey)) {
         throw new BadRequestException(`Duplicate question: ${a.questionKey}`);
       }
       seen.add(a.questionKey);
     }
-    if (seen.size !== PEER_REVIEW_QUESTIONS.length) {
+    if (seen.size !== expectedCount) {
       throw new BadRequestException(
-        `You must answer all ${PEER_REVIEW_QUESTIONS.length} questions.`,
+        `You must answer all ${expectedCount} questions.`,
       );
     }
 
@@ -317,14 +394,17 @@ export class PeerReviewsService {
       );
     }
 
-    // Upsert response shell
+    // Upsert response shell (scoped by kind so the same reviewer can submit
+    // both a team review AND an HR review for the same person if applicable)
     let response = await this.responseRepo.findOne({
-      where: { surveyId, reviewerId, revieweeId },
+      where: { surveyId, reviewerId, revieweeId, kind },
       relations: ['answers'],
     });
     if (response && response.status === PeerReviewResponseStatus.SUBMITTED) {
       throw new BadRequestException(
-        'You have already submitted a review for this teammate.',
+        kind === PeerReviewResponseKind.HR
+          ? 'You have already submitted an HR review for this person.'
+          : 'You have already submitted a review for this teammate.',
       );
     }
     if (!response) {
@@ -332,6 +412,7 @@ export class PeerReviewsService {
         surveyId,
         reviewerId,
         revieweeId,
+        kind,
         status: PeerReviewResponseStatus.SUBMITTED,
         submittedAt: new Date(),
         comment: dto.comment ?? null,
@@ -350,7 +431,7 @@ export class PeerReviewsService {
       this.answerRepo.create({
         responseId: response!.id,
         questionKey: a.questionKey,
-        category: QUESTION_MAP.get(a.questionKey)!.category,
+        category: questionMap.get(a.questionKey)!.category,
         score: a.score,
       }),
     );
@@ -413,7 +494,11 @@ export class PeerReviewsService {
     if (!survey) return null;
 
     const responses = await this.responseRepo.find({
-      where: { surveyId: survey.id, status: PeerReviewResponseStatus.SUBMITTED },
+      where: {
+        surveyId: survey.id,
+        status: PeerReviewResponseStatus.SUBMITTED,
+        kind: PeerReviewResponseKind.TEAM,
+      },
       relations: ['answers', 'reviewee'],
     });
 
@@ -434,6 +519,10 @@ export class PeerReviewsService {
       [PeerReviewCategory.RESPONSIBILITY]: { sum: 0, count: 0 },
       [PeerReviewCategory.KNOWLEDGE]: { sum: 0, count: 0 },
       [PeerReviewCategory.LEADERSHIP_COLLABORATION]: { sum: 0, count: 0 },
+      [PeerReviewCategory.HR_RESPONSIVENESS]: { sum: 0, count: 0 },
+      [PeerReviewCategory.HR_EMPATHY]: { sum: 0, count: 0 },
+      [PeerReviewCategory.HR_FAIRNESS]: { sum: 0, count: 0 },
+      [PeerReviewCategory.HR_COMMUNICATION]: { sum: 0, count: 0 },
     });
 
     for (const r of responses) {
@@ -540,7 +629,11 @@ export class PeerReviewsService {
     return results;
   }
 
-  async getSurveyResults(surveyId: string, organizationId: string) {
+  async getSurveyResults(
+    surveyId: string,
+    organizationId: string,
+    kind: PeerReviewResponseKind = PeerReviewResponseKind.TEAM,
+  ) {
     const survey = await this.surveyRepo.findOne({ where: { id: surveyId } });
     if (!survey) throw new NotFoundException('Survey not found.');
     if (survey.organizationId !== organizationId) {
@@ -548,7 +641,7 @@ export class PeerReviewsService {
     }
 
     const responses = await this.responseRepo.find({
-      where: { surveyId, status: PeerReviewResponseStatus.SUBMITTED },
+      where: { surveyId, status: PeerReviewResponseStatus.SUBMITTED, kind },
       relations: ['answers', 'reviewer', 'reviewee'],
     });
 
@@ -577,6 +670,10 @@ export class PeerReviewsService {
       [PeerReviewCategory.RESPONSIBILITY]: { sum: 0, count: 0 },
       [PeerReviewCategory.KNOWLEDGE]: { sum: 0, count: 0 },
       [PeerReviewCategory.LEADERSHIP_COLLABORATION]: { sum: 0, count: 0 },
+      [PeerReviewCategory.HR_RESPONSIVENESS]: { sum: 0, count: 0 },
+      [PeerReviewCategory.HR_EMPATHY]: { sum: 0, count: 0 },
+      [PeerReviewCategory.HR_FAIRNESS]: { sum: 0, count: 0 },
+      [PeerReviewCategory.HR_COMMUNICATION]: { sum: 0, count: 0 },
     });
 
     for (const r of responses) {
@@ -626,14 +723,9 @@ export class PeerReviewsService {
         b.overallCount > 0
           ? Math.round((b.overallSum / b.overallCount) * 100) / 100
           : 0,
-      categoryAverages: {
-        [PeerReviewCategory.PERFORMANCE]: avg(b.perCategory[PeerReviewCategory.PERFORMANCE]),
-        [PeerReviewCategory.RESPONSIBILITY]: avg(b.perCategory[PeerReviewCategory.RESPONSIBILITY]),
-        [PeerReviewCategory.KNOWLEDGE]: avg(b.perCategory[PeerReviewCategory.KNOWLEDGE]),
-        [PeerReviewCategory.LEADERSHIP_COLLABORATION]: avg(
-          b.perCategory[PeerReviewCategory.LEADERSHIP_COLLABORATION],
-        ),
-      },
+      categoryAverages: Object.fromEntries(
+        Object.entries(b.perCategory).map(([cat, bucket]) => [cat, avg(bucket)]),
+      ) as Record<PeerReviewCategory, number>,
       responses: b.responses,
     }));
 
@@ -647,6 +739,7 @@ export class PeerReviewsService {
         closesAt: survey.closesAt,
         status: survey.status,
       },
+      kind,
       results: rows,
     };
   }
