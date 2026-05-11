@@ -417,7 +417,31 @@ export default function UsersPage() {
       title: 'Role',
       dataIndex: 'role',
       key: 'role',
-      render: (role: string) => <RolePill role={role} />,
+      render: (role: string, record: User) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <RolePill role={role} />
+          {record.isHr && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '2px 8px',
+                borderRadius: 6,
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: 0.05,
+                textTransform: 'uppercase',
+                background: 'rgba(236, 72, 153, 0.12)',
+                color: '#be185d',
+                border: '1px solid rgba(236, 72, 153, 0.25)',
+              }}
+              title="HR member — reviewable by every active employee"
+            >
+              HR
+            </span>
+          )}
+        </div>
+      ),
     },
     {
       title: 'Designation',
