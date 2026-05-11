@@ -6,6 +6,7 @@ import { PeerReviewSurvey } from './entities/peer-review-survey.entity';
 import { PeerReviewResponse } from './entities/peer-review-response.entity';
 import { PeerReviewAnswer } from './entities/peer-review-answer.entity';
 import { User } from '../users/entities/user.entity';
+import { TeamsModule } from '../teams/teams.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { User } from '../users/entities/user.entity';
       PeerReviewAnswer,
       User,
     ]),
+    TeamsModule,
   ],
   controllers: [PeerReviewsController],
   providers: [PeerReviewsService],

@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Team } from './entities/team.entity';
+import { TeamMember } from './entities/team-member.entity';
 import { User } from '../users/entities/user.entity';
 import { AssignMembersDto, CreateTeamDto, UpdateTeamDto } from './dto/team.dto';
 
@@ -14,6 +15,8 @@ import { AssignMembersDto, CreateTeamDto, UpdateTeamDto } from './dto/team.dto';
 export class TeamsService {
   constructor(
     @InjectRepository(Team) private readonly teamRepo: Repository<Team>,
+    @InjectRepository(TeamMember)
+    private readonly membershipRepo: Repository<TeamMember>,
     @InjectRepository(User) private readonly userRepo: Repository<User>,
   ) {}
 
@@ -22,19 +25,29 @@ export class TeamsService {
       where: { organizationId },
       order: { name: 'ASC' },
     });
-    const ids = teams.map((t) => t.id);
-    if (ids.length === 0) return [];
+    if (teams.length === 0) return [];
 
-    const members = await this.userRepo.find({
-      where: { teamId: In(ids), organizationId },
-      select: ['id', 'firstName', 'lastName', 'email', 'designation', 'teamId'],
-    });
-    const byTeam = new Map<string, typeof members>();
-    for (const m of members) {
-      const arr = byTeam.get(m.teamId!) || [];
-      arr.push(m);
-      byTeam.set(m.teamId!, arr);
+    const memberships = await this.membershipRepo
+      .createQueryBuilder('m')
+      .innerJoinAndSelect('m.user', 'user')
+      .where('m.team_id IN (:...ids)', { ids: teams.map((t) => t.id) })
+      .getMany();
+
+    const byTeam = new Map<string, Array<{ id: string; firstName: string; lastName: string; email: string; designation: string | null }>>();
+    for (const m of memberships) {
+      const arr = byTeam.get(m.teamId) || [];
+      if (m.user) {
+        arr.push({
+          id: m.user.id,
+          firstName: m.user.firstName,
+          lastName: m.user.lastName,
+          email: m.user.email,
+          designation: m.user.designation || null,
+        });
+      }
+      byTeam.set(m.teamId, arr);
     }
+
     return teams.map((t) => ({
       id: t.id,
       name: t.name,
@@ -78,15 +91,16 @@ export class TeamsService {
 
   async remove(teamId: string, organizationId: string) {
     const team = await this.findOwned(teamId, organizationId);
-    // Unassign members first
-    await this.userRepo.update(
-      { teamId: team.id, organizationId },
-      { teamId: null },
-    );
+    // FK on team_members(team_id) is ON DELETE CASCADE, so the join rows go too.
     await this.teamRepo.remove(team);
     return { deleted: true };
   }
 
+  /**
+   * Replace the team's membership list. Users not in the new list are
+   * removed FROM THIS TEAM ONLY — their memberships in other teams are
+   * left intact (multi-team support).
+   */
   async assignMembers(
     teamId: string,
     organizationId: string,
@@ -94,50 +108,117 @@ export class TeamsService {
   ) {
     const team = await this.findOwned(teamId, organizationId);
 
-    if (dto.memberIds.length > 0) {
+    const incoming = Array.from(new Set(dto.memberIds));
+
+    if (incoming.length > 0) {
       const valid = await this.userRepo.find({
-        where: { id: In(dto.memberIds), organizationId },
+        where: { id: In(incoming), organizationId },
         select: ['id'],
       });
-      if (valid.length !== dto.memberIds.length) {
+      if (valid.length !== incoming.length) {
         throw new BadRequestException(
           'Some users do not belong to this organization.',
         );
       }
     }
 
-    // Replace team membership: unassign anyone currently in this team
-    // who is not in the new list, then assign the new list.
-    await this.userRepo.update(
-      { teamId: team.id, organizationId },
-      { teamId: null },
-    );
-    if (dto.memberIds.length > 0) {
-      await this.userRepo.update(
-        { id: In(dto.memberIds), organizationId },
-        { teamId: team.id },
+    const current = await this.membershipRepo.find({
+      where: { teamId: team.id },
+    });
+    const currentIds = new Set(current.map((m) => m.userId));
+    const incomingSet = new Set(incoming);
+
+    const toRemove = current.filter((m) => !incomingSet.has(m.userId));
+    const toAdd = incoming.filter((id) => !currentIds.has(id));
+
+    if (toRemove.length > 0) {
+      await this.membershipRepo.remove(toRemove);
+    }
+    if (toAdd.length > 0) {
+      const fresh = toAdd.map((userId) =>
+        this.membershipRepo.create({ teamId: team.id, userId }),
       );
+      await this.membershipRepo.save(fresh);
     }
 
     return this.list(organizationId);
   }
 
   /**
-   * For employee — get their team and teammates (active members).
-   * Returns null if the user has no team.
+   * For employee — get all teams + teammates the user belongs to (active members).
+   * Returns null if the user has no team memberships.
    */
-  async getMyTeam(userId: string) {
+  async getMyTeams(userId: string) {
     const me = await this.userRepo.findOne({ where: { id: userId } });
-    if (!me || !me.teamId || !me.organizationId) return null;
+    if (!me || !me.organizationId) return null;
 
-    const team = await this.teamRepo.findOne({ where: { id: me.teamId } });
-    if (!team) return null;
-
-    const members = await this.userRepo.find({
-      where: { teamId: team.id, organizationId: me.organizationId },
-      select: ['id', 'firstName', 'lastName', 'email', 'designation', 'status'],
+    const myMemberships = await this.membershipRepo.find({
+      where: { userId: me.id },
     });
-    return { team, members };
+    const myTeamIds = myMemberships.map((m) => m.teamId);
+    if (myTeamIds.length === 0) return { teams: [], teammates: [] };
+
+    const teams = await this.teamRepo.find({
+      where: { id: In(myTeamIds), organizationId: me.organizationId },
+    });
+
+    const teammateMemberships = await this.membershipRepo
+      .createQueryBuilder('m')
+      .innerJoinAndSelect('m.user', 'user')
+      .where('m.team_id IN (:...ids)', { ids: myTeamIds })
+      .andWhere('m.user_id != :uid', { uid: me.id })
+      .getMany();
+
+    const byUserId = new Map<string, { user: User; teamIds: Set<string> }>();
+    for (const m of teammateMemberships) {
+      if (!m.user) continue;
+      const entry = byUserId.get(m.userId) || { user: m.user, teamIds: new Set() };
+      entry.teamIds.add(m.teamId);
+      byUserId.set(m.userId, entry);
+    }
+
+    return {
+      teams,
+      teammates: Array.from(byUserId.values()).map(({ user, teamIds }) => ({
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        designation: user.designation || null,
+        teamIds: Array.from(teamIds),
+      })),
+    };
+  }
+
+  /**
+   * Returns set of user IDs that share at least one team with `userId`
+   * within the same organization. Self is excluded.
+   */
+  async getTeammateIds(userId: string, organizationId: string): Promise<Set<string>> {
+    const myMemberships = await this.membershipRepo.find({
+      where: { userId },
+    });
+    const myTeamIds = myMemberships.map((m) => m.teamId);
+    if (myTeamIds.length === 0) return new Set();
+
+    const teammates = await this.membershipRepo
+      .createQueryBuilder('m')
+      .select('DISTINCT m.user_id', 'userId')
+      .innerJoin('users', 'u', 'u.id = m.user_id')
+      .where('m.team_id IN (:...ids)', { ids: myTeamIds })
+      .andWhere('m.user_id != :uid', { uid: userId })
+      .andWhere('u.organization_id = :org', { org: organizationId })
+      .getRawMany<{ userId: string }>();
+
+    return new Set(teammates.map((t) => t.userId));
+  }
+
+  async shareTeam(
+    userIdA: string,
+    userIdB: string,
+    organizationId: string,
+  ): Promise<boolean> {
+    const teammates = await this.getTeammateIds(userIdA, organizationId);
+    return teammates.has(userIdB);
   }
 
   private async findOwned(teamId: string, organizationId: string) {

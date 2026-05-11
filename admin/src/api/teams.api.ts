@@ -7,7 +7,6 @@ export interface TeamMember {
   lastName: string;
   email: string;
   designation: string | null;
-  teamId: string | null;
 }
 
 export interface Team {

@@ -23,6 +23,7 @@ import { User } from '../users/entities/user.entity';
 import { Role } from '../../common/enums/role.enum';
 import { UserStatus } from '../../common/enums/user-status.enum';
 import { SubmitPeerReviewResponseDto } from './dto/submit-response.dto';
+import { TeamsService } from '../teams/teams.service';
 
 const SURVEY_OPEN_DAYS = 7;
 
@@ -39,6 +40,7 @@ export class PeerReviewsService {
     private readonly answerRepo: Repository<PeerReviewAnswer>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    private readonly teamsService: TeamsService,
   ) {}
 
   // ──────────────────────────────────────────────
@@ -173,18 +175,23 @@ export class PeerReviewsService {
     });
     if (!survey) return null;
 
-    const teammates = me.teamId
+    const teammateIds = await this.teamsService.getTeammateIds(
+      me.id,
+      me.organizationId,
+    );
+
+    const teammates = teammateIds.size
       ? await this.userRepo.find({
           where: {
+            id: In(Array.from(teammateIds)),
             organizationId: me.organizationId,
-            teamId: me.teamId,
             status: UserStatus.ACTIVE,
             role: In([Role.EMPLOYEE, Role.ADMIN]),
           },
         })
       : [];
 
-    const others = teammates.filter((u) => u.id !== userId);
+    const others = teammates;
     const responses = await this.responseRepo.find({
       where: {
         surveyId: survey.id,
@@ -266,9 +273,14 @@ export class PeerReviewsService {
     ) {
       throw new ForbiddenException('Cross-organization reviews are not allowed.');
     }
-    if (!reviewer.teamId || reviewer.teamId !== reviewee.teamId) {
+    const share = await this.teamsService.shareTeam(
+      reviewer.id,
+      reviewee.id,
+      reviewer.organizationId,
+    );
+    if (!share) {
       throw new ForbiddenException(
-        'You can only review members of your own team.',
+        'You can only review teammates you share a team with.',
       );
     }
     if (reviewee.status !== UserStatus.ACTIVE) {

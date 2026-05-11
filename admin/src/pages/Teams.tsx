@@ -145,14 +145,20 @@ export default function TeamsPage() {
     }
   };
 
-  // Build the per-employee picker: include current team members + anyone unassigned.
-  // Optionally include members of other teams (they'll be moved if selected).
+  // For the assign modal: show how many OTHER teams the user is already in
+  // (users can belong to multiple teams).
+  const otherTeamCountByUser = new Map<string, number>();
+  for (const t of teams) {
+    if (assignState.team && t.id === assignState.team.id) continue;
+    for (const m of t.members) {
+      otherTeamCountByUser.set(m.id, (otherTeamCountByUser.get(m.id) || 0) + 1);
+    }
+  }
   const userOptions = users.map((u) => {
-    const currentTeam = teams.find((t) => t.id === (u as any).teamId);
-    const otherTeam = currentTeam && currentTeam.id !== assignState.team?.id ? currentTeam : null;
+    const other = otherTeamCountByUser.get(u.id) || 0;
     return {
       value: u.id,
-      label: `${u.firstName} ${u.lastName}${otherTeam ? ` (currently in ${otherTeam.name})` : ''}`,
+      label: `${u.firstName} ${u.lastName}${other ? ` (in ${other} other team${other === 1 ? '' : 's'})` : ''}`,
     };
   });
 
@@ -335,9 +341,7 @@ export default function TeamsPage() {
               placeholder="Add members (optional)"
               options={users.map((u) => ({
                 value: u.id,
-                label: `${u.firstName} ${u.lastName}${
-                  (u as any).teamId ? ' (already in a team)' : ''
-                }`,
+                label: `${u.firstName} ${u.lastName}`,
               }))}
             />
           </Form.Item>
@@ -379,7 +383,7 @@ export default function TeamsPage() {
         width={620}
       >
         <div style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 12 }}>
-          Selecting a user that's currently in another team will move them to this team.
+          Users can belong to multiple teams. Removing them from this list only removes them from this team.
         </div>
         <Select
           mode="multiple"

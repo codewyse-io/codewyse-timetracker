@@ -73,8 +73,8 @@ export class TeamsController {
 
   // ── Employee ──
   @Get('me')
-  @ApiOperation({ summary: 'Get the current user\'s team and teammates' })
-  myTeam(@Req() req: any) {
-    return this.service.getMyTeam(req.user.id);
+  @ApiOperation({ summary: 'Get the current user\'s teams and combined teammates' })
+  myTeams(@Req() req: any) {
+    return this.service.getMyTeams(req.user.id);
   }
 }
