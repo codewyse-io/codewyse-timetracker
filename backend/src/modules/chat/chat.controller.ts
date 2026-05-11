@@ -199,12 +199,20 @@ export class ChatController {
 
     const s3Key = await this.s3Service.uploadFile(file, `chat/${conversationId}`);
     const presignedUrl = await this.s3Service.getPresignedUrl(s3Key, 3600);
+
+    // If the client/multer reported a generic or empty mime, infer one
+    // from the file extension so the renderer can preview the file.
+    const resolvedMime =
+      !file.mimetype || file.mimetype === 'application/octet-stream'
+        ? inferMimeFromName(file.originalname) || file.mimetype || 'application/octet-stream'
+        : file.mimetype;
+
     return {
       s3Key,
       presignedUrl,
       fileName: file.originalname,
       fileSize: file.size,
-      mimeType: file.mimetype,
+      mimeType: resolvedMime,
     };
   }
 
@@ -257,4 +265,44 @@ export class ChatController {
     });
     return users;
   }
+}
+
+// ── Helpers ──
+
+/**
+ * Infer a mime type from a file name extension when multer reports
+ * application/octet-stream (or nothing). Lets the chat thread preview
+ * images, videos, PDFs etc. uploaded from sources that don't supply a
+ * proper Content-Type.
+ */
+function inferMimeFromName(name: string | null | undefined): string | null {
+  if (!name) return null;
+  const dot = name.lastIndexOf('.');
+  if (dot < 0) return null;
+  const ext = name.slice(dot + 1).toLowerCase();
+  const map: Record<string, string> = {
+    jpg: 'image/jpeg', jpeg: 'image/jpeg', jfif: 'image/jpeg',
+    png: 'image/png',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    bmp: 'image/bmp',
+    svg: 'image/svg+xml',
+    heic: 'image/heic', heif: 'image/heif',
+    avif: 'image/avif',
+    tiff: 'image/tiff', tif: 'image/tiff',
+    mp4: 'video/mp4', m4v: 'video/mp4',
+    webm: 'video/webm',
+    mov: 'video/quicktime',
+    mkv: 'video/x-matroska',
+    avi: 'video/x-msvideo',
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    ogg: 'audio/ogg',
+    m4a: 'audio/mp4',
+    aac: 'audio/aac',
+    flac: 'audio/flac',
+    opus: 'audio/opus',
+    pdf: 'application/pdf',
+  };
+  return map[ext] || null;
 }

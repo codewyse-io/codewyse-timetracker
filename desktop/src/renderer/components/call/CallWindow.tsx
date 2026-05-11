@@ -67,6 +67,36 @@ function useRingtone(isRinging: boolean) {
   }, [isRinging]);
 }
 
+// Invisible audio sink — needed for audio-only calls where there's no
+// <video> element on screen. Without this, the remote MediaStream exists
+// in React state but no media element is playing its audio track.
+function AudioSink({ stream }: { stream: MediaStream }) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (audio && stream) {
+      audio.srcObject = stream;
+      // Some browsers/electron versions need an explicit play() to start
+      // playback when srcObject is assigned after element mount.
+      audio.play().catch((err) => {
+        console.warn('[Call] Remote audio play() failed:', err);
+      });
+    }
+    return () => { if (audio) audio.srcObject = null; };
+  }, [stream]);
+
+  return (
+    <audio
+      ref={audioRef}
+      autoPlay
+      playsInline
+      // never muted — this is the only path through which remote audio
+      // reaches the speakers during an audio-only call
+    />
+  );
+}
+
 function VideoTile({
   stream,
   muted,
@@ -374,6 +404,10 @@ export default function CallWindow() {
             </div>
           ) : (
             <>
+              {/* Audio sinks — required for the remote audio track to play */}
+              {remoteEntries.map(([userId, stream]) => (
+                <AudioSink key={`mini-audio-${userId}`} stream={stream} />
+              ))}
               <MiniAvatar label={myName} isActive={!state.isMuted} />
               {remoteEntries.length > 0
                 ? remoteEntries.map(([userId]) => (
@@ -575,6 +609,13 @@ export default function CallWindow() {
         ) : (
           /* Audio call — Meet-style centered layout */
           <div style={{ width: '100%', height: '100%', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {/* Hidden audio sinks — one per remote stream. Without these the
+                remote MediaStream is never bound to an <audio> element, so
+                no sound is heard even though the call is connected. */}
+            {remoteEntries.map(([userId, stream]) => (
+              <AudioSink key={`audio-${userId}`} stream={stream} />
+            ))}
+
             {/* Center: callee avatar (large) with ripple rings */}
             {(() => {
               const calleeName = remoteEntries.length > 0

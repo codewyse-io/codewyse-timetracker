@@ -29,6 +29,35 @@ interface Props {
   typingUserIds: string[];
 }
 
+type InferredKind = 'image' | 'video' | 'audio' | 'pdf' | 'other';
+
+const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'heic', 'heif', 'avif', 'tiff', 'tif']);
+const VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'mkv', 'avi', 'm4v', 'mpg', 'mpeg']);
+const AUDIO_EXTS = new Set(['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'opus', 'webm']);
+const PDF_EXTS = new Set(['pdf']);
+
+/**
+ * Determine how to render a file message even when mimeType is missing or
+ * generic (some upload paths report application/octet-stream). We fall
+ * back to the file-name extension so images/videos/PDFs still preview.
+ */
+function inferFileType(mimeType: string | null, fileName: string | null): InferredKind {
+  const mt = (mimeType || '').toLowerCase();
+  if (mt.startsWith('image/')) return 'image';
+  if (mt.startsWith('video/')) return 'video';
+  if (mt.startsWith('audio/')) return 'audio';
+  if (mt === 'application/pdf') return 'pdf';
+
+  // mimeType is unknown / generic — fall back to extension sniffing
+  const dot = (fileName || '').lastIndexOf('.');
+  const ext = dot >= 0 ? (fileName || '').slice(dot + 1).toLowerCase() : '';
+  if (IMAGE_EXTS.has(ext)) return 'image';
+  if (VIDEO_EXTS.has(ext)) return 'video';
+  if (AUDIO_EXTS.has(ext)) return 'audio';
+  if (PDF_EXTS.has(ext)) return 'pdf';
+  return 'other';
+}
+
 function DeliveryTick({ status }: { status: 'sent' | 'delivered' | 'seen' }) {
   if (status === 'sent') {
     // Single grey tick
@@ -184,8 +213,13 @@ export default function MessageThread({ messages, hasMore, onLoadMore, typingUse
                       This message was deleted
                     </span>
                   ) : msg.type === 'file' ? (
+                    (() => {
+                      // Infer file type even when mimeType is missing/generic
+                      // (some sources upload with mimeType=application/octet-stream).
+                      const inferred = inferFileType(msg.mimeType, msg.fileName);
+                      return (
                     <div>
-                      {msg.mimeType?.startsWith('image/') && msg.fileUrl ? (
+                      {inferred === 'image' && msg.fileUrl ? (
                         /* Image preview — click to open lightbox */
                         <div
                           onClick={() => setPreview({ url: msg.fileUrl!, type: 'image', name: msg.fileName || 'Image' })}
@@ -203,7 +237,7 @@ export default function MessageThread({ messages, hasMore, onLoadMore, typingUse
                             }}
                           />
                         </div>
-                      ) : msg.mimeType?.startsWith('video/') && msg.fileUrl ? (
+                      ) : inferred === 'video' && msg.fileUrl ? (
                         /* Video thumbnail — click to open lightbox */
                         <div
                           onClick={() => setPreview({ url: msg.fileUrl!, type: 'video', name: msg.fileName || 'Video' })}
@@ -239,7 +273,7 @@ export default function MessageThread({ messages, hasMore, onLoadMore, typingUse
                             }}>▶</div>
                           </div>
                         </div>
-                      ) : msg.mimeType?.startsWith('audio/') && msg.fileUrl ? (
+                      ) : inferred === 'audio' && msg.fileUrl ? (
                         /* Audio / Voice note — inline player */
                         <div style={{
                           display: 'flex',
@@ -263,7 +297,7 @@ export default function MessageThread({ messages, hasMore, onLoadMore, typingUse
                             }}
                           />
                         </div>
-                      ) : msg.mimeType === 'application/pdf' && msg.fileUrl ? (
+                      ) : inferred === 'pdf' && msg.fileUrl ? (
                         /* PDF — click to open lightbox */
                         <div
                           onClick={() => setPreview({ url: msg.fileUrl!, type: 'pdf', name: msg.fileName || 'Document' })}
@@ -313,6 +347,8 @@ export default function MessageThread({ messages, hasMore, onLoadMore, typingUse
                         </a>
                       ) : null}
                     </div>
+                      );
+                    })()
                   ) : (
                     <span style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.88)', lineHeight: 1.5, wordBreak: 'break-word' }}>
                       {msg.content}
