@@ -306,28 +306,71 @@ function setupIpcHandlers(): void {
         });
 
         if (process.platform === 'darwin') {
-          // On macOS, quitAndInstall can be unreliable.
-          // autoInstallOnAppQuit=true ensures the update is applied on next launch.
-          // So we just relaunch the app — the update will be applied automatically.
-          console.log('[AutoUpdater] macOS: relaunching app to apply update');
-          app.relaunch();
-          app.exit(0);
+          // macOS uses Squirrel.Mac via electron-updater. The new .app bundle
+          // MUST be signed with the same Developer ID identity that signed
+          // the running app, otherwise Squirrel rejects the update and
+          // quitAndInstall returns silently. isSilent is ignored on macOS;
+          // isForceRunAfter=true makes the new version launch automatically.
+          console.log('[AutoUpdater] macOS: calling quitAndInstall(false, true)');
+          try {
+            autoUpdater.quitAndInstall(false, true);
+          } catch (err) {
+            console.error('[AutoUpdater] macOS quitAndInstall threw:', err);
+            mainWindow?.webContents.send(
+              'update-error',
+              `Install failed on macOS: ${(err as Error)?.message || 'Unknown error'}. ` +
+                `If this build is not code-signed, the update cannot be applied automatically — ` +
+                `please re-install the latest version manually.`,
+            );
+            isQuitting = false;
+          }
         } else {
-          // Windows: use NSIS silent install
-          console.log('[AutoUpdater] Windows: calling quitAndInstall');
+          // Windows: NSIS silent install (no UAC prompt, runs in background)
+          console.log('[AutoUpdater] Windows: calling quitAndInstall(true, true)');
           autoUpdater.quitAndInstall(true, true);
         }
       } catch (err) {
         console.error('[AutoUpdater] Failed to install update:', err);
-        // Fallback: relaunch anyway
-        app.relaunch();
-        app.exit(0);
+        mainWindow?.webContents.send(
+          'update-error',
+          `Install failed: ${(err as Error)?.message || 'Unknown error'}`,
+        );
+        isQuitting = false;
       }
     });
   });
 
   ipcMain.handle('get-app-version', () => {
     return app.getVersion();
+  });
+
+  // Platform + arch reporting — used by the renderer to provide a
+  // manual-download link with the right installer when auto-update fails.
+  ipcMain.handle('get-platform-info', () => {
+    return {
+      platform: process.platform,      // 'darwin' | 'win32' | 'linux'
+      arch: process.arch,              // 'x64' | 'arm64'
+      isMac: process.platform === 'darwin',
+      isAppleSilicon: process.platform === 'darwin' && process.arch === 'arm64',
+      electronVersion: process.versions.electron,
+      nodeVersion: process.versions.node,
+    };
+  });
+
+  // Returns the direct download URL for the latest version matching the
+  // running platform + arch. Used as a manual-update fallback on macOS
+  // when Squirrel rejects the update (typically unsigned builds).
+  ipcMain.handle('get-manual-download-url', async () => {
+    const baseUrl = API_BASE_URL || 'https://backend.codewyse.site';
+    const platform = process.platform === 'darwin' ? 'mac' : 'win';
+    const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+    // The /downloads/update/file/:version endpoint requires a version. We
+    // ask for "latest" via a sentinel — but the backend's existing route
+    // takes :version. Build a URL that resolves to the latest installer
+    // via the existing /update/latest-mac.yml metadata. Simpler: pass a
+    // wildcard. For now, the renderer pairs this with the version it just
+    // got from the update-available event.
+    return { baseUrl, platform, arch };
   });
 
   // macOS media permissions — request on-demand from renderer

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Spin, message } from 'antd';
-import { SettingOutlined, LockOutlined, EyeOutlined, EyeInvisibleOutlined, SyncOutlined, InfoCircleOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { Spin, message, notification } from 'antd';
+import { SettingOutlined, LockOutlined, EyeOutlined, EyeInvisibleOutlined, SyncOutlined, InfoCircleOutlined, CheckCircleOutlined, CloudDownloadOutlined, RocketOutlined } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 import { getMe, changePassword } from '../api/client';
 import { User } from '../types';
@@ -20,27 +20,122 @@ export default function ProfilePanel() {
 
   // App version only — update listeners are handled by UpdateBanner
   const [appVersion, setAppVersion] = useState('');
-  const [updateCheckState, setUpdateCheckState] = useState<'idle' | 'checking' | 'up-to-date'>('idle');
+  const [updateCheckState, setUpdateCheckState] = useState<
+    'idle' | 'checking' | 'up-to-date' | 'available'
+  >('idle');
+  const [availableVersion, setAvailableVersion] = useState<string>('');
+  const [platformInfo, setPlatformInfo] = useState<{
+    platform: string;
+    arch: string;
+    isMac: boolean;
+    isAppleSilicon: boolean;
+  } | null>(null);
 
   useEffect(() => {
     window.electronAPI?.getAppVersion?.().then((v) => setAppVersion(v)).catch(() => {});
+    window.electronAPI?.getPlatformInfo?.().then((info) => setPlatformInfo(info)).catch(() => {});
   }, []);
 
-  // Listen for update-not-available only after manual check
+  // Helper: open the right installer in the browser for the running arch.
+  const openManualDownload = useCallback(async () => {
+    try {
+      const { baseUrl, platform, arch } = await window.electronAPI.getManualDownloadUrl();
+      const v = availableVersion || appVersion;
+      const url = `${baseUrl}/downloads/update/file/${encodeURIComponent('v' + v)}?platform=${platform}&arch=${arch}`;
+      await window.electronAPI.openExternal(url);
+    } catch {
+      message.error('Could not open the download link. Please contact your admin.');
+    }
+  }, [availableVersion, appVersion]);
+
+  // Listen for update-not-available / update-available only after manual check
   useEffect(() => {
     if (updateCheckState !== 'checking') return;
-    const unsub = window.electronAPI?.onUpdateNotAvailable?.(() => {
+
+    const unsubNotAvail = window.electronAPI?.onUpdateNotAvailable?.(() => {
       setUpdateCheckState('up-to-date');
+      notification.success({
+        message: 'You\'re up to date',
+        description: `Pulse v${appVersion} is the latest version available.`,
+        icon: <CheckCircleOutlined style={{ color: '#00e676' }} />,
+        placement: 'topRight',
+        duration: 5,
+      });
       setTimeout(() => setUpdateCheckState('idle'), 3000);
     });
-    const unsub2 = window.electronAPI?.onUpdateAvailable?.(() => {
-      setUpdateCheckState('idle'); // UpdateBanner handles the rest
+
+    const unsubAvail = window.electronAPI?.onUpdateAvailable?.((info) => {
+      const v = info?.version || '';
+      setAvailableVersion(v);
+      setUpdateCheckState('available');
+      notification.info({
+        message: 'Update available',
+        description: `A new version ${v ? `v${v}` : ''} is being downloaded and will be installed soon.`,
+        icon: <CloudDownloadOutlined style={{ color: '#7c5cfc' }} />,
+        placement: 'topRight',
+        duration: 6,
+      });
     });
-    return () => { unsub?.(); unsub2?.(); };
-  }, [updateCheckState]);
+
+    const unsubErr = window.electronAPI?.onUpdateError?.((msg) => {
+      const key = `update-err-${Date.now()}`;
+      notification.error({
+        key,
+        message: 'Update failed',
+        description:
+          msg || 'The update could not be applied. Please try again later or reinstall manually.',
+        placement: 'topRight',
+        duration: 0, // sticky until dismissed — user needs to act
+        btn: (
+          <button
+            onClick={() => {
+              notification.destroy(key);
+              openManualDownload();
+            }}
+            style={{
+              padding: '6px 12px',
+              borderRadius: 6,
+              border: '1px solid #6366f1',
+              background: '#6366f1',
+              color: '#fff',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Download Manually
+          </button>
+        ),
+      });
+      setUpdateCheckState('idle');
+    });
+
+    return () => {
+      unsubNotAvail?.();
+      unsubAvail?.();
+      unsubErr?.();
+    };
+  }, [updateCheckState, appVersion, openManualDownload]);
+
+  // Once the download finishes, flip the badge to "ready" — the UpdateBanner
+  // already drives the restart modal, but the profile card should reflect it.
+  useEffect(() => {
+    if (updateCheckState !== 'available') return;
+    const unsubDone = window.electronAPI?.onUpdateDownloaded?.(() => {
+      notification.success({
+        message: 'Update ready',
+        description: `v${availableVersion || ''} has been downloaded. Restart Pulse to apply it.`,
+        icon: <RocketOutlined style={{ color: '#00e676' }} />,
+        placement: 'topRight',
+        duration: 8,
+      });
+    });
+    return () => { unsubDone?.(); };
+  }, [updateCheckState, availableVersion]);
 
   const handleCheckUpdate = useCallback(async () => {
     setUpdateCheckState('checking');
+    setAvailableVersion('');
     await window.electronAPI?.checkForUpdates?.();
   }, []);
 
@@ -361,7 +456,7 @@ export default function ProfilePanel() {
       {/* App Version Section — simplified, no duplicate update listeners */}
       <div className="glass-card" style={{ padding: 16, flex: '1 1 100%' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <InfoCircleOutlined style={{ fontSize: 12, opacity: 0.5 }} />
             <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.9)' }}>
               App Version
@@ -369,6 +464,30 @@ export default function ProfilePanel() {
             <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>
               v{appVersion || '...'}
             </span>
+            {platformInfo && (
+              <span
+                style={{
+                  fontSize: 10,
+                  color: platformInfo.isAppleSilicon ? '#a78bfa' : 'rgba(255,255,255,0.35)',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.05,
+                  padding: '2px 8px',
+                  borderRadius: 6,
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  background: 'rgba(255,255,255,0.04)',
+                }}
+                title={`${platformInfo.platform} / ${platformInfo.arch}`}
+              >
+                {platformInfo.isMac
+                  ? platformInfo.isAppleSilicon
+                    ? 'macOS · Apple Silicon'
+                    : 'macOS · Intel'
+                  : platformInfo.platform === 'win32'
+                    ? `Windows · ${platformInfo.arch}`
+                    : `${platformInfo.platform} · ${platformInfo.arch}`}
+              </span>
+            )}
           </div>
 
           {updateCheckState === 'up-to-date' ? (
@@ -385,6 +504,22 @@ export default function ProfilePanel() {
               gap: 5,
             }}>
               <CheckCircleOutlined style={{ fontSize: 11 }} /> You're up to date
+            </span>
+          ) : updateCheckState === 'available' ? (
+            <span style={{
+              padding: '5px 12px',
+              borderRadius: 6,
+              border: '1px solid rgba(124, 92, 252, 0.3)',
+              background: 'rgba(124, 92, 252, 0.1)',
+              color: '#a78bfa',
+              fontSize: 11,
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}>
+              <CloudDownloadOutlined style={{ fontSize: 11 }} />
+              v{availableVersion} downloading…
             </span>
           ) : (
             <button

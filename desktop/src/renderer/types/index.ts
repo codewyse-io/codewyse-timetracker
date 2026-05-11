@@ -117,6 +117,15 @@ declare global {
       downloadUpdate: () => Promise<any>;
       installUpdate: () => Promise<void>;
       getAppVersion: () => Promise<string>;
+      getPlatformInfo: () => Promise<{
+        platform: string;
+        arch: string;
+        isMac: boolean;
+        isAppleSilicon: boolean;
+        electronVersion: string;
+        nodeVersion: string;
+      }>;
+      getManualDownloadUrl: () => Promise<{ baseUrl: string; platform: string; arch: string }>;
       onUpdateAvailable: (callback: (info: { version: string; releaseNotes: string }) => void) => () => void;
       onUpdateNotAvailable: (callback: () => void) => () => void;
       onUpdateDownloadProgress: (callback: (progress: { percent: number; transferred: number; total: number }) => void) => () => void;

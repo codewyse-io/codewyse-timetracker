@@ -2,6 +2,7 @@ export function newVersionTemplate(
   version: string,
   windowsUrl: string | null,
   macUrl: string | null,
+  macVariants?: { macIntelUrl?: string | null; macAppleSiliconUrl?: string | null },
   branding: { appName: string; primaryColor: string } = { appName: 'PulseTrack', primaryColor: '#6366f1' },
 ): string {
   const { appName, primaryColor } = branding;
@@ -12,11 +13,25 @@ export function newVersionTemplate(
       </a>`
     : '';
 
-  const macButton = macUrl
-    ? `<a href="${macUrl}" style="display: inline-block; padding: 14px 28px; background: linear-gradient(135deg, #1e293b, #475569); color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,0.2); margin: 0 6px 10px;">
-         Download for Mac
+  // Prefer per-arch Mac buttons when both are available; fall back to a single
+  // "Download for Mac" link otherwise. This ensures M1/M2/M3 users get the
+  // Apple Silicon installer and avoid running through Rosetta.
+  const macIntelUrl = macVariants?.macIntelUrl;
+  const macAppleSiliconUrl = macVariants?.macAppleSiliconUrl;
+  const hasBothMacBuilds = !!macIntelUrl && !!macAppleSiliconUrl;
+
+  const macButton = hasBothMacBuilds
+    ? `<a href="${macAppleSiliconUrl}" style="display: inline-block; padding: 14px 22px; background: linear-gradient(135deg, #1e293b, #475569); color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,0.2); margin: 0 6px 10px;">
+         Download for Mac (Apple Silicon)
+      </a>
+      <a href="${macIntelUrl}" style="display: inline-block; padding: 14px 22px; background: linear-gradient(135deg, #475569, #64748b); color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,0.2); margin: 0 6px 10px;">
+         Download for Mac (Intel)
       </a>`
-    : '';
+    : macUrl
+      ? `<a href="${macUrl}" style="display: inline-block; padding: 14px 28px; background: linear-gradient(135deg, #1e293b, #475569); color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,0.2); margin: 0 6px 10px;">
+           Download for Mac
+        </a>`
+      : '';
 
   return `
 <!DOCTYPE html>

@@ -117,10 +117,11 @@ export class DownloadsController {
    * Used by email download links. Accepts ?platform=win|mac query param.
    */
   @Get('update/file/:version')
-  @ApiOperation({ summary: 'Download latest installer for a version (public)' })
+  @ApiOperation({ summary: 'Download latest installer for a version (public). Accepts ?platform=win|mac and ?arch=x64|arm64.' })
   async downloadVersionFile(
     @Param('version') version: string,
     @Query('platform') platform: string,
+    @Query('arch') arch: string,
     @Res() res: Response,
   ) {
     try {
@@ -129,7 +130,32 @@ export class DownloadsController {
       let file: { key: string } | undefined;
 
       if (platform === 'mac') {
-        file = objects.find((o) => o.key.endsWith('.dmg') && !o.key.includes('arm64'));
+        // Match arch:
+        //   arch=arm64 → prefer file containing "arm64"
+        //   arch=x64   → prefer file NOT containing "arm64"
+        //   arch=universal → prefer file containing "universal"
+        //   (omitted) → default to x64 (legacy behaviour, but log it)
+        const dmgs = objects.filter((o) => o.key.endsWith('.dmg'));
+        if (arch === 'arm64') {
+          file = dmgs.find((o) => o.key.includes('arm64'))
+              || dmgs.find((o) => o.key.includes('universal'))
+              || dmgs[0];
+        } else if (arch === 'universal') {
+          file = dmgs.find((o) => o.key.includes('universal'))
+              || dmgs.find((o) => !o.key.includes('arm64'))
+              || dmgs[0];
+        } else {
+          // x64 or unspecified — exclude arm64, prefer non-universal first
+          file = dmgs.find((o) => !o.key.includes('arm64') && !o.key.includes('universal'))
+              || dmgs.find((o) => o.key.includes('universal'))
+              || dmgs[0];
+          if (!arch) {
+            this.logger.warn(
+              `[downloads] /update/file/${version} called without ?arch — defaulting to x64. ` +
+                `M-series users will get an Intel build under Rosetta.`,
+            );
+          }
+        }
       } else {
         // Default to Windows: prefer .exe, fallback to .zip (nsis output)
         file = objects.find((o) => o.key.endsWith('.exe'))
@@ -184,7 +210,10 @@ export class DownloadsController {
     }
     const baseUrl = 'https://backend.codewyse.site/downloads/update/file';
     const windowsUrl = `${baseUrl}/${version}?platform=win`;
-    const macUrl = `${baseUrl}/${version}?platform=mac`;
+    const macIntelUrl = `${baseUrl}/${version}?platform=mac&arch=x64`;
+    const macAppleSiliconUrl = `${baseUrl}/${version}?platform=mac&arch=arm64`;
+    // Backward-compat: macUrl without arch defaults to Intel (used by older email templates)
+    const macUrl = macIntelUrl;
 
     const employees = await this.usersService.findByRole('employee');
     const versionLabel = version.replace(/^v/, '');
@@ -192,7 +221,13 @@ export class DownloadsController {
     let sent = 0;
     for (const emp of employees) {
       try {
-        await this.emailService.sendNewVersionEmail(emp.email, versionLabel, windowsUrl, macUrl);
+        await this.emailService.sendNewVersionEmail(
+          emp.email,
+          versionLabel,
+          windowsUrl,
+          macUrl,
+          { macIntelUrl, macAppleSiliconUrl },
+        );
         sent++;
         // Resend rate limit: 5 requests/second
         if (sent % 4 === 0) {
@@ -203,7 +238,13 @@ export class DownloadsController {
       }
     }
 
-    return { sent, total: employees.length, windowsUrl, macUrl };
+    return {
+      sent,
+      total: employees.length,
+      windowsUrl,
+      macIntelUrl,
+      macAppleSiliconUrl,
+    };
   }
 
   @Get('releases')

@@ -47,8 +47,9 @@ export class EmailService {
     version: string,
     windowsUrl: string | null,
     macUrl: string | null,
+    macVariants?: { macIntelUrl?: string | null; macAppleSiliconUrl?: string | null },
   ): Promise<void> {
-    const html = newVersionTemplate(version, windowsUrl, macUrl);
+    const html = newVersionTemplate(version, windowsUrl, macUrl, macVariants);
     await this.sendEmail(email, `Pulse v${version} — Update Available`, html);
   }
 
