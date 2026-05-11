@@ -157,6 +157,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const pendingOfferRef = useRef<RTCSessionDescriptionInit | null>(null);
   const disconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const remoteStreamsRef = useRef(state.remoteStreams);
   const localStreamRef = useRef(state.localStream);
   const screenStreamRef = useRef(state.screenStream);
@@ -173,6 +174,27 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { remoteStreamsRef.current = state.remoteStreams; }, [state.remoteStreams]);
   useEffect(() => { localStreamRef.current = state.localStream; }, [state.localStream]);
   useEffect(() => { screenStreamRef.current = state.screenStream; }, [state.screenStream]);
+
+  // Connect timeout: if the call stays in 'connecting' for more than 30s,
+  // surface an error and clean up so the user isn't stuck forever.
+  useEffect(() => {
+    if (connectTimeoutRef.current) {
+      clearTimeout(connectTimeoutRef.current);
+      connectTimeoutRef.current = null;
+    }
+    if (state.activeCall?.state === 'connecting') {
+      connectTimeoutRef.current = setTimeout(() => {
+        console.warn('[Call] connect timeout — no answer/handshake in 30s, ending call');
+        endCallCleanupRef.current();
+      }, 30_000);
+    }
+    return () => {
+      if (connectTimeoutRef.current) {
+        clearTimeout(connectTimeoutRef.current);
+        connectTimeoutRef.current = null;
+      }
+    };
+  }, [state.activeCall?.state]);
 
   // Ref to always point to the latest endCallCleanup (defined below)
   const endCallCleanupRef = useRef<() => void>(() => {});
@@ -216,6 +238,15 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
           clearTimeout(disconnectTimerRef.current);
           disconnectTimerRef.current = null;
         }
+        // Also clear the 30s connect timeout — we're live
+        if (connectTimeoutRef.current) {
+          clearTimeout(connectTimeoutRef.current);
+          connectTimeoutRef.current = null;
+        }
+        // Safety net: if the answer signaling event was missed/dropped but
+        // the underlying WebRTC connection actually came up, flip the UI
+        // state so the user isn't stuck on "connecting".
+        dispatch({ type: 'SET_CALL_STATE', state: 'connected' });
       } else if (pc.connectionState === 'disconnected') {
         // Give 10 seconds for the connection to recover before cleaning up
         if (!disconnectTimerRef.current) {
@@ -375,43 +406,87 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   // ── Cleanup ──
 
   const endCallCleanup = useCallback(() => {
-    // Stop all media tracks before resetting state (use refs to avoid stale closures)
-    localStreamRef.current?.getTracks().forEach((t) => t.stop());
-    screenStreamRef.current?.getTracks().forEach((t) => t.stop());
-    Object.values(remoteStreamsRef.current).forEach((s) => s.getTracks().forEach((t) => t.stop()));
+    // CRITICAL ORDER: release every reference to the camera/mic tracks BEFORE
+    // calling track.stop(), otherwise macOS keeps the camera indicator
+    // light/green dot on because Chromium considers the device in-use as
+    // long as any sender/producer still references the track.
+
+    // 1) Replace tracks in P2P RTCRtpSenders with null (releases sender refs)
+    if (peerConnectionRef.current) {
+      for (const sender of peerConnectionRef.current.getSenders()) {
+        try {
+          sender.replaceTrack(null);
+        } catch {
+          // ignore — sender may already be closed
+        }
+      }
+    }
+
+    // 2) Close SFU producers (releases mediasoup-client refs to tracks)
+    for (const producer of producersRef.current.values()) {
+      try {
+        producer.close();
+      } catch {
+        // ignore
+      }
+    }
+    producersRef.current.clear();
+
+    for (const consumer of consumersRef.current.values()) {
+      try {
+        consumer.close();
+      } catch {
+        // ignore
+      }
+    }
+    consumersRef.current.clear();
+
+    // 3) Now stop the underlying device tracks — the OS will release the
+    //    camera/mic immediately because no other references remain.
+    localStreamRef.current?.getTracks().forEach((t) => {
+      try { t.stop(); } catch { /* ignore */ }
+    });
+    screenStreamRef.current?.getTracks().forEach((t) => {
+      try { t.stop(); } catch { /* ignore */ }
+    });
+    // Remote tracks aren't local devices, but stop for cleanup
+    Object.values(remoteStreamsRef.current).forEach((s) =>
+      s.getTracks().forEach((t) => {
+        try { t.stop(); } catch { /* ignore */ }
+      }),
+    );
+
+    // 4) Close PC + transports now that tracks are detached
+    if (peerConnectionRef.current) {
+      try { peerConnectionRef.current.close(); } catch { /* ignore */ }
+      peerConnectionRef.current = null;
+    }
+
+    try { sendTransportRef.current?.close(); } catch { /* ignore */ }
+    sendTransportRef.current = null;
+    try { recvTransportRef.current?.close(); } catch { /* ignore */ }
+    recvTransportRef.current = null;
+    deviceRef.current = null;
+    sfuModeRef.current = false;
 
     // Clear disconnect timer if active
     if (disconnectTimerRef.current) {
       clearTimeout(disconnectTimerRef.current);
       disconnectTimerRef.current = null;
     }
-
-    // P2P cleanup
-    if (peerConnectionRef.current) {
-      peerConnectionRef.current.close();
-      peerConnectionRef.current = null;
+    // Clear connect-timeout if pending
+    if (connectTimeoutRef.current) {
+      clearTimeout(connectTimeoutRef.current);
+      connectTimeoutRef.current = null;
     }
-
-    // SFU cleanup
-    for (const producer of producersRef.current.values()) {
-      producer.close();
-    }
-    producersRef.current.clear();
-
-    for (const consumer of consumersRef.current.values()) {
-      consumer.close();
-    }
-    consumersRef.current.clear();
-
-    sendTransportRef.current?.close();
-    sendTransportRef.current = null;
-    recvTransportRef.current?.close();
-    recvTransportRef.current = null;
-    deviceRef.current = null;
-    sfuModeRef.current = false;
 
     pendingCandidatesRef.current = [];
     pendingOfferRef.current = null;
+
+    // Null out refs so a later stray callback can't re-trigger anything
+    localStreamRef.current = null;
+    screenStreamRef.current = null;
+    remoteStreamsRef.current = {};
 
     dispatch({ type: 'CLEAR_CALL' });
   }, []);
@@ -433,10 +508,23 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: 'SET_PARTICIPANT_NAMES', names });
     }
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: type === 'video',
-    });
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: type === 'video',
+      });
+    } catch (err) {
+      console.error('[Call] getUserMedia failed in initiateCall:', err);
+      dispatch({ type: 'CLEAR_CALL' });
+      const msg = (err as Error)?.name === 'NotAllowedError'
+        ? `${type === 'video' ? 'Camera and microphone' : 'Microphone'} permission was denied. Please enable it in your system settings and try again.`
+        : `Could not access your ${type === 'video' ? 'camera/microphone' : 'microphone'}. Please check that no other app is using it.`;
+      // Surface to UI via a lightweight pattern — dispatching an error
+      // event would require a new action type; for now, alert + log.
+      try { window.alert(msg); } catch { /* ignore */ }
+      return;
+    }
     dispatch({ type: 'SET_LOCAL_STREAM', stream });
 
     socket.emit(
@@ -497,10 +585,23 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     const { callId, type, sfuMode } = state.incomingCall;
     sfuModeRef.current = sfuMode;
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: type === 'video',
-    });
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: type === 'video',
+      });
+    } catch (err) {
+      console.error('[Call] getUserMedia failed in acceptCall:', err);
+      // Tell the caller we can't accept so they're not stuck on 'ringing'
+      socket.emit('call:respond', { callId, action: 'decline' }, () => {});
+      dispatch({ type: 'SET_INCOMING_CALL', call: null });
+      const msg = (err as Error)?.name === 'NotAllowedError'
+        ? `${type === 'video' ? 'Camera and microphone' : 'Microphone'} permission was denied. Please enable it in your system settings.`
+        : `Could not access your ${type === 'video' ? 'camera/microphone' : 'microphone'}.`;
+      try { window.alert(msg); } catch { /* ignore */ }
+      return;
+    }
     dispatch({ type: 'SET_LOCAL_STREAM', stream });
 
     dispatch({

@@ -15,6 +15,7 @@ import {
   StarFilled,
   EyeOutlined,
   PlusOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
@@ -282,7 +283,16 @@ export default function PeerReviewsPage() {
   if (!selectedSurveyId) {
     return (
       <div style={{ animation: 'fadeInUp 0.35s ease-out' }}>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginBottom: 16 }}>
+          <Button
+            icon={<ReloadOutlined spin={loading} />}
+            onClick={loadSurveys}
+            disabled={loading}
+            style={{ borderRadius: 10, fontWeight: 500 }}
+            title="Refresh survey list"
+          >
+            Refresh
+          </Button>
           <Button
             type="primary"
             icon={<PlusOutlined />}
@@ -370,39 +380,57 @@ export default function PeerReviewsPage() {
             )}
           </div>
         </div>
-        {/* Team / HR toggle */}
-        <div
-          style={{
-            display: 'inline-flex',
-            background: 'var(--surface-sunken)',
-            borderRadius: 10,
-            padding: 4,
-            gap: 2,
-          }}
-        >
-          {(['team', 'hr'] as PeerReviewKind[]).map((k) => {
-            const active = resultsKind === k;
-            return (
-              <button
-                key={k}
-                onClick={() => setResultsKind(k)}
-                style={{
-                  padding: '7px 16px',
-                  borderRadius: 8,
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  background: active ? 'var(--surface-card)' : 'transparent',
-                  color: active ? 'var(--primary)' : 'var(--text-secondary)',
-                  boxShadow: active ? 'var(--shadow-sm)' : 'none',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                {k === 'team' ? 'Team Reviews' : 'HR Reviews'}
-              </button>
-            );
-          })}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {/* Team / HR toggle */}
+          <div
+            style={{
+              display: 'inline-flex',
+              background: 'var(--surface-sunken)',
+              borderRadius: 10,
+              padding: 4,
+              gap: 2,
+            }}
+          >
+            {(['team', 'hr'] as PeerReviewKind[]).map((k) => {
+              const active = resultsKind === k;
+              return (
+                <button
+                  key={k}
+                  onClick={() => setResultsKind(k)}
+                  style={{
+                    padding: '7px 16px',
+                    borderRadius: 8,
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    background: active ? 'var(--surface-card)' : 'transparent',
+                    color: active ? 'var(--primary)' : 'var(--text-secondary)',
+                    boxShadow: active ? 'var(--shadow-sm)' : 'none',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {k === 'team' ? 'Team Reviews' : 'HR Reviews'}
+                </button>
+              );
+            })}
+          </div>
+          {/* Refresh button — re-fetches the latest results from the backend */}
+          <Button
+            icon={<ReloadOutlined spin={resultsLoading} />}
+            onClick={() => {
+              if (selectedSurveyId) loadResults(selectedSurveyId, resultsKind);
+            }}
+            loading={false}
+            disabled={resultsLoading}
+            style={{
+              borderRadius: 10,
+              fontWeight: 500,
+            }}
+            title="Refresh results"
+          >
+            Refresh
+          </Button>
         </div>
       </div>
 

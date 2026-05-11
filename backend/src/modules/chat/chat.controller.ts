@@ -25,6 +25,7 @@ import { CurrentOrg } from '../../common/decorators/current-org.decorator';
 import { ChatService } from './chat.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { S3Service } from '../s3/s3.service';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Not } from 'typeorm';
 import { User } from '../users/entities/user.entity';
@@ -56,6 +57,7 @@ export class ChatController {
   constructor(
     private readonly chatService: ChatService,
     private readonly s3Service: S3Service,
+    private readonly realtimeGateway: RealtimeGateway,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
   ) {}
@@ -67,12 +69,25 @@ export class ChatController {
 
   @Post('conversations')
   async createConversation(@Req() req: any, @Body() dto: CreateConversationDto) {
-    return this.chatService.createConversation(
+    const conversation = await this.chatService.createConversation(
       req.user.id,
       dto.type,
       dto.participantIds,
       dto.name,
     );
+
+    // Real-time fan-out: notify every participant (including the creator,
+    // so multiple devices stay in sync) that a new conversation exists.
+    try {
+      const participantIds = await this.chatService.getParticipantIds(conversation.id);
+      for (const userId of participantIds) {
+        this.realtimeGateway.emitToUser(userId, 'chat:conversation-created', conversation);
+      }
+    } catch {
+      // Don't fail the request on broadcast issues — REST response still succeeds
+    }
+
+    return conversation;
   }
 
   @Patch('conversations/:id')
@@ -84,7 +99,16 @@ export class ChatController {
     const name = (body?.name || '').trim();
     if (!name) throw new BadRequestException('Group name cannot be empty');
     if (name.length > 100) throw new BadRequestException('Group name too long (max 100 chars)');
-    return this.chatService.renameConversation(req.user.id, id, name);
+    const conversation = await this.chatService.renameConversation(req.user.id, id, name);
+    try {
+      const participantIds = await this.chatService.getParticipantIds(id);
+      for (const userId of participantIds) {
+        this.realtimeGateway.emitToUser(userId, 'chat:conversation-updated', conversation);
+      }
+    } catch {
+      /* ignore broadcast errors */
+    }
+    return conversation;
   }
 
   @Get('conversations/:id/messages')
@@ -110,6 +134,18 @@ export class ChatController {
     @Body('userId') userId: string,
   ) {
     await this.chatService.addGroupMember(conversationId, userId, req.user.id);
+    try {
+      const fresh = await this.chatService.getConversationById(conversationId);
+      const participantIds = await this.chatService.getParticipantIds(conversationId);
+      // The newly-added user needs the "conversation-created" event so it
+      // appears in their list; existing members get an "updated" event.
+      for (const memberId of participantIds) {
+        const eventName = memberId === userId ? 'chat:conversation-created' : 'chat:conversation-updated';
+        this.realtimeGateway.emitToUser(memberId, eventName, fresh);
+      }
+    } catch {
+      /* ignore broadcast errors */
+    }
     return { ok: true };
   }
 
@@ -120,6 +156,17 @@ export class ChatController {
     @Param('userId') userId: string,
   ) {
     await this.chatService.removeGroupMember(conversationId, userId, req.user.id);
+    try {
+      const fresh = await this.chatService.getConversationById(conversationId);
+      const remainingIds = await this.chatService.getParticipantIds(conversationId);
+      // Tell the removed user their conversation is gone, and update the rest
+      this.realtimeGateway.emitToUser(userId, 'chat:conversation-removed', { id: conversationId });
+      for (const memberId of remainingIds) {
+        this.realtimeGateway.emitToUser(memberId, 'chat:conversation-updated', fresh);
+      }
+    } catch {
+      /* ignore broadcast errors */
+    }
     return { ok: true };
   }
 

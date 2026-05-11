@@ -95,6 +95,8 @@ interface ChatState {
 
 type ChatAction =
   | { readonly type: 'SET_CONVERSATIONS'; readonly conversations: Conversation[] }
+  | { readonly type: 'UPSERT_CONVERSATION'; readonly conversation: Conversation }
+  | { readonly type: 'REMOVE_CONVERSATION'; readonly conversationId: string }
   | { readonly type: 'ADD_MESSAGE'; readonly message: ChatMessage; readonly currentUserId?: string }
   | { readonly type: 'SET_MESSAGES'; readonly conversationId: string; readonly messages: ChatMessage[] }
   | { readonly type: 'PREPEND_MESSAGES'; readonly conversationId: string; readonly messages: ChatMessage[] }
@@ -124,6 +126,34 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
     case 'SET_CONVERSATIONS':
       return { ...state, conversations: action.conversations };
+
+    case 'UPSERT_CONVERSATION': {
+      const existing = state.conversations.find((c) => c.id === action.conversation.id);
+      if (existing) {
+        // Merge — preserve lastMessage/unreadCount unless the server provided
+        // them (the conversation broadcast usually doesn't).
+        return {
+          ...state,
+          conversations: state.conversations.map((c) =>
+            c.id === action.conversation.id ? { ...c, ...action.conversation, lastMessage: action.conversation.lastMessage ?? c.lastMessage, unreadCount: action.conversation.unreadCount ?? c.unreadCount } : c,
+          ),
+        };
+      }
+      // New conversation — prepend so it shows at top
+      return { ...state, conversations: [action.conversation, ...state.conversations] };
+    }
+
+    case 'REMOVE_CONVERSATION':
+      return {
+        ...state,
+        conversations: state.conversations.filter((c) => c.id !== action.conversationId),
+        // Also drop loaded messages and reset active if necessary
+        messages: Object.fromEntries(
+          Object.entries(state.messages).filter(([cid]) => cid !== action.conversationId),
+        ),
+        activeConversationId:
+          state.activeConversationId === action.conversationId ? null : state.activeConversationId,
+      };
 
     case 'ADD_MESSAGE': {
       const convId = action.message.conversationId;
@@ -376,18 +406,24 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     async (type: 'direct' | 'group', participantIds: string[], name?: string): Promise<Conversation> => {
       const res = await apiClient.post('/chat/conversations', { type, participantIds, name });
       const conversation = res.data?.data || res.data;
-      await loadConversations();
+      // Optimistic update — show the conversation immediately. The
+      // chat:conversation-created socket event will also fire and become a
+      // no-op via UPSERT_CONVERSATION's existing-row branch.
+      dispatch({ type: 'UPSERT_CONVERSATION', conversation });
       return conversation;
     },
-    [loadConversations],
+    [],
   );
 
   const renameConversation = useCallback(
     async (conversationId: string, name: string): Promise<void> => {
-      await apiClient.patch(`/chat/conversations/${conversationId}`, { name });
-      await loadConversations();
+      const res = await apiClient.patch(`/chat/conversations/${conversationId}`, { name });
+      const conversation = res.data?.data || res.data;
+      if (conversation?.id) {
+        dispatch({ type: 'UPSERT_CONVERSATION', conversation });
+      }
     },
-    [loadConversations],
+    [],
   );
 
   // Socket event listeners
@@ -430,11 +466,31 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: 'SET_PRESENCE', userId: presence.userId, status: presence.status });
     };
 
+    // Conversation lifecycle — keep the sidebar in sync when other clients
+    // create / rename / add or remove members on a group.
+    const handleConversationCreated = (conversation: Conversation) => {
+      console.log('[Chat] conversation-created:', conversation.id, conversation.name);
+      dispatch({ type: 'UPSERT_CONVERSATION', conversation });
+    };
+
+    const handleConversationUpdated = (conversation: Conversation) => {
+      console.log('[Chat] conversation-updated:', conversation.id, conversation.name);
+      dispatch({ type: 'UPSERT_CONVERSATION', conversation });
+    };
+
+    const handleConversationRemoved = (data: { id: string }) => {
+      console.log('[Chat] conversation-removed:', data.id);
+      dispatch({ type: 'REMOVE_CONVERSATION', conversationId: data.id });
+    };
+
     socket.on('chat:message', handleMessage);
     socket.on('chat:typing', handleTyping);
     socket.on('chat:read-receipt', handleReadReceipt);
     socket.on('chat:message-updated', handleMessageUpdated);
     socket.on('chat:message-deleted', handleMessageDeleted);
+    socket.on('chat:conversation-created', handleConversationCreated);
+    socket.on('chat:conversation-updated', handleConversationUpdated);
+    socket.on('chat:conversation-removed', handleConversationRemoved);
     socket.on('presence:update', handlePresence);
 
     return () => {
@@ -443,6 +499,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       socket.off('chat:read-receipt', handleReadReceipt);
       socket.off('chat:message-updated', handleMessageUpdated);
       socket.off('chat:message-deleted', handleMessageDeleted);
+      socket.off('chat:conversation-created', handleConversationCreated);
+      socket.off('chat:conversation-updated', handleConversationUpdated);
+      socket.off('chat:conversation-removed', handleConversationRemoved);
       socket.off('presence:update', handlePresence);
     };
   }, [socket, isAuthenticated, user?.id, loadConversations]);
