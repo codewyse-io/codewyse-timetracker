@@ -114,6 +114,17 @@ export async function getActiveAnnouncements() {
   return response.data;
 }
 
+export async function createAnnouncement(payload: {
+  title: string;
+  message: string;
+  type?: 'general' | 'holiday' | 'meeting' | 'memo' | 'urgent';
+  priority?: 'low' | 'normal' | 'high';
+  expiresAt?: string;
+}) {
+  const response = await apiClient.post('/announcements', payload);
+  return response.data;
+}
+
 // Google Calendar
 export async function getGoogleCalendarAuthUrl() {
   const res = await apiClient.get('/google-calendar/auth-url');
@@ -231,6 +242,54 @@ export async function getMyPeerReviewFeedback(
   const res = await apiClient.get('/peer-reviews/my-feedback', {
     params: { ...options },
   });
+  return res.data;
+}
+
+// ── HR / admin views ──
+export async function getAllSessions(params: {
+  page?: number;
+  limit?: number;
+  startDate?: string;
+  endDate?: string;
+  userId?: string;
+}) {
+  const res = await apiClient.get('/time-tracking/sessions', { params });
+  return res.data;
+}
+
+export async function getAllActiveSessions() {
+  const res = await apiClient.get('/time-tracking/sessions/active');
+  return res.data;
+}
+
+export async function getPayrollSummary(startDate: string, endDate: string) {
+  const res = await apiClient.get('/payroll/summary', {
+    params: { startDate, endDate },
+  });
+  return res.data;
+}
+
+export async function getAllLeaveRequests(page = 1, limit = 50) {
+  const res = await apiClient.get('/leave-requests', { params: { page, limit } });
+  return res.data;
+}
+
+export async function updateLeaveRequestStatus(
+  id: string,
+  status: 'approved' | 'rejected',
+  adminNotes?: string,
+) {
+  const res = await apiClient.patch(`/leave-requests/${id}/status`, {
+    status,
+    adminNotes,
+  });
+  return res.data;
+}
+
+export async function getAllUsersForHr() {
+  // For employee dropdown in HR views — uses chat users endpoint which is
+  // already org-scoped and returns id/firstName/lastName/email/designation
+  const res = await apiClient.get('/chat/users');
   return res.data;
 }
 

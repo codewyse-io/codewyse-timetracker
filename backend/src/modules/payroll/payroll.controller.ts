@@ -17,12 +17,14 @@ import {
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { HrAllowed } from '../../common/decorators/hr-allowed.decorator';
 import { CurrentOrg } from '../../common/decorators/current-org.decorator';
 
 @ApiTags('Payroll')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin')
+@HrAllowed()
 @Controller('payroll')
 export class PayrollController {
   constructor(private readonly payrollService: PayrollService) {}

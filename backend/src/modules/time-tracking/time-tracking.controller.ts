@@ -22,6 +22,7 @@ import { PaginatedResponseDto } from '../../common/dto/paginated-response.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { HrAllowed } from '../../common/decorators/hr-allowed.decorator';
 import { CurrentOrg } from '../../common/decorators/current-org.decorator';
 
 @ApiTags('Time Tracking')
@@ -101,18 +102,19 @@ export class TimeTrackingController {
 
   @Get('sessions')
   @ApiOperation({
-    summary: 'Get work sessions (admin sees all, employee sees own)',
+    summary: 'Get work sessions (admin / HR see all, employee sees own)',
   })
   async getSessions(
     @Query() query: SessionQueryDto,
     @Req() req: any,
     @CurrentOrg() orgId: string,
   ): Promise<PaginatedResponseDto<WorkSession>> {
-    const isAdmin = req.user?.role === 'admin';
+    // HR has the same read-visibility as admin for org-wide sessions
+    const canSeeAll = req.user?.role === 'admin' || req.user?.isHr === true;
     return this.timeTrackingService.getSessions(
       query,
       req.user?.id,
-      isAdmin,
+      canSeeAll,
       orgId,
     );
   }

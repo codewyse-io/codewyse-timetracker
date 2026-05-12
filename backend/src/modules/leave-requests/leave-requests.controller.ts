@@ -22,6 +22,7 @@ import { PaginationDto } from '../../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { HrAllowed } from '../../common/decorators/hr-allowed.decorator';
 import { Role } from '../../common/enums/role.enum';
 import { S3Service } from '../s3/s3.service';
 import { CurrentOrg } from '../../common/decorators/current-org.decorator';
@@ -63,7 +64,8 @@ export class LeaveRequestsController {
 
   @Get()
   @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'List all leave requests (admin)' })
+  @HrAllowed()
+  @ApiOperation({ summary: 'List all leave requests (admin / HR)' })
   findAll(@Query() paginationDto: PaginationDto, @CurrentOrg() orgId: string) {
     return this.leaveRequestsService.findAll(paginationDto, orgId);
   }
@@ -98,7 +100,8 @@ export class LeaveRequestsController {
 
   @Patch(':id/status')
   @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Approve or reject a leave request (admin)' })
+  @HrAllowed()
+  @ApiOperation({ summary: 'Approve or reject a leave request (admin / HR)' })
   updateStatus(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateLeaveStatusDto,

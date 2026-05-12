@@ -30,14 +30,28 @@ import AnnouncementsPanel from '../components/AnnouncementsPanel';
 import PeerReviewPanel from '../components/PeerReviewPanel';
 import ChatPanel from '../components/chat/ChatPanel';
 import MeetingsPanel from '../components/MeetingsPanel';
+import HrTimeTrackingPanel from '../components/hr/HrTimeTrackingPanel';
+import HrPayrollPanel from '../components/hr/HrPayrollPanel';
+import HrLeaveRequestsPanel from '../components/hr/HrLeaveRequestsPanel';
 import { useChat } from '../contexts/ChatContext';
-import { StarOutlined } from '@ant-design/icons';
+import { StarOutlined, ClockCircleOutlined, DollarOutlined, AuditOutlined } from '@ant-design/icons';
 
 const { Content } = Layout;
 
-type TabKey = 'dashboard' | 'timeline' | 'leaves' | 'announcements' | 'chat' | 'meetings' | 'peer-reviews' | 'profile';
+type TabKey =
+  | 'dashboard'
+  | 'timeline'
+  | 'leaves'
+  | 'announcements'
+  | 'chat'
+  | 'meetings'
+  | 'peer-reviews'
+  | 'hr-time-tracking'
+  | 'hr-payroll'
+  | 'hr-leave-requests'
+  | 'profile';
 
-const NAV_ITEMS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
+const BASE_NAV_ITEMS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: 'dashboard', label: 'Dashboard', icon: <DashboardOutlined /> },
   { key: 'timeline', label: 'Timeline', icon: <FieldTimeOutlined /> },
   { key: 'chat', label: 'Chat', icon: <MessageOutlined /> },
@@ -45,6 +59,12 @@ const NAV_ITEMS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: 'meetings', label: 'Meetings', icon: <VideoCameraOutlined /> },
   { key: 'announcements', label: 'Notices', icon: <SoundOutlined /> },
   { key: 'peer-reviews', label: 'Peer Review', icon: <StarOutlined /> },
+];
+
+const HR_NAV_ITEMS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
+  { key: 'hr-time-tracking', label: 'Time Tracking', icon: <ClockCircleOutlined /> },
+  { key: 'hr-payroll', label: 'Payroll', icon: <DollarOutlined /> },
+  { key: 'hr-leave-requests', label: 'Leave Requests', icon: <AuditOutlined /> },
 ];
 
 // Isolated clock component — only this re-renders every second, not the entire Home tree
@@ -257,6 +277,24 @@ export default function Home() {
   const user = fullUser || authUser;
   const shiftTimezone = fullUser?.shift?.timezone;
   const sidebarWidth = collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED;
+  const isHr = !!fullUser?.isHr || !!authUser?.isHr;
+
+  // HR users get three additional sidebar entries (Time Tracking / Payroll /
+  // Leave Requests) that mirror the admin panel's read views.
+  const NAV_ITEMS = isHr ? [...BASE_NAV_ITEMS, ...HR_NAV_ITEMS] : BASE_NAV_ITEMS;
+
+  // If a user gets un-flagged from HR while sitting on an HR tab, bounce them
+  // back to Dashboard so they don't see an empty white panel.
+  useEffect(() => {
+    if (
+      !isHr &&
+      (activeTab === 'hr-time-tracking' ||
+        activeTab === 'hr-payroll' ||
+        activeTab === 'hr-leave-requests')
+    ) {
+      setActiveTab('dashboard');
+    }
+  }, [isHr, activeTab]);
 
   const handleMinimize = () => {
     window.electronAPI.minimizeToTray();
@@ -599,6 +637,19 @@ export default function Home() {
             <div style={{ display: activeTab === 'peer-reviews' ? 'block' : 'none' }}>
               <PeerReviewPanel />
             </div>
+            {isHr && (
+              <>
+                <div style={{ display: activeTab === 'hr-time-tracking' ? 'block' : 'none' }}>
+                  <HrTimeTrackingPanel />
+                </div>
+                <div style={{ display: activeTab === 'hr-payroll' ? 'block' : 'none' }}>
+                  <HrPayrollPanel />
+                </div>
+                <div style={{ display: activeTab === 'hr-leave-requests' ? 'block' : 'none' }}>
+                  <HrLeaveRequestsPanel />
+                </div>
+              </>
+            )}
             <div style={{ display: activeTab === 'profile' ? 'block' : 'none' }}>
               <ProfilePanel />
             </div>

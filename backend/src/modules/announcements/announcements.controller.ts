@@ -17,6 +17,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../../common/enums/role.enum';
+import { HrAllowed } from '../../common/decorators/hr-allowed.decorator';
 import { CurrentOrg } from '../../common/decorators/current-org.decorator';
 
 @ApiTags('Announcements')
@@ -28,14 +29,16 @@ export class AnnouncementsController {
 
   @Post()
   @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Create a new announcement (admin only)' })
+  @HrAllowed()
+  @ApiOperation({ summary: 'Create a new announcement (admin / HR)' })
   create(@Req() req: any, @Body() dto: CreateAnnouncementDto, @CurrentOrg() orgId: string) {
     return this.announcementsService.create(dto, req.user.id, orgId);
   }
 
   @Get()
   @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'List all announcements (admin)' })
+  @HrAllowed()
+  @ApiOperation({ summary: 'List all announcements (admin / HR)' })
   findAll(@CurrentOrg() orgId: string) {
     return this.announcementsService.findAll(orgId);
   }
@@ -48,14 +51,16 @@ export class AnnouncementsController {
 
   @Patch(':id/deactivate')
   @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Deactivate an announcement (admin)' })
+  @HrAllowed()
+  @ApiOperation({ summary: 'Deactivate an announcement (admin / HR)' })
   deactivate(@Param('id', ParseUUIDPipe) id: string) {
     return this.announcementsService.deactivate(id);
   }
 
   @Delete(':id')
   @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Delete an announcement (admin)' })
+  @HrAllowed()
+  @ApiOperation({ summary: 'Delete an announcement (admin / HR)' })
   delete(@Param('id', ParseUUIDPipe) id: string) {
     return this.announcementsService.delete(id);
   }

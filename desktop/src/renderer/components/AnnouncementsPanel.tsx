@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Spin } from 'antd';
+import { Spin, Modal, Input, Select, DatePicker, message } from 'antd';
 import {
   SoundOutlined,
   CalendarOutlined,
@@ -7,8 +7,11 @@ import {
   FileTextOutlined,
   ThunderboltOutlined,
   ReloadOutlined,
+  PlusOutlined,
 } from '@ant-design/icons';
-import { getActiveAnnouncements } from '../api/client';
+import dayjs, { type Dayjs } from 'dayjs';
+import { getActiveAnnouncements, createAnnouncement } from '../api/client';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Announcement {
   id: string;
@@ -47,8 +50,20 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function AnnouncementsPanel() {
+  const { user: authUser } = useAuth();
+  const isHr = !!authUser?.isHr;
+
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Create modal state (HR-only)
+  const [createOpen, setCreateOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [draftTitle, setDraftTitle] = useState('');
+  const [draftMessage, setDraftMessage] = useState('');
+  const [draftType, setDraftType] = useState<Announcement['type']>('general');
+  const [draftPriority, setDraftPriority] = useState<Announcement['priority']>('normal');
+  const [draftExpiresAt, setDraftExpiresAt] = useState<Dayjs | null>(null);
 
   const loadAnnouncements = useCallback(async () => {
     try {
@@ -68,6 +83,128 @@ export default function AnnouncementsPanel() {
     return () => clearInterval(interval);
   }, [loadAnnouncements]);
 
+  const resetDraft = () => {
+    setDraftTitle('');
+    setDraftMessage('');
+    setDraftType('general');
+    setDraftPriority('normal');
+    setDraftExpiresAt(null);
+  };
+
+  const handleCreate = async () => {
+    const title = draftTitle.trim();
+    const msg = draftMessage.trim();
+    if (!title) {
+      message.warning('Please enter a title');
+      return;
+    }
+    if (!msg) {
+      message.warning('Please enter a message');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await createAnnouncement({
+        title,
+        message: msg,
+        type: draftType,
+        priority: draftPriority,
+        expiresAt: draftExpiresAt ? draftExpiresAt.toISOString() : undefined,
+      });
+      message.success('Notice posted');
+      setCreateOpen(false);
+      resetDraft();
+      setLoading(true);
+      await loadAnnouncements();
+    } catch (err: any) {
+      message.error(err?.response?.data?.message || err?.message || 'Failed to post notice');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const createModal = (
+    <Modal
+      open={createOpen}
+      title="New Notice"
+      okText={submitting ? 'Posting…' : 'Post Notice'}
+      okButtonProps={{ disabled: submitting, loading: submitting }}
+      onOk={handleCreate}
+      onCancel={() => {
+        if (submitting) return;
+        setCreateOpen(false);
+        resetDraft();
+      }}
+      destroyOnClose
+      width={520}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 600, color: 'rgba(0,0,0,0.7)' }}>Title</label>
+          <Input
+            value={draftTitle}
+            onChange={(e) => setDraftTitle(e.target.value)}
+            maxLength={120}
+            placeholder="Short, descriptive title"
+          />
+        </div>
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 600, color: 'rgba(0,0,0,0.7)' }}>Message</label>
+          <Input.TextArea
+            value={draftMessage}
+            onChange={(e) => setDraftMessage(e.target.value)}
+            rows={5}
+            maxLength={2000}
+            placeholder="Body of the notice…"
+          />
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'rgba(0,0,0,0.7)' }}>Type</label>
+            <Select
+              value={draftType}
+              onChange={(v) => setDraftType(v)}
+              style={{ width: '100%' }}
+              options={[
+                { value: 'general', label: 'General' },
+                { value: 'holiday', label: 'Holiday' },
+                { value: 'meeting', label: 'Meeting' },
+                { value: 'memo', label: 'Memo' },
+                { value: 'urgent', label: 'Urgent' },
+              ]}
+            />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'rgba(0,0,0,0.7)' }}>Priority</label>
+            <Select
+              value={draftPriority}
+              onChange={(v) => setDraftPriority(v)}
+              style={{ width: '100%' }}
+              options={[
+                { value: 'low', label: 'Low' },
+                { value: 'normal', label: 'Normal' },
+                { value: 'high', label: 'High' },
+              ]}
+            />
+          </div>
+        </div>
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 600, color: 'rgba(0,0,0,0.7)' }}>
+            Expires at <span style={{ color: 'rgba(0,0,0,0.4)', fontWeight: 400 }}>(optional)</span>
+          </label>
+          <DatePicker
+            showTime
+            value={draftExpiresAt}
+            onChange={(d) => setDraftExpiresAt(d)}
+            style={{ width: '100%' }}
+            disabledDate={(d) => d && d.isBefore(dayjs().startOf('day'))}
+            placeholder="Auto-hide after this date/time"
+          />
+        </div>
+      </div>
+    </Modal>
+  );
+
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: 30 }}>
@@ -79,10 +216,18 @@ export default function AnnouncementsPanel() {
   if (announcements.length === 0) {
     return (
       <div style={{ padding: 10 }}>
+        {isHr && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+            <button onClick={() => setCreateOpen(true)} style={newNoticeBtn}>
+              <PlusOutlined /> New Notice
+            </button>
+          </div>
+        )}
         <div className="glass-card" style={{ padding: 24, textAlign: 'center' }}>
           <SoundOutlined style={{ fontSize: 22, color: 'rgba(255,255,255,0.15)', marginBottom: 8, display: 'block' }} />
           <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>No announcements</span>
         </div>
+        {createModal}
       </div>
     );
   }
@@ -107,18 +252,25 @@ export default function AnnouncementsPanel() {
             {announcements.length}
           </span>
         </div>
-        <button
-          onClick={() => { setLoading(true); loadAnnouncements(); }}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: 4,
-            display: 'flex',
-          }}
-        >
-          <ReloadOutlined style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }} />
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {isHr && (
+            <button onClick={() => setCreateOpen(true)} style={newNoticeBtn}>
+              <PlusOutlined style={{ fontSize: 10 }} /> New
+            </button>
+          )}
+          <button
+            onClick={() => { setLoading(true); loadAnnouncements(); }}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 4,
+              display: 'flex',
+            }}
+          >
+            <ReloadOutlined style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }} />
+          </button>
+        </div>
       </div>
 
       {/* Announcements */}
@@ -188,6 +340,21 @@ export default function AnnouncementsPanel() {
           </div>
         );
       })}
+      {createModal}
     </div>
   );
 }
+
+const newNoticeBtn: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 4,
+  padding: '4px 10px',
+  borderRadius: 6,
+  background: 'linear-gradient(135deg, #7c5cfc, #5b8def)',
+  border: 'none',
+  color: '#fff',
+  fontSize: 10,
+  fontWeight: 700,
+  cursor: 'pointer',
+};
