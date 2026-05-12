@@ -19,6 +19,7 @@ export interface User {
   shiftId: string | null;
   shift?: Shift | null;
   status: string;
+  isHr?: boolean;
   createdAt?: string;
 }
 

@@ -8,6 +8,8 @@ import {
   TrophyOutlined,
   FormOutlined,
   ReloadOutlined,
+  HeartOutlined,
+  EyeInvisibleOutlined,
 } from '@ant-design/icons';
 import {
   getActivePeerReview,
@@ -17,7 +19,9 @@ import {
   getPeerReviewLeaderboard,
   listPeerReviewSurveys,
   getMyTeams,
+  getMyPeerReviewFeedback,
 } from '../api/client';
+import { useAuth } from '../contexts/AuthContext';
 
 type Category =
   | 'performance'
@@ -124,10 +128,24 @@ function daysLeft(iso: string): number {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 }
 
-type View = 'leaderboard' | 'survey';
+type View = 'leaderboard' | 'survey' | 'my-feedback';
+
+interface MyFeedbackData {
+  survey: Survey;
+  kind: 'team' | 'hr';
+  reviewerCount: number;
+  overallAverage: number;
+  categoryAverages: Record<Category, number>;
+  responses: Array<{
+    id: string;
+    submittedAt: string;
+    comment: string | null;
+    answers: Array<{ questionKey: string; category: Category; score: number }>;
+  }>;
+}
 
 export default function PeerReviewPanel() {
-  // Top-level view (leaderboard | survey)
+  // Top-level view (leaderboard | survey | my-feedback)
   const [view, setView] = useState<View>('leaderboard');
 
   // Survey state
@@ -148,6 +166,28 @@ export default function PeerReviewPanel() {
   const [lb, setLb] = useState<LeaderboardData | null>(null);
   const [allSurveys, setAllSurveys] = useState<Survey[]>([]);
   const [pickedSurveyId, setPickedSurveyId] = useState<string | undefined>(undefined);
+
+  // My Feedback state (HR-only view of anonymous feedback received)
+  const { user: authUser } = useAuth();
+  const isHr = !!authUser?.isHr;
+  const [myFeedbackLoading, setMyFeedbackLoading] = useState(false);
+  const [myFeedback, setMyFeedback] = useState<MyFeedbackData | null>(null);
+  const [feedbackSurveyId, setFeedbackSurveyId] = useState<string | undefined>(undefined);
+  const [feedbackKind, setFeedbackKind] = useState<'team' | 'hr'>('hr');
+
+  const loadMyFeedback = useCallback(async (surveyId?: string, kind: 'team' | 'hr' = 'hr') => {
+    setMyFeedbackLoading(true);
+    try {
+      const res = await getMyPeerReviewFeedback({ surveyId, kind });
+      const data = res?.data ?? res;
+      setMyFeedback(data || null);
+      if (data?.survey?.id && !surveyId) setFeedbackSurveyId(data.survey.id);
+    } catch {
+      setMyFeedback(null);
+    } finally {
+      setMyFeedbackLoading(false);
+    }
+  }, []);
 
   const loadActiveSurvey = useCallback(async () => {
     setSurveyLoading(true);
@@ -206,6 +246,20 @@ export default function PeerReviewPanel() {
     loadActiveSurvey();
     loadLeaderboard();
   }, [loadActiveSurvey, loadLeaderboard]);
+
+  // Load my-feedback when the tab becomes active (and on kind change).
+  // We don't preload because it's only relevant for HR users.
+  useEffect(() => {
+    if (view === 'my-feedback' && isHr) {
+      loadMyFeedback(feedbackSurveyId, feedbackKind);
+    }
+  }, [view, isHr, feedbackKind, feedbackSurveyId, loadMyFeedback]);
+
+  // If the user is NOT HR but somehow ended up on the my-feedback tab
+  // (e.g. they were HR and got un-marked), bounce them to leaderboard.
+  useEffect(() => {
+    if (view === 'my-feedback' && !isHr) setView('leaderboard');
+  }, [view, isHr]);
 
   const activeQuestions = useMemo(() => {
     if (selected?.kind === 'hr') return hrQuestions;
@@ -439,6 +493,9 @@ export default function PeerReviewPanel() {
         {([
           { key: 'leaderboard' as View, label: 'Leaderboard', icon: <TrophyOutlined /> },
           { key: 'survey' as View, label: 'Survey', icon: <FormOutlined /> },
+          ...(isHr
+            ? [{ key: 'my-feedback' as View, label: 'My Feedback', icon: <HeartOutlined /> }]
+            : []),
         ]).map((tab) => {
           const active = view === tab.key;
           return (
@@ -477,6 +534,18 @@ export default function PeerReviewPanel() {
             setPickedSurveyId(id);
             loadLeaderboard(id);
           }}
+        />
+      ) : view === 'my-feedback' ? (
+        <MyFeedbackView
+          loading={myFeedbackLoading}
+          data={myFeedback}
+          allSurveys={allSurveys}
+          surveyId={feedbackSurveyId}
+          kind={feedbackKind}
+          questionMap={hrQuestions.concat(teamQuestions).reduce((m, q) => { m[q.key] = q.prompt; return m; }, {} as Record<string, string>)}
+          onPickSurvey={(id) => { setFeedbackSurveyId(id); }}
+          onPickKind={(k) => { setFeedbackKind(k); }}
+          onRefresh={() => loadMyFeedback(feedbackSurveyId, feedbackKind)}
         />
       ) : (
         <SurveyView
@@ -613,6 +682,287 @@ function LeaderboardView({
               row={row}
               isMe={data.myEntry?.reviewee.id === row.reviewee.id}
             />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────
+// My Feedback sub-view — anonymous reviews ABOUT the current user
+// ──────────────────────────────────────────────
+
+function MyFeedbackView({
+  loading,
+  data,
+  allSurveys,
+  surveyId,
+  kind,
+  questionMap,
+  onPickSurvey,
+  onPickKind,
+  onRefresh,
+}: {
+  loading: boolean;
+  data: MyFeedbackData | null;
+  allSurveys: Survey[];
+  surveyId?: string;
+  kind: 'team' | 'hr';
+  questionMap: Record<string, string>;
+  onPickSurvey: (id: string) => void;
+  onPickKind: (k: 'team' | 'hr') => void;
+  onRefresh: () => void;
+}) {
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: 64 }}>
+        <Spin />
+      </div>
+    );
+  }
+
+  const activeCategories: Category[] = kind === 'hr' ? HR_CATEGORIES : TEAM_CATEGORIES;
+
+  // Header — period picker + kind toggle + refresh
+  const header = (
+    <div style={{ ...panelStyle, padding: 14, marginBottom: 14, textAlign: 'left' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <EyeInvisibleOutlined style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13 }} />
+        <span style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>Anonymous Feedback</span>
+        <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>
+          Reviewer identities are never shown to you.
+        </span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {/* kind toggle */}
+          <div
+            style={{
+              display: 'inline-flex',
+              background: 'rgba(255,255,255,0.04)',
+              borderRadius: 8,
+              padding: 3,
+              gap: 2,
+            }}
+          >
+            {(['hr', 'team'] as const).map((k) => {
+              const active = kind === k;
+              return (
+                <button
+                  key={k}
+                  onClick={() => onPickKind(k)}
+                  style={{
+                    padding: '5px 12px',
+                    borderRadius: 6,
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    background: active ? 'rgba(124, 92, 252, 0.22)' : 'transparent',
+                    color: active ? '#c4b5fd' : 'rgba(255,255,255,0.5)',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {k === 'hr' ? 'HR Feedback' : 'Team Feedback'}
+                </button>
+              );
+            })}
+          </div>
+          {allSurveys.length > 1 && (
+            <Select
+              size="small"
+              value={surveyId}
+              style={{ minWidth: 160 }}
+              onChange={(v) => onPickSurvey(v)}
+              options={allSurveys.map((s) => ({
+                value: s.id,
+                label: `${formatPeriod(s.periodMonth)}${s.status === 'open' ? ' • Live' : ''}`,
+              }))}
+            />
+          )}
+        </div>
+        <button onClick={onRefresh} style={refreshBtn} title="Refresh">
+          <ReloadOutlined /> Refresh
+        </button>
+      </div>
+    </div>
+  );
+
+  if (!data) {
+    return (
+      <div>
+        {header}
+        <div style={panelStyle}>
+          <EyeInvisibleOutlined style={{ fontSize: 32, color: 'rgba(255,255,255,0.25)', display: 'block', marginBottom: 12 }} />
+          <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+            No feedback yet
+          </div>
+          <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12 }}>
+            When teammates submit reviews about you, they appear here — without names.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {header}
+
+      {/* Aggregated scores */}
+      <div
+        style={{
+          ...panelStyle,
+          padding: 16,
+          marginBottom: 14,
+          textAlign: 'left',
+          background:
+            'linear-gradient(135deg, rgba(124, 92, 252, 0.10), rgba(91, 141, 239, 0.06))',
+          borderColor: 'rgba(124, 92, 252, 0.22)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ color: 'rgba(196, 181, 253, 0.8)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.05 }}>
+              {formatPeriod(data.survey.periodMonth)}
+            </div>
+            <div style={{ color: '#fff', fontSize: 13, fontWeight: 600, marginTop: 2 }}>
+              {data.reviewerCount} anonymous response{data.reviewerCount === 1 ? '' : 's'}
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.05 }}>
+              Overall
+            </div>
+            <div style={{ color: '#c4b5fd', fontSize: 22, fontWeight: 700, marginTop: 2 }}>
+              {data.overallAverage.toFixed(2)}
+              <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, fontWeight: 500 }}>/5</span>
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+          {activeCategories.map((cat) => (
+            <div
+              key={cat}
+              style={{
+                padding: '8px 10px',
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.05)',
+                borderRadius: 8,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <span style={{ color: CATEGORY_COLOR[cat], fontSize: 11, fontWeight: 600 }}>
+                {CATEGORY_LABEL[cat]}
+              </span>
+              <span style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>
+                {(data.categoryAverages[cat] ?? 0).toFixed(2)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Per-response anonymous cards */}
+      {data.responses.length === 0 ? (
+        <div style={panelStyle}>
+          <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>
+            No individual responses yet.
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {data.responses.map((resp, idx) => (
+            <div key={resp.id} style={{ ...panelStyle, padding: 14, textAlign: 'left' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 6,
+                      background: 'rgba(255,255,255,0.04)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'rgba(255,255,255,0.45)',
+                      fontSize: 11,
+                    }}
+                  >
+                    <EyeInvisibleOutlined />
+                  </div>
+                  <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: 600 }}>
+                    Anonymous Reviewer #{idx + 1}
+                  </span>
+                </div>
+                <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 10 }}>
+                  {resp.submittedAt ? new Date(resp.submittedAt).toLocaleDateString() : ''}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {resp.answers.map((a) => (
+                  <div
+                    key={a.questionKey}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr auto',
+                      gap: 8,
+                      padding: '6px 8px',
+                      borderRadius: 6,
+                      background: 'rgba(255,255,255,0.02)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'rgba(255,255,255,0.75)' }}>
+                      <span
+                        style={{
+                          width: 4,
+                          height: 4,
+                          borderRadius: 2,
+                          background: CATEGORY_COLOR[a.category],
+                          flexShrink: 0,
+                        }}
+                        title={CATEGORY_LABEL[a.category]}
+                      />
+                      {questionMap[a.questionKey] || a.questionKey}
+                    </div>
+                    <span
+                      style={{
+                        fontWeight: 700,
+                        fontSize: 12,
+                        color: CATEGORY_COLOR[a.category],
+                        textAlign: 'right',
+                        minWidth: 30,
+                      }}
+                    >
+                      {a.score}/5
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {resp.comment && (
+                <div
+                  style={{
+                    marginTop: 10,
+                    padding: '10px 12px',
+                    background: 'rgba(124, 92, 252, 0.07)',
+                    border: '1px solid rgba(124, 92, 252, 0.15)',
+                    borderRadius: 8,
+                    fontSize: 12,
+                    color: 'rgba(255,255,255,0.85)',
+                    fontStyle: 'italic',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  "{resp.comment}"
+                </div>
+              )}
+            </div>
           ))}
         </div>
       )}

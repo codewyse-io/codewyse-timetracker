@@ -225,4 +225,13 @@ export async function getMyTeams() {
   return res.data;
 }
 
+export async function getMyPeerReviewFeedback(
+  options: { surveyId?: string; kind?: 'team' | 'hr' } = {},
+) {
+  const res = await apiClient.get('/peer-reviews/my-feedback', {
+    params: { ...options },
+  });
+  return res.data;
+}
+
 export default apiClient;

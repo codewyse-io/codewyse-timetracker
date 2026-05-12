@@ -448,6 +448,115 @@ export class PeerReviewsService {
   }
 
   // ──────────────────────────────────────────────
+  // "My feedback" — anonymous view for any user (HR-focused use case)
+  // ──────────────────────────────────────────────
+
+  /**
+   * Returns the feedback received BY the current user, with reviewer
+   * identities stripped. Defaults to the most recent survey in the user's
+   * org and to HR-kind responses (since that's the primary use case: HR
+   * staff seeing their own anonymous reviews), but `kind` can be overridden.
+   */
+  async getMyFeedback(
+    userId: string,
+    options: { surveyId?: string; kind?: 'team' | 'hr' } = {},
+  ) {
+    const me = await this.userRepo.findOne({ where: { id: userId } });
+    if (!me?.organizationId) return null;
+
+    const kind =
+      (options.kind === 'team' || options.kind === 'hr')
+        ? (options.kind === 'team' ? PeerReviewResponseKind.TEAM : PeerReviewResponseKind.HR)
+        : PeerReviewResponseKind.HR;
+
+    let survey: PeerReviewSurvey | null = null;
+    if (options.surveyId) {
+      survey = await this.surveyRepo.findOne({ where: { id: options.surveyId } });
+      if (!survey || survey.organizationId !== me.organizationId) {
+        throw new NotFoundException('Survey not found.');
+      }
+    } else {
+      survey =
+        (await this.surveyRepo.findOne({
+          where: { organizationId: me.organizationId, status: PeerReviewSurveyStatus.OPEN },
+          order: { opensAt: 'DESC' },
+        })) ||
+        (await this.surveyRepo.findOne({
+          where: { organizationId: me.organizationId },
+          order: { opensAt: 'DESC' },
+        }));
+    }
+    if (!survey) return null;
+
+    const responses = await this.responseRepo.find({
+      where: {
+        surveyId: survey.id,
+        revieweeId: userId,
+        status: PeerReviewResponseStatus.SUBMITTED,
+        kind,
+      },
+      relations: ['answers'],
+      order: { submittedAt: 'DESC' },
+    });
+
+    // Aggregate
+    type PerCategory = Record<PeerReviewCategory, { sum: number; count: number }>;
+    const perCategory: PerCategory = {
+      [PeerReviewCategory.PERFORMANCE]: { sum: 0, count: 0 },
+      [PeerReviewCategory.RESPONSIBILITY]: { sum: 0, count: 0 },
+      [PeerReviewCategory.KNOWLEDGE]: { sum: 0, count: 0 },
+      [PeerReviewCategory.LEADERSHIP_COLLABORATION]: { sum: 0, count: 0 },
+      [PeerReviewCategory.HR_RESPONSIVENESS]: { sum: 0, count: 0 },
+      [PeerReviewCategory.HR_EMPATHY]: { sum: 0, count: 0 },
+      [PeerReviewCategory.HR_FAIRNESS]: { sum: 0, count: 0 },
+      [PeerReviewCategory.HR_COMMUNICATION]: { sum: 0, count: 0 },
+    };
+    let overallSum = 0;
+    let overallCount = 0;
+
+    // Anonymize: drop reviewer info entirely, just keep the answers
+    const anonymizedResponses = responses.map((r) => {
+      for (const a of r.answers || []) {
+        perCategory[a.category].sum += a.score;
+        perCategory[a.category].count += 1;
+        overallSum += a.score;
+        overallCount += 1;
+      }
+      return {
+        // Stable opaque id so the UI can use it as a React key — but it
+        // is NOT useful for identifying the reviewer because the response
+        // id doesn't carry reviewer info on the client.
+        id: r.id,
+        submittedAt: r.submittedAt,
+        comment: r.comment,
+        answers: (r.answers || []).map((a) => ({
+          questionKey: a.questionKey,
+          category: a.category,
+          score: a.score,
+        })),
+      };
+    });
+
+    return {
+      survey: {
+        id: survey.id,
+        periodMonth: survey.periodMonth,
+        opensAt: survey.opensAt,
+        closesAt: survey.closesAt,
+        status: survey.status,
+      },
+      kind,
+      reviewerCount: anonymizedResponses.length,
+      overallAverage:
+        overallCount > 0 ? Math.round((overallSum / overallCount) * 100) / 100 : 0,
+      categoryAverages: Object.fromEntries(
+        Object.entries(perCategory).map(([cat, bucket]) => [cat, avg(bucket)]),
+      ) as Record<PeerReviewCategory, number>,
+      responses: anonymizedResponses,
+    };
+  }
+
+  // ──────────────────────────────────────────────
   // Employee-visible leaderboard
   // ──────────────────────────────────────────────
 

@@ -112,6 +112,17 @@ export class PeerReviewsController {
     );
   }
 
+  // ── My feedback (anonymous view of reviews ABOUT the current user) ──
+  @Get('my-feedback')
+  @ApiOperation({ summary: 'Get anonymized feedback received by the current user (HR-focused)' })
+  async myFeedback(
+    @Req() req: any,
+    @Query('surveyId') surveyId?: string,
+    @Query('kind') kind?: 'team' | 'hr',
+  ) {
+    return this.service.getMyFeedback(req.user.id, { surveyId, kind });
+  }
+
   // ── Leaderboard (visible to all authenticated users in the org) ──
   @Get('leaderboard')
   @ApiOperation({ summary: 'Org-wide leaderboard of peer-review averages' })
