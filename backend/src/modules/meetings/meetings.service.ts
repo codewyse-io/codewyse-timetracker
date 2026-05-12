@@ -102,9 +102,15 @@ export class MeetingsService {
     // Use the query builder so we can OR the date filter with `scheduledStart IS NULL`
     // — manually-joined meetings have no scheduledStart and shouldn't be filtered out
     // by a date range.
+    //
+    // Scope to the requesting user. Meetings imported from Google Calendar
+    // and manually-joined meetings both store the owner in `userId`, so
+    // restricting on this here prevents one user from seeing another's
+    // meetings within the same organization.
     const qb = this.meetingRepo
       .createQueryBuilder('meeting')
-      .where('meeting.organizationId = :orgId', { orgId });
+      .where('meeting.organizationId = :orgId', { orgId })
+      .andWhere('meeting.userId = :userId', { userId });
 
     if (startDate && endDate) {
       qb.andWhere(

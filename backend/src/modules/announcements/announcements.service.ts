@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThanOrEqual, IsNull, Or } from 'typeorm';
 import { Announcement } from './entities/announcement.entity';
@@ -40,20 +40,26 @@ export class AnnouncementsService {
     });
   }
 
-  async findById(id: string): Promise<Announcement> {
+  async findById(id: string, organizationId?: string): Promise<Announcement> {
     const announcement = await this.repo.findOne({ where: { id } });
     if (!announcement) throw new NotFoundException('Announcement not found');
+    // Defensive: when an organizationId is provided, ensure the row belongs
+    // to that org. Prevents an admin/HR in tenant A from mutating notices
+    // in tenant B by guessing a UUID.
+    if (organizationId && announcement.organizationId !== organizationId) {
+      throw new ForbiddenException('Announcement does not belong to your organization');
+    }
     return announcement;
   }
 
-  async deactivate(id: string): Promise<Announcement> {
-    const announcement = await this.findById(id);
+  async deactivate(id: string, organizationId?: string): Promise<Announcement> {
+    const announcement = await this.findById(id, organizationId);
     announcement.isActive = false;
     return this.repo.save(announcement);
   }
 
-  async delete(id: string): Promise<void> {
-    const announcement = await this.findById(id);
+  async delete(id: string, organizationId?: string): Promise<void> {
+    const announcement = await this.findById(id, organizationId);
     await this.repo.remove(announcement);
   }
 }

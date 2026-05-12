@@ -53,15 +53,15 @@ export class AnnouncementsController {
   @Roles(Role.ADMIN)
   @HrAllowed()
   @ApiOperation({ summary: 'Deactivate an announcement (admin / HR)' })
-  deactivate(@Param('id', ParseUUIDPipe) id: string) {
-    return this.announcementsService.deactivate(id);
+  deactivate(@Param('id', ParseUUIDPipe) id: string, @CurrentOrg() orgId: string) {
+    return this.announcementsService.deactivate(id, orgId);
   }
 
   @Delete(':id')
   @Roles(Role.ADMIN)
   @HrAllowed()
   @ApiOperation({ summary: 'Delete an announcement (admin / HR)' })
-  delete(@Param('id', ParseUUIDPipe) id: string) {
-    return this.announcementsService.delete(id);
+  delete(@Param('id', ParseUUIDPipe) id: string, @CurrentOrg() orgId: string) {
+    return this.announcementsService.delete(id, orgId);
   }
 }
