@@ -528,6 +528,65 @@ export class TimeTrackingService {
   }
 
   /**
+   * Aggregated session totals per employee for a date range.
+   * Computed at the database level so paging never truncates the math.
+   * Returned shape mirrors the EmployeeGroup the admin UI was previously
+   * building client-side.
+   */
+  async getSessionsSummary(
+    organizationId: string,
+    options: { startDate?: string; endDate?: string; userId?: string } = {},
+  ): Promise<
+    Array<{
+      userId: string;
+      employeeName: string;
+      sessionCount: number;
+      totalDuration: number;
+      activeDuration: number;
+      idleDuration: number;
+    }>
+  > {
+    const qb = this.sessionRepository
+      .createQueryBuilder('session')
+      .leftJoin('session.user', 'user')
+      .select('session.userId', 'userId')
+      .addSelect("CONCAT(user.firstName, ' ', user.lastName)", 'employeeName')
+      .addSelect('COUNT(session.id)', 'sessionCount')
+      .addSelect('COALESCE(SUM(session.totalDuration), 0)', 'totalDuration')
+      .addSelect('COALESCE(SUM(session.activeDuration), 0)', 'activeDuration')
+      .addSelect('COALESCE(SUM(session.idleDuration), 0)', 'idleDuration')
+      .where('session.organizationId = :organizationId', { organizationId })
+      .groupBy('session.userId')
+      .addGroupBy('user.firstName')
+      .addGroupBy('user.lastName')
+      .orderBy('totalDuration', 'DESC');
+
+    if (options.userId) {
+      qb.andWhere('session.userId = :userId', { userId: options.userId });
+    }
+    if (options.startDate) {
+      qb.andWhere('session.startTime >= :startDate', {
+        startDate: new Date(options.startDate),
+      });
+    }
+    if (options.endDate) {
+      const end = new Date(options.endDate);
+      end.setHours(23, 59, 59, 999);
+      qb.andWhere('session.startTime <= :endDate', { endDate: end });
+    }
+
+    const rows = await qb.getRawMany();
+    return rows.map((r) => ({
+      userId: r.userId,
+      employeeName: (r.employeeName || '').trim() || r.userId,
+      sessionCount: parseInt(r.sessionCount, 10) || 0,
+      totalDuration: parseInt(r.totalDuration, 10) || 0,
+      activeDuration: parseInt(r.activeDuration, 10) || 0,
+      idleDuration: parseInt(r.idleDuration, 10) || 0,
+    }));
+  }
+
+  /**
    * Get sessions for a specific user within a date range (used by payroll).
    */
   async getSessionsByUser(

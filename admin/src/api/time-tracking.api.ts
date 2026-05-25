@@ -25,4 +25,23 @@ export const timeTrackingApi = {
   deleteSession(sessionId: string): Promise<ApiResponse<{ deleted: true }>> {
     return apiClient.delete(`/time-tracking/sessions/${sessionId}`);
   },
+
+  getSessionsSummary(params: {
+    startDate?: string;
+    endDate?: string;
+    userId?: string;
+  }): Promise<
+    ApiResponse<
+      Array<{
+        userId: string;
+        employeeName: string;
+        sessionCount: number;
+        totalDuration: number;
+        activeDuration: number;
+        idleDuration: number;
+      }>
+    >
+  > {
+    return apiClient.get('/time-tracking/sessions/summary', { params });
+  },
 };

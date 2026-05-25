@@ -174,31 +174,6 @@ interface DayGroup {
   sessions: WorkSession[];
 }
 
-function groupSessionsByEmployee(sessions: WorkSession[]): EmployeeGroup[] {
-  const map = new Map<string, WorkSession[]>();
-  sessions.forEach((s) => {
-    const key = s.userId;
-    if (!map.has(key)) map.set(key, []);
-    map.get(key)!.push(s);
-  });
-  return Array.from(map.entries())
-    .map(([userId, empSessions]) => {
-      const name = empSessions[0]?.user
-        ? `${empSessions[0].user.firstName} ${empSessions[0].user.lastName}`
-        : userId;
-      return {
-        key: userId,
-        employeeName: name,
-        sessionCount: empSessions.length,
-        totalDuration: empSessions.reduce((sum, s) => sum + (s.totalDuration || 0), 0),
-        activeDuration: empSessions.reduce((sum, s) => sum + (s.activeDuration || 0), 0),
-        idleDuration: empSessions.reduce((sum, s) => sum + (s.idleDuration || 0), 0),
-        sessions: empSessions.sort((a, b) => (a.startTime > b.startTime ? -1 : 1)),
-      };
-    })
-    .sort((a, b) => b.totalDuration - a.totalDuration);
-}
-
 function groupSessionsByDate(sessions: WorkSession[], tz?: string): DayGroup[] {
   const map = new Map<string, WorkSession[]>();
   const effectiveTz = tz || 'UTC';
@@ -224,6 +199,9 @@ function groupSessionsByDate(sessions: WorkSession[], tz?: string): DayGroup[] {
 function SessionHistoryTab() {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState<WorkSession[]>([]);
+  // Pre-aggregated per-employee totals computed server-side.
+  // Used for the "all employees" view so paging never truncates the math.
+  const [summary, setSummary] = useState<EmployeeGroup[]>([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [dateRange, setDateRange] = useState<
@@ -236,16 +214,42 @@ function SessionHistoryTab() {
   const fetchSessions = useCallback(async () => {
     setLoading(true);
     try {
-      const params: Record<string, string | number | undefined> = {
-        page,
-        limit: 200,
-      };
-      if (dateRange?.[0]) params.startDate = dateRange[0].format('YYYY-MM-DD');
-      if (dateRange?.[1]) params.endDate = dateRange[1].format('YYYY-MM-DD');
-      if (userId) params.userId = userId;
-
-      const res = await timeTrackingApi.getSessions(params);
-      setSessions(res.data.data);
+      if (!userId) {
+        // No employee filter — fetch DB-aggregated totals so we don't get
+        // tripped up by the 200-row page cap when summing client-side.
+        const params: { startDate?: string; endDate?: string } = {};
+        if (dateRange?.[0]) params.startDate = dateRange[0].format('YYYY-MM-DD');
+        if (dateRange?.[1]) params.endDate = dateRange[1].format('YYYY-MM-DD');
+        const res = await timeTrackingApi.getSessionsSummary(params);
+        const rows = res.data || [];
+        setSummary(
+          rows.map((r) => ({
+            key: r.userId,
+            employeeName: r.employeeName,
+            sessionCount: r.sessionCount,
+            totalDuration: r.totalDuration,
+            activeDuration: r.activeDuration,
+            idleDuration: r.idleDuration,
+            // Sessions are loaded on-demand when the user drills into a row,
+            // not as part of the summary.
+            sessions: [],
+          })),
+        );
+        setSessions([]);
+      } else {
+        // A specific employee — keep paged session fetching for the
+        // day-grouped drill-down view.
+        const params: Record<string, string | number | undefined> = {
+          page,
+          limit: 200,
+          userId,
+        };
+        if (dateRange?.[0]) params.startDate = dateRange[0].format('YYYY-MM-DD');
+        if (dateRange?.[1]) params.endDate = dateRange[1].format('YYYY-MM-DD');
+        const res = await timeTrackingApi.getSessions(params);
+        setSessions(res.data.data);
+        setSummary([]);
+      }
     } catch {
       message.error('Failed to load session history');
     } finally {
@@ -382,8 +386,10 @@ function SessionHistoryTab() {
 
   const employeeTz = userId ? resolveUserTz(userId) : undefined;
 
-  // Employee selected → group by date; otherwise → group by employee
-  const employeeGroups = !userId ? groupSessionsByEmployee(sessions) : [];
+  // Employee selected → group by date (client-side from the page).
+  // No employee selected → use the server-aggregated summary so the totals
+  // are correct regardless of how many sessions exist in the date range.
+  const employeeGroups = !userId ? summary : [];
   const dayGroups = userId ? groupSessionsByDate(sessions, employeeTz) : [];
 
   // Employee group columns

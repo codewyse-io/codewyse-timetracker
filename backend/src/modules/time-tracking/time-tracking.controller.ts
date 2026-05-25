@@ -100,6 +100,25 @@ export class TimeTrackingController {
     return this.timeTrackingService.getActiveSessions(orgId);
   }
 
+  @Get('sessions/summary')
+  @ApiOperation({
+    summary:
+      'Aggregated per-employee session totals (org-wide) for a date range. ' +
+      'Computed in SQL so pagination never truncates the math.',
+  })
+  async getSessionsSummary(
+    @Query() query: SessionQueryDto,
+    @Req() req: any,
+    @CurrentOrg() orgId: string,
+  ) {
+    const canSeeAll = req.user?.role === 'admin' || req.user?.isHr === true;
+    return this.timeTrackingService.getSessionsSummary(orgId, {
+      startDate: query.startDate,
+      endDate: query.endDate,
+      userId: query.userId ?? (canSeeAll ? undefined : req.user?.id),
+    });
+  }
+
   @Get('sessions')
   @ApiOperation({
     summary: 'Get work sessions (admin / HR see all, employee sees own)',
